@@ -3,16 +3,29 @@ import pandas as pd
 import plotly.express as px
 import re
 import os
-from datetime import timedelta
+import glob
+import json
+from datetime import datetime, timedelta
+
+# --- [추가] 비밀 장부(JSON) 로드 로직 ---
+def load_realtor_map():
+    if os.path.exists("realtors.json"):
+        with open("realtors.json", "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except:
+                return {"a123": "더자이디엘"}
+    return {"a123": "더자이디엘"}
+
+REALTOR_MAP = load_realtor_map()
+
+# URL 파라미터 인식 (id=a123 방식)
+query_params = st.query_params
+user_id = query_params.get("id", "a123") 
+my_realtor = REALTOR_MAP.get(user_id, "더자이디엘") 
 
 # --- 1. 웹사이트 기본 세팅 (전체화면 모드) ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
-
-# --- 2. URL 파라미터 인식 (맞춤형 링크 구현) ---
-if "realtor" in st.query_params:
-    default_realtor = st.query_params["realtor"]
-else:
-    default_realtor = "더자이디엘"
 
 # --- 3. 유틸리티 함수 ---
 def clean_realtor_name(name):
@@ -44,27 +57,21 @@ def process_data(df):
     return df
 
 # --- 4. 데이터 자동 로드 (다중 파일 자동 병합 & 중복 제거) ---
-import glob
-import os
-
 @st.cache_data(ttl=600) # 10분마다 새로고침
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    csv_files = glob.glob(os.path.join(current_dir, "*.csv"))
-    xlsx_files = glob.glob(os.path.join(current_dir, "*.xlsx"))
-    all_files = csv_files + xlsx_files
+    xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
+    if os.path.exists("data.xlsx"):
+        xlsx_files.append("data.xlsx")
     
-    if not all_files:
+    if not xlsx_files:
         return None
         
     df_list = []
-    for file in all_files:
+    for file in xlsx_files:
         try:
-            if file.endswith('.csv'):
-                temp = pd.read_csv(file)
-            else:
-                temp = pd.read_excel(file)
+            temp = pd.read_excel(file)
             df_list.append(temp)
         except Exception as e:
             st.error(f"파일 읽기 오류 ({file}): {e}")
@@ -72,10 +79,7 @@ def load_server_data():
     if not df_list:
         return None
         
-    # 3. 모든 파일을 하나로 합칩니다.
     merged_df = pd.concat(df_list, ignore_index=True)
-    
-    # 🛡️ [추가된 마법의 1줄] 소장님이 실수로 엑셀을 겹치게 올려도, 완벽히 중복되는 데이터는 알아서 1개만 남기고 삭제합니다!
     merged_df = merged_df.drop_duplicates()
     
     return merged_df
@@ -83,13 +87,11 @@ def load_server_data():
 raw_df = load_server_data()
 
 if raw_df is None:
-    st.error("🚨 서버에 엑셀(.xlsx)이나 CSV(.csv) 파일이 없습니다.")
+    st.error("🚨 서버에 엑셀(.xlsx) 파일이 없습니다.")
     st.stop()
 
 # --- 5. 사이드바 (고객용 기간 설정 패널) ---
-# (파일 업로드 창은 숨기고 날짜 필터만 남겨둡니다)
 st.sidebar.title("📅 리포트 설정")
-my_realtor = default_realtor # 고객은 자신의 부동산 이름을 바꿀 수 없게 고정!
 
 try:
     df = process_data(raw_df)
@@ -111,7 +113,6 @@ try:
     global_times = t_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
     dataset_end_time = global_times.max()
     
-    # --- 핵심 변수 생성 ---
     group_keys = ['단지명', '동/호수', '층/타입', '거래방식', '가격', '부동산명']
     bundle_keys = ['단지명', '동/호수', '층/타입', '거래방식', '가격']
     complex_list = sorted(t_df['단지명'].dropna().unique().tolist())
@@ -141,17 +142,14 @@ try:
     # --- 메인 화면 시작 ---
     st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향")
     
-    # 상단 KPI 지표
     col1, col2, col3, col4 = st.columns(4)
     
-    # KPI 1
     with col1:
         st.write("🏆 **내 점유율**")
         kpi_comp = st.selectbox("단지 선택", complex_list, label_visibility="collapsed")
         kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
         st.subheader(f"{kpi_rank}위" if kpi_rank != "권외" else "권외")
     
-    # KPI 2
     my_ls = t_df[t_df['부동산명'].str.contains(my_realtor, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -161,7 +159,6 @@ try:
         danger_ls['현재1위부동산'] = pd.Series(dtype='str')
     col2.metric("🚨 상위 노출 실패 매물", f"{len(danger_ls)}건")
     
-    # KPI 3
     bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
     bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
     bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
@@ -181,7 +178,6 @@ try:
         empty_houses['현재1위부동산'] = pd.Series(dtype='str')
     col3.metric("🎯 방치된 꿀매물 (최적타겟)", f"{len(empty_houses)}건")
     
-    # KPI 4
     trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['쌍둥이_식별자'] = trk.groupby(group_keys + ['수집일시']).cumcount()
     fgk = group_keys + ['쌍둥이_식별자']
@@ -214,10 +210,8 @@ try:
         "🌀 매물 롤링 추적", "⏳ 인덱싱 효과 분석", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
-    # 탭 1: 브리핑
     with tab_report:
         st.subheader("브리핑 내용")
-        
         rank_str = " / ".join([f"{k} {v}위" for k, v in my_ranks_dict.items() if v != "권외"])
         
         danger_detail = ""
@@ -248,7 +242,6 @@ try:
 """
         st.text_area("마우스로 긁거나 터치하여 복사하세요.", value=briefing, height=450)
         
-    # 탭 2: 점유율
     with tab_ms:
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
@@ -268,7 +261,6 @@ try:
             fig.update_layout(xaxis_title="파워 점수", yaxis_title="")
             st.plotly_chart(fig, use_container_width=True)
 
-    # 탭 3: 내 매물 순위 현황
     with tab_danger:
         st.subheader("🚨 방어전 타겟 (1위 밀려난 매물)")
         if not danger_ls.empty:
@@ -278,7 +270,6 @@ try:
         else:
             st.info("현재 1위에서 밀려난 매물이 없습니다! 완벽한 방어 상태입니다.")
 
-    # 탭 4: 방치된 매물
     with tab_empty:
         st.subheader("🎯 공격 타겟 (6시간 이상 방치 빈집)")
         if not empty_houses.empty:
@@ -289,7 +280,6 @@ try:
         else:
             st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
-    # 탭 5: 롤링 추적
     with tab_tracker:
         st.subheader("🌀 특정 매물의 전체 페이지 롤링 현황")
         c1, c2 = st.columns(2)
@@ -318,7 +308,6 @@ try:
             t_hist['1위부동산'] = t_hist['1위부동산'].fillna("-")
             st.dataframe(t_hist[['수집일시', '전체순위표시', '1위부동산']], use_container_width=True)
 
-    # 탭 6: 인덱싱 효과 분석
     with tab_indexing:
         st.subheader("⏳ 광고 갱신 후 골든타임(12h) 인덱싱 성적표")
         idx_events = []
@@ -364,7 +353,6 @@ try:
         else:
             st.info("조건에 맞는 갱신 내역이 없습니다.")
 
-    # 탭 7: 광고 갱신 팩트
     with tab_timing:
         st.subheader("⏱️ 광고 갱신 팩트 (로그)")
         if not boosted_df.empty:
@@ -374,7 +362,6 @@ try:
         else:
             st.info("갱신 내역이 없습니다.")
             
-    # 탭 8: 경쟁사 분석
     with tab_stat:
         st.subheader("경쟁사 갱신 트렌드 요약")
         if not boosted_df.empty:
