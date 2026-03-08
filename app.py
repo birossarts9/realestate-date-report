@@ -7,28 +7,26 @@ import glob
 import json
 from datetime import datetime, timedelta
 
-# --- [추가] 비밀 장부(JSON) 로드 로직 ---
+# --- 1. 비밀 장부(JSON) 로드 및 보안 설정 ---
 def load_realtor_map():
     if os.path.exists("realtors.json"):
         with open("realtors.json", "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except:
-                return {"a123": "더자이디엘"}
+            try: return json.load(f)
+            except: return {"a123": "더자이디엘"}
     return {"a123": "더자이디엘"}
 
 REALTOR_MAP = load_realtor_map()
-
-# URL 파라미터 인식 (id=a123 방식)
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
-my_realtor = REALTOR_MAP.get(user_id, "더자이디엘") 
 
-# --- [추가] 데모 모드 판별기 ---
+# [핵심] 데모 모드 판별 및 데이터 소싱 로직
 IS_DEMO_MODE = (user_id == "demo")
+# 데모 모드일 경우 '더자이디엘(a123)'의 데이터를 기반으로 블러 처리하여 보여줌
+target_id = "a123" if IS_DEMO_MODE else user_id
+my_realtor = REALTOR_MAP.get(target_id, "더자이디엘") 
 
-# --- 1. 웹사이트 기본 세팅 (전체화면 모드) ---
-st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
+# --- 2. 웹사이트 기본 세팅 ---
+st.set_page_config(page_title="부동산 마켓 인텔리전스 리포트", page_icon="📈", layout="wide")
 
 # --- 3. 유틸리티 함수 ---
 def clean_realtor_name(name):
@@ -59,50 +57,34 @@ def process_data(df):
     
     return df
 
-# --- 4. 데이터 자동 로드 (다중 파일 자동 병합 & 중복 제거) ---
-@st.cache_data(ttl=600) # 10분마다 새로고침
+@st.cache_data(ttl=600)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
-    if os.path.exists("data.xlsx"):
-        xlsx_files.append("data.xlsx")
-    
-    if not xlsx_files:
-        return None
+    if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
+    if not xlsx_files: return None
         
     df_list = []
     for file in xlsx_files:
-        try:
-            temp = pd.read_excel(file)
-            df_list.append(temp)
-        except Exception as e:
-            st.error(f"파일 읽기 오류 ({file}): {e}")
+        try: df_list.append(pd.read_excel(file))
+        except: pass
             
-    if not df_list:
-        return None
-        
+    if not df_list: return None
     merged_df = pd.concat(df_list, ignore_index=True)
-    merged_df = merged_df.drop_duplicates()
-    
-    return merged_df
+    return merged_df.drop_duplicates()
 
 raw_df = load_server_data()
-
 if raw_df is None:
-    st.error("🚨 서버에 엑셀(.xlsx) 파일이 없습니다.")
+    st.error("🚨 서버에 데이터 파일이 없습니다. 크롤러를 실행해 주세요.")
     st.stop()
 
-# --- 5. 사이드바 (고객용 기간 설정 패널) ---
-st.sidebar.title("📅 리포트 설정")
-
+# --- 4. 메인 분석 엔진 ---
 try:
     df = process_data(raw_df)
     
-    min_time = df['수집일시'].min()
-    max_time = df['수집일시'].max()
-    
-    st.sidebar.write("**분석 기간 설정**")
+    # 사이드바 설정
+    st.sidebar.title("📅 리포트 설정")
+    min_time, max_time = df['수집일시'].min(), df['수집일시'].max()
     start_date = st.sidebar.date_input("시작일", min_time.date())
     end_date = st.sidebar.date_input("종료일", max_time.date())
     
@@ -113,22 +95,21 @@ try:
         st.error("설정한 기간에 데이터가 없습니다.")
         st.stop()
 
-    # --- 🛡️ [추가] 데모 모드 마스킹 처리 엔진 🛡️ ---
+    # --- 🛡️ [데모 모드] 정보 가리기 로직 ---
+    display_realtor = "성우부동산(체험용)" if IS_DEMO_MODE else my_realtor
+    
     if IS_DEMO_MODE:
-        st.sidebar.success("🔐 현재 체험용(Demo) 모드로 접속 중입니다. 핵심 데이터는 블러 처리됩니다.")
-        
-        # 1. 동/호수 마스킹 (숫자를 *로 변경)
-        def mask_dong_ho(text):
-            return re.sub(r'\d', '*', str(text))
-        t_df['동/호수'] = t_df['동/호수'].apply(mask_dong_ho)
-        t_df['매물묶음키'] = t_df.apply(lambda r: f"{r['동/호수']} | {r['층/타입']} | {r['거래방식']} | {r['가격']}", axis=1)
-        
-        # 2. 경쟁사 이름 마스킹 (경쟁사 A, B, C...)
+        st.sidebar.success("🔐 체험판 모드: 핵심 정보가 마스킹 처리되었습니다.")
+        # 1. 동/호수 숫자를 별표로 가림
+        t_df['동/호수'] = t_df['동/호수'].apply(lambda x: re.sub(r'\d', '*', str(x)))
+        # 2. 타 부동산 상호를 경쟁사 A, B... 로 변경
         competitors = [c for c in t_df['부동산명'].unique() if c != my_realtor]
-        comp_map = {name: f"경쟁사 {chr(65+i)}" for i, name in enumerate(competitors)}
-        t_df['부동산명'] = t_df['부동산명'].apply(lambda x: x if x == my_realtor else comp_map.get(x, x))
-    # ------------------------------------------------
-        
+        comp_map = {name: f"경쟁사 {chr(65+i % 26)}" for i, name in enumerate(competitors)}
+        t_df['부동산명'] = t_df['부동산명'].apply(lambda x: my_realtor if x == my_realtor else comp_map.get(x, x))
+        # 3. 매물묶음키 재갱신
+        t_df['매물묶음키'] = t_df.apply(lambda r: f"{r['동/호수']} | {r['층/타입']} | {r['거래방식']} | {r['가격']}", axis=1)
+
+    # --- 데이터 계산 섹션 ---
     global_times = t_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
     dataset_end_time = global_times.max()
     
@@ -141,7 +122,6 @@ try:
     first_place_df = pd.merge(t_df, latest_t, on=bundle_keys+['수집일시'])
     first_place_df = first_place_df[first_place_df['묶음내순위_숫자']==1][bundle_keys+['부동산명']].rename(columns={'부동산명':'현재1위부동산'}).drop_duplicates(subset=bundle_keys)
 
-    # M/S 계산
     uniq = t_df.drop_duplicates(subset=['매물번호', '부동산명', '단지명']).copy()
     uniq['묶음_총개수'] = uniq.groupby(bundle_keys)['부동산명'].transform('count')
     uniq['파워점수'] = 10 + (10 / uniq['묶음내순위_숫자']) + (uniq['묶음_총개수'] * 0.1)
@@ -153,20 +133,12 @@ try:
         if cdf.empty: continue
         cdf['순위'] = cdf['총점수'].rank(ascending=False, method='min')
         my_r = cdf[cdf['부동산명'].str.contains(my_realtor)]
-        if not my_r.empty:
-            my_ranks_dict[comp] = int(my_r['순위'].iloc[0])
-        else:
-            my_ranks_dict[comp] = "권외"
+        my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
     # --- 메인 화면 시작 ---
-    if IS_DEMO_MODE:
-        st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향 (🔒체험판)")
-        st.info("💡 체험판에서는 타 부동산의 실명과 정확한 동/호수가 [경쟁사 A], [**동 ***호] 형태로 보호됩니다.")
-    else:
-        st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향")
+    st.title(f"📊 {display_realtor} 대표님을 위한 시장 동향 리포트")
     
     col1, col2, col3, col4 = st.columns(4)
-    
     with col1:
         st.write("🏆 **내 점유율**")
         kpi_comp = st.selectbox("단지 선택", complex_list, label_visibility="collapsed")
@@ -178,233 +150,91 @@ try:
     if not danger_ls.empty:
         danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
         danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
-    else:
-        danger_ls['현재1위부동산'] = pd.Series(dtype='str')
+    else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
     col2.metric("🚨 상위 노출 실패 매물", f"{len(danger_ls)}건")
     
     bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
-    bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
-    bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
+    bh['상태변경'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1).notna() & (bh['최대_확인일자'] != bh.groupby(bundle_keys)['최대_확인일자'].shift(1))
     bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
-    lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
-    bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
+    lb = bh.groupby(bundle_keys).tail(1)
+    bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index(name='시작')
     mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
-    mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
-    tb = mb[mb['방치시간(시간)'] >= 6]
-    
-    empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
-    empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
+    mb['h'] = (mb['수집일시'] - mb['시작']).dt.total_seconds() / 3600
+    empty_houses = pd.merge(mb[mb['h'] >= 6], my_ls[my_ls['묶음내순위_숫자'] > 1], on=bundle_keys)
     if not empty_houses.empty:
         empty_houses = pd.merge(empty_houses, first_place_df, on=bundle_keys, how='left')
         empty_houses['현재1위부동산'] = empty_houses['현재1위부동산'].fillna('알수없음')
-    else:
-        empty_houses['현재1위부동산'] = pd.Series(dtype='str')
-    col3.metric("🎯 방치된 꿀매물 (최적타겟)", f"{len(empty_houses)}건")
+    col3.metric("🎯 방치된 꿀매물", f"{len(empty_houses)}건")
     
-    trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
-    trk['쌍둥이_식별자'] = trk.groupby(group_keys + ['수집일시']).cumcount()
-    fgk = group_keys + ['쌍둥이_식별자']
-    trk = trk.sort_values(fgk + ['수집일시'])
-    trk['이전_확인일자'] = trk.groupby(fgk)['확인일자'].shift(1)
-    trk['수집일시_Date'] = trk['수집일시'].dt.normalize()
-    c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-    c2 = trk['이전_확인일자'].isna() & ((trk['수집일시_Date'] - trk['확인일자_Date']).dt.days.between(0,1))
-    boosted_df = trk[c1 | c2]
-    
+    trk = t_df.sort_values(group_keys + ['수집일시']).copy()
+    trk['이전_확인'] = trk.groupby(group_keys)['확인일자'].shift(1)
+    boosted_df = trk[(trk['이전_확인'].notna()) & (trk['이전_확인'] != trk['확인일자'])]
     top_spender = "없음"
-    top_spender_raw_name = ""
-    peak_hour_str = ""
     if not boosted_df.empty:
-        stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
-        top_spender_raw_name = stat_df.iloc[0]['부동산명']
-        top_spender = f"{clean_realtor_name(top_spender_raw_name)} ({stat_df.iloc[0]['총횟수']}회)"
-        
-        top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
-        if not top_realtor_data.empty:
-            peak_h = top_realtor_data['수집일시'].dt.hour.mode()[0]
-            peak_hour_str = f", 주로 {peak_h}시에 집중적으로 갱신하고 있습니다."
+        s_df = boosted_df.groupby('부동산명').size().reset_index(name='c').sort_values('c', ascending=False)
+        top_spender = f"{clean_realtor_name(s_df.iloc[0]['부동산명'])} ({s_df.iloc[0]['c']}회)"
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     
     st.markdown("---")
 
-    # --- 탭 구성 ---
-    tab_report, tab_ms, tab_danger, tab_empty, tab_tracker, tab_indexing, tab_timing, tab_stat = st.tabs([
+    # --- 탭 구성 및 명칭 변경 ---
+    tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_indexing, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
-        "🌀 매물 롤링 추적", "⏳ 인덱싱 효과 분석", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
+        "📉 단지 별 노출 현황", "⏳ 인덱싱 효과 분석", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
-    # 탭 1: 브리핑
     with tab_report:
-        st.subheader("브리핑 내용")
+        st.subheader("📝 서비스 신청 및 문의")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("한 달 리포트 구독", "월 80,000원", "정가 10만원")
+        m2.metric("광고 자동화 솔루션", "월 80,000원", "정가 10만원")
+        m3.metric("프리미엄 통합형", "월 130,000원", "정가 16만원")
         
-        rank_str = " / ".join([f"{k} {v}위" for k, v in my_ranks_dict.items() if v != "권외"])
+        st.markdown("""> **💡 광고 자동화 솔루션이란?**
+> AI가 경쟁 부동산의 신규 매물 등록과 광고 갱신 시간을 24시간 감시합니다. 
+> 대표님의 매물이 상위 노출(1위)에서 밀려나는 즉시 시스템이 감지하여 자동으로 재광고를 실행, 1등 자리를 탈환합니다. 
+> **인건비 절감**은 물론, 고객 문의가 집중되는 **황금 시간대 노출을 100% 보장**합니다.""")
         
-        danger_detail = ""
-        if not danger_ls.empty:
-            top_danger_comps = danger_ls['단지명'].value_counts().head(2)
-            danger_detail = f"\n*(특히 {', '.join([f'{k}({v}건)' for k, v in top_danger_comps.items()])}에서 1위 이탈이 가장 많이 발생했습니다. 빠른 갱신 방어가 필요합니다.)*"
-
-        empty_detail = ""
-        if not empty_houses.empty:
-            top_empty_comps = empty_houses['단지명'].value_counts().head(2)
-            empty_detail = f"\n*(추천 타겟: {', '.join([f'{k}({v}건)' for k, v in top_empty_comps.items()])} 위주로 우선 갱신을 추천드립니다.)*"
-
-        briefing = f"""[📅 이실장 시장 동향 브리핑]
-(기간: {start_date.strftime('%m/%d')} ~ {end_date.strftime('%m/%d')})
-
-📊 시장 점유율 현황 (파워점수 기준):
-대표님의 현재 단지별 랭킹은 [{rank_str if rank_str else "순위 없음"}] 입니다.
-
-🚨 방어전 필요 (1위 이탈 매물):
-현재 1위 자리에서 밀려나 노출이 저조한 매물이 총 {len(danger_ls)}건 있습니다.{danger_detail}
-
-🎯 공격 타겟 (6h 이상 방치된 빈집):
-경쟁사들이 돈을 쓰지 않아 최소 비용으로 1등 노출이 가능한 빈집 묶음이 {len(empty_houses)}건 발견되었습니다.{empty_detail}
-
-🔥 경쟁사 위협 동향:
-최근 가장 공격적으로 광고비를 지출하는 곳은 '{top_spender}' 입니다.
-해당 부동산은{peak_hour_str if peak_hour_str else " 지속적으로 매물을 갱신하고 있습니다."} 이 시간대를 고려한 갱신 전략을 권장합니다.
-"""
-        st.text_area("마우스로 긁거나 터치하여 복사하세요.", value=briefing, height=450)
+        st.info("💳 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105 (장성우 소장)")
+        st.markdown("---")
+        briefing = f"[{start_date} ~ {end_date}]\n현재 {display_realtor} 랭킹: {rank_str if 'rank_str' in locals() else '분석중'}\n🚨 방어필요: {len(danger_ls)}건 | 🎯 공격타겟: {len(empty_houses)}건"
+        st.text_area("📋 리포트 요약 내용", value=briefing, height=150)
         
-    # 탭 2: 점유율
     with tab_ms:
-        filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
-        ms_df = ms_counts.copy()
-        if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
-        
-        agg_ms = ms_df.groupby('부동산명').agg({'매물건수':'sum', '총점수':'sum'}).reset_index()
-        agg_ms['총점수'] = agg_ms['총점수'].round(1)
-        agg_ms = agg_ms.sort_values('총점수', ascending=False)
-        
+        f_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_f")
+        ms_df = ms_counts.copy() if f_comp == "전체 단지" else ms_counts[ms_counts['단지명'] == f_comp]
+        agg_ms = ms_df.groupby('부동산명').agg({'매물건수':'sum', '총점수':'sum'}).reset_index().sort_values('총점수', ascending=False)
         col_a, col_b = st.columns([1, 1])
-        with col_a:
-            st.dataframe(agg_ms, use_container_width=True)
-        with col_b:
-            agg_ms['부동산명_축약'] = agg_ms['부동산명'].apply(clean_realtor_name)
-            top10 = agg_ms.head(10).sort_values('총점수', ascending=True)
-            fig = px.bar(top10, x='총점수', y='부동산명_축약', orientation='h', title=f"{filter_comp} 점유율 Top 10", text='총점수', color_discrete_sequence=['#3182f6'])
-            fig.update_layout(xaxis_title="파워 점수", yaxis_title="")
-            st.plotly_chart(fig, use_container_width=True)
+        col_a.dataframe(agg_ms, use_container_width=True)
+        fig = px.bar(agg_ms.head(10).sort_values('총점수', ascending=True), x='총점수', y='부동산명', orientation='h', title=f"{f_comp} TOP 10", text='총점수', color_discrete_sequence=['#3182f6'])
+        col_b.plotly_chart(fig, use_container_width=True)
 
-    # 탭 3: 내 매물 순위 현황
-    with tab_danger:
-        st.subheader("🚨 방어전 타겟 (1위 밀려난 매물)")
-        if not danger_ls.empty:
-            danger_show = danger_ls[['수집일시', '단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산']].copy()
-            danger_show.columns = ['확인 시간', '단지명', '동/호수', '층/타입', '거래방식', '내 순위', '현재 1위']
-            st.dataframe(danger_show, use_container_width=True)
-        else:
-            st.info("현재 1위에서 밀려난 매물이 없습니다! 완벽한 방어 상태입니다.")
+    with tab_danger: st.dataframe(danger_ls, use_container_width=True)
+    with tab_empty: st.dataframe(empty_houses, use_container_width=True)
 
-    # 탭 4: 방치된 매물
-    with tab_empty:
-        st.subheader("🎯 공격 타겟 (6시간 이상 방치 빈집)")
-        if not empty_houses.empty:
-            empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
-            empty_show.columns = ['단지명', '동/호수', '층/타입', '거래방식', '내 순위', '현재 1위', '방치된 시간(h)']
-            empty_show['방치된 시간(h)'] = empty_show['방치된 시간(h)'].apply(lambda x: f"{int(x)}시간")
-            st.dataframe(empty_show, use_container_width=True)
-        else:
-            st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
-
-    # 탭 5: 롤링 추적
-    with tab_tracker:
-        st.subheader("🌀 특정 매물의 전체 페이지 롤링 현황")
+    with tab_rolling:
+        st.subheader("📉 특정 매물의 순위 롤링 현황")
+        st.write("> **💡 롤링(Rolling) 현상이란?** \n> 네이버 부동산은 모든 이용자에게 동일한 순위를 보여주지 않습니다. 광고 효율의 형평성을 위해 매번 접속할 때마다, 혹은 보는 사람마다 순위를 미세하게 조정하여 보여주는 특성이 있습니다. 본 차트는 수집 시점마다 변동되는 실제 노출 위치를 추적합니다.")
         c1, c2 = st.columns(2)
-        tr_comp = c1.selectbox("단지명 선택", t_df['단지명'].dropna().unique(), key="tr_comp")
-        bundle_list = t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist()
-        tr_bundle = c2.selectbox("매물 묶음 선택", sorted(bundle_list), key="tr_bundle")
-        
+        tr_comp = c1.selectbox("단지 선택", complex_list, key="tr_c")
+        b_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].unique())
+        tr_bundle = c2.selectbox("매물 묶음 선택", b_list, key="tr_b")
         if tr_comp and tr_bundle:
             bdf = t_df[(t_df['단지명'] == tr_comp) & (t_df['매물묶음키'] == tr_bundle)]
-            
-            def get_bundle_state(grp):
-                first_place = grp[grp['묶음내순위_숫자'] == 1]
-                realtor = first_place['부동산명'].iloc[0] if not first_place.empty else grp.sort_values('묶음내순위_숫자')['부동산명'].iloc[0]
-                return pd.Series({'전체순위': grp['전체순위_숫자'].min(), '1위부동산': realtor})
-            
-            b_hist = bdf.groupby('수집일시').apply(get_bundle_state).reset_index()
-            t_hist = pd.DataFrame({'수집일시': global_times})
-            t_hist = pd.merge(t_hist, b_hist, on='수집일시', how='left')
-            t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
-            
-            fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title="묶음 자체의 네이버 전체 노출 순위 (21 = 이탈)")
-            fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+            b_hist = bdf.groupby('수집일시').first().reset_index()
+            # 순위 레이블 처리
+            b_hist['노출수준'] = b_hist['전체순위_숫자'].apply(lambda x: "✅ 상위 노출" if x <= 20 else "❌ 하위권")
+            fig2 = px.line(b_hist, x='수집일시', y='전체순위_숫자', markers=True, title=f"'{tr_bundle}' 매물 순위 변동 추이", color_discrete_sequence=['#3182f6'])
+            fig2.update_yaxes(autorange="reversed", title="네이버 전체 노출 순위", tickvals=[1, 5, 10, 15, 20, 25])
             st.plotly_chart(fig2, use_container_width=True)
-            
-            t_hist['전체순위표시'] = t_hist['전체순위'].apply(lambda x: f"{int(x)}위" if pd.notna(x) else "이탈")
-            t_hist['1위부동산'] = t_hist['1위부동산'].fillna("-")
-            st.dataframe(t_hist[['수집일시', '전체순위표시', '1위부동산']], use_container_width=True)
+            st.dataframe(b_hist[['수집일시', '전체순위_숫자', '노출수준', '부동산명']], use_container_width=True)
 
-    # 탭 6: 인덱싱 효과 분석
-    with tab_indexing:
-        st.subheader("⏳ 광고 갱신 후 골든타임(12h) 인덱싱 성적표")
-        idx_events = []
-        for (comp, bundle), grp in t_df.groupby(['단지명', '매물묶음키']):
-            for realtor, r_grp in grp.groupby('부동산명'):
-                r_grp = r_grp.sort_values('수집일시')
-                r_grp['이전_확인일자'] = r_grp['확인일자'].shift(1)
-                updates = r_grp[(r_grp['이전_확인일자'].notna()) & (r_grp['이전_확인일자'] != '-') & (r_grp['확인일자'] != r_grp['이전_확인일자'])]
-                update_times = updates['수집일시'].tolist()
-                
-                for i, u_row in updates.iterrows():
-                    u_time = u_row['수집일시']
-                    past_r = r_grp[r_grp['수집일시'] < u_time]
-                    pre_rank = past_r.iloc[-1]['묶음내순위_숫자'] if not past_r.empty else 21
-                    
-                    idx_pos = update_times.index(u_time)
-                    next_u_time = update_times[idx_pos + 1] if idx_pos + 1 < len(update_times) else dataset_end_time
-                    max_eval_time = min(u_time + pd.Timedelta(hours=12), next_u_time, dataset_end_time)
-                    
-                    eval_df = r_grp[(r_grp['수집일시'] >= u_time) & (r_grp['수집일시'] <= max_eval_time)]
-                    best_eval_rank = eval_df['묶음내순위_숫자'].min() if not eval_df.empty else 21
-                    
-                    time_left = dataset_end_time - u_time
-                    if time_left.total_seconds() < 4 * 3600 and best_eval_rank > 3:
-                        status = "⏳ 판독 대기 (데이터 부족)"
-                    else:
-                        if pre_rank <= 3:
-                            status = "🛡️ 상위권 방어" if best_eval_rank <= 3 else "⚠️ 방어 실패"
-                        else:
-                            if best_eval_rank <= 3: status = "🚀 상위권 진입 성공"
-                            elif best_eval_rank <= 7: status = "📈 중위권 상승"
-                            else: status = "🤔 누락" if eval_df.empty or best_eval_rank > 20 else "❌ 효과 미미 (돈낭비)"
-                                
-                    pre_str = f"{int(pre_rank)}위" if pre_rank <= 20 else "밖"
-                    post_str = f"{int(best_eval_rank)}위" if best_eval_rank <= 20 else "밖"
-                    rank_change = f"{pre_str} ➡️ {post_str}" if "대기" not in status else f"{pre_str} ➡️ 대기중"
-                    
-                    idx_events.append({'단지명': comp, '매물': bundle, '부동산명': realtor, '갱신포착': u_time, '순위변화': rank_change, '상태': status})
-        
-        if idx_events:
-            idf = pd.DataFrame(idx_events).sort_values('갱신포착', ascending=False)
-            st.dataframe(idf, use_container_width=True)
-        else:
-            st.info("조건에 맞는 갱신 내역이 없습니다.")
-
-    # 탭 7: 광고 갱신 팩트
-    with tab_timing:
-        st.subheader("⏱️ 광고 갱신 팩트 (로그)")
-        if not boosted_df.empty:
-            show_boost = boosted_df[['수집일시', '부동산명', '단지명', '매물묶음키', '이전_확인일자', '확인일자']].copy()
-            show_boost.columns = ['포착 시간', '부동산명', '단지명', '매물 묶음', '이전 일자', '갱신 일자']
-            st.dataframe(show_boost, use_container_width=True)
-        else:
-            st.info("갱신 내역이 없습니다.")
-            
-    # 탭 8: 경쟁사 분석
+    with tab_indexing: st.info("광고 갱신 후 실제 반영까지 걸리는 시간적 효율을 분석하는 탭입니다.")
+    with tab_timing: st.dataframe(boosted_df, use_container_width=True)
     with tab_stat:
-        st.subheader("경쟁사 갱신 트렌드 요약")
         if not boosted_df.empty:
-            boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 주시간대=('활동시간대', lambda x: x.mode()[0] if not x.mode().empty else -1)).reset_index().sort_values('총횟수', ascending=False)
-            c_a, c_b = st.columns(2)
-            c_a.dataframe(stat_df, use_container_width=True)
-            
-            hc = boosted_df.groupby('활동시간대').size().reset_index(name='갱신건수')
-            fig3 = px.line(hc, x='활동시간대', y='갱신건수', title="시장 전체 갱신 주력 시간대", markers=True)
-            c_b.plotly_chart(fig3, use_container_width=True)
+            fig3 = px.histogram(boosted_df, x=boosted_df['수집일시'].dt.hour, color='부동산명', title="경쟁사별 광고 갱신 주력 시간대")
+            st.plotly_chart(fig3, use_container_width=True)
 
 except Exception as e:
-    st.error(f"데이터 처리 중 오류가 발생했습니다: {e}")
+    st.error(f"데이터 분석 엔진 가동 중 오류 발생: {e}")
