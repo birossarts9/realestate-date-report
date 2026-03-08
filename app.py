@@ -228,7 +228,7 @@ try:
         top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
         if not top_realtor_data.empty:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f", 평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
             
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     st.markdown("---")
@@ -277,7 +277,7 @@ try:
         with col_p3: st.markdown(card_html.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="소장님이 잠든 새벽에도 24시간<br>원하는 시간에 재광고 무한 실행"), unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
+        st.info("🏦 **결제 계좌:** 하나은행 173-910-317-90907 (예금주: 신성우)  \n📞 **문의:** 010-8416-2806")
 
     with tab_ms:
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
@@ -315,7 +315,7 @@ try:
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
     with tab_rolling:
-        st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
+        st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 단의 실제 평균 노출 위치를 분석합니다.")
         c1, c2 = st.columns(2)
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
         bundle_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist())
@@ -373,3 +373,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
