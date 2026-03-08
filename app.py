@@ -109,10 +109,21 @@ try:
     min_time, max_time = df['수집일시'].min(), df['수집일시'].max()
     
     st.sidebar.write("**분석 기간 설정**")
-    start_date = st.sidebar.date_input("시작일", min_time.date())
-    end_date = st.sidebar.date_input("종료일", max_time.date())
     
-    mask = (df['수집일시'].dt.date >= start_date) & (df['수집일시'].dt.date <= end_date)
+    # [수정] 날짜와 시간 입력을 분리하여 나란히 배치 (시간 범위 지정 가능)
+    col_d1, col_t1 = st.sidebar.columns([3, 2])
+    start_date = col_d1.date_input("시작일", min_time.date())
+    start_time = col_t1.time_input("시작시간", min_time.time())
+    
+    col_d2, col_t2 = st.sidebar.columns([3, 2])
+    end_date = col_d2.date_input("종료일", max_time.date())
+    end_time = col_t2.time_input("종료시간", max_time.time())
+    
+    # 선택된 날짜와 시간을 합쳐서 datetime 객체로 변환
+    start_dt = datetime.combine(start_date, start_time)
+    end_dt = datetime.combine(end_date, end_time)
+    
+    mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
     t_df = df[mask].copy()
     
     if t_df.empty:
@@ -198,9 +209,12 @@ try:
         top_spender_raw_name = stat_df.iloc[0]['부동산명']
         top_spender = f"{clean_realtor_name(top_spender_raw_name)} ({stat_df.iloc[0]['총횟수']}회)"
         top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
+        
+        # [수정] 크롤링 공백기로 인한 쏠림 방지를 위해 mode(최빈값)가 아닌 mean(평균)으로 갱신 시간대 계산
         if not top_realtor_data.empty:
-            peak_h = top_realtor_data['수집일시'].dt.hour.mode()[0]
-            peak_hour_str = f", 주로 {peak_h}시에 집중적으로 갱신하고 있습니다."
+            avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
+            peak_hour_str = f", 평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+            
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     
     st.markdown("---")
@@ -236,7 +250,8 @@ try:
             top_empty_comps = empty_houses['단지명'].value_counts().head(2)
             empty_detail = f"\n*(추천 타겟: {', '.join([f'{k}({v}건)' for k, v in top_empty_comps.items()])} 위주로 우선 갱신을 추천드립니다.)*"
 
-        briefing = f"""[📅 이실장 시장 동향 브리핑]\n(기간: {start_date.strftime('%m/%d')} ~ {end_date.strftime('%m/%d')})\n\n📊 시장 점유율 현황:\n대표님의 현재 단지별 랭킹은 [{rank_str if rank_str else "순위 없음"}] 입니다.\n\n🚨 방어전 필요: {len(danger_ls)}건{danger_detail}\n🎯 공격 타겟: {len(empty_houses)}건{empty_detail}\n🔥 경쟁사 위협: {top_spender}"""
+        # [수정] 브리핑 기간에도 시간까지 상세하게 표시하도록 포맷 변경
+        briefing = f"""[📅 이실장 시장 동향 브리핑]\n(기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')})\n\n📊 시장 점유율 현황:\n대표님의 현재 단지별 랭킹은 [{rank_str if rank_str else "순위 없음"}] 입니다.\n\n🚨 방어전 필요: {len(danger_ls)}건{danger_detail}\n🎯 공격 타겟: {len(empty_houses)}건{empty_detail}\n🔥 경쟁사 위협: {top_spender}{peak_hour_str}"""
         st.text_area("마우스로 긁거나 터치하여 복사하세요.", value=briefing, height=400)
         
     with tab_ms:
@@ -344,11 +359,20 @@ try:
         st.subheader("경쟁사 갱신 트렌드 요약")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 주시간대=('활동시간대', lambda x: x.mode()[0] if not x.mode().empty else -1)).reset_index().sort_values('총횟수', ascending=False)
+            
+            # [수정] mode(최빈값) 대신 mean(평균값)을 적용하여 '평균 갱신 시간대' 도출
+            stat_df = boosted_df.groupby('부동산명').agg(
+                총횟수=('부동산명', 'count'), 
+                평균시간대=('활동시간대', lambda x: int(round(x.mean())) if not x.empty else -1)
+            ).reset_index().sort_values('총횟수', ascending=False)
+            
+            stat_df['평균시간대'] = stat_df['평균시간대'].apply(lambda x: f"{x}시" if x != -1 else "-")
+            
             c_a, c_b = st.columns(2)
             stat_show = stat_df.copy()
             stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
             c_a.dataframe(stat_show, use_container_width=True)
+            
             hc = boosted_df.groupby('활동시간대').size().reset_index(name='갱신건수')
             fig3 = px.line(hc, x='활동시간대', y='갱신건수', title="시장 전체 갱신 주력 시간대", markers=True)
             c_b.plotly_chart(fig3, use_container_width=True)
