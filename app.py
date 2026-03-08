@@ -218,7 +218,7 @@ try:
     ])
     
     with tab_report:
-        # [신규 UI] 시안 반영 브리핑 박스
+        # 1. 최상단 브리핑 섹션
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
@@ -233,17 +233,15 @@ try:
 
 🔥 경쟁사 동향:
 - 가장 활발한 경쟁사: [{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]
-- {peak_hour_str} 해당 시간대를 피해 광고를 올리거나, 자동화 솔루션을 활용하세요.
+- {peak_hour_str} 해당 시간을 피해 광고를 올리거나, 자동화 솔루션을 활용하세요.
             </p>
         </div>
         """, unsafe_allow_html=True)
         
-        # [강화된 UI] 프리미엄 통합팩 강조 가격 카드
+        # 2. 서비스 신청 안내 (프리미엄 통합팩 강조 디자인)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
+        col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         
-        col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1]) # 가운데 컬럼을 더 넓게 배치
-        
-        # 기본 카드 스타일
         base_card = """
         <div style="position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; height: 100%; margin-top: 15px;">
             <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
@@ -253,8 +251,6 @@ try:
             <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
         </div>
         """
-        
-        # 강조형 카드 스타일 (프리미엄 통합팩용)
         focus_card = """
         <div style="position: relative; padding: 35px 20px; border-radius: 24px; background-color: white; border: 3px solid #3182f6; box-shadow: 0 15px 35px rgba(49, 130, 246, 0.15); text-align: center; height: 100%; transform: scale(1.05); z-index: 10;">
             <div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); background-color: #3182f6; color: white; padding: 6px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; white-space: nowrap;">⭐ 소장님 베스트 선택</div>
@@ -265,12 +261,23 @@ try:
             <div style="font-size: 15px; color: #1e293b; font-weight: 600; line-height: 1.6;">{desc}</div>
         </div>
         """
-        
         with col_p1: st.markdown(base_card.format(title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(focus_card.format(title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>한 번에 관리하는 올인원 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(base_card.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
 
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        # 3. [신규 추가] 광고 자동화 기능 상세 설명 (직관적인 위치)
+        st.markdown(f"""
+        <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
+            <h3 style="color:#0f172a; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
+            <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">
+                네이버 부동산의 치열한 순위 경쟁에서 소장님의 소중한 시간을 지켜드리는 기술입니다.<br>
+                <b>소장님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>
+                시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
@@ -311,7 +318,7 @@ try:
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
     with tab_rolling:
-        st.info("💡 **순위 롤링 가이드:** 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
+        st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
         c1, c2 = st.columns(2)
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
         bundle_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist())
@@ -334,7 +341,7 @@ try:
             st.dataframe(t_show, use_container_width=True)
 
     with tab_timing:
-        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다.")
+        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다. 경쟁사가 언제 움직였는지 증거를 확인하세요.")
         if not boosted_raw.empty:
             show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '확인일자', '왜곡영역']].copy()
             show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
@@ -346,11 +353,16 @@ try:
         else: st.info("갱신 내역이 없습니다.")
             
     with tab_stat:
-        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들의 광고 지출 골든 타임입니다.")
+        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean()))), 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())).reset_index()
+            realtor_stats = boosted_df.groupby('부동산명').agg(
+                총횟수=('부동산명', 'count'), 
+                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
+                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
+            ).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
+            
             c_a, c_b = st.columns(2)
             with c_a:
                 stat_show = stat_df_final.copy()
