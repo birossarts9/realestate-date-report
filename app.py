@@ -24,6 +24,9 @@ query_params = st.query_params
 user_id = query_params.get("id", "a123") 
 my_realtor = REALTOR_MAP.get(user_id, "더자이디엘") 
 
+# --- [추가] 데모 모드 판별기 ---
+IS_DEMO_MODE = (user_id == "demo")
+
 # --- 1. 웹사이트 기본 세팅 (전체화면 모드) ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
@@ -109,6 +112,22 @@ try:
     if t_df.empty:
         st.error("설정한 기간에 데이터가 없습니다.")
         st.stop()
+
+    # --- 🛡️ [추가] 데모 모드 마스킹 처리 엔진 🛡️ ---
+    if IS_DEMO_MODE:
+        st.sidebar.success("🔐 현재 체험용(Demo) 모드로 접속 중입니다. 핵심 데이터는 블러 처리됩니다.")
+        
+        # 1. 동/호수 마스킹 (숫자를 *로 변경)
+        def mask_dong_ho(text):
+            return re.sub(r'\d', '*', str(text))
+        t_df['동/호수'] = t_df['동/호수'].apply(mask_dong_ho)
+        t_df['매물묶음키'] = t_df.apply(lambda r: f"{r['동/호수']} | {r['층/타입']} | {r['거래방식']} | {r['가격']}", axis=1)
+        
+        # 2. 경쟁사 이름 마스킹 (경쟁사 A, B, C...)
+        competitors = [c for c in t_df['부동산명'].unique() if c != my_realtor]
+        comp_map = {name: f"경쟁사 {chr(65+i)}" for i, name in enumerate(competitors)}
+        t_df['부동산명'] = t_df['부동산명'].apply(lambda x: x if x == my_realtor else comp_map.get(x, x))
+    # ------------------------------------------------
         
     global_times = t_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
     dataset_end_time = global_times.max()
@@ -140,7 +159,11 @@ try:
             my_ranks_dict[comp] = "권외"
 
     # --- 메인 화면 시작 ---
-    st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향")
+    if IS_DEMO_MODE:
+        st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향 (🔒체험판)")
+        st.info("💡 체험판에서는 타 부동산의 실명과 정확한 동/호수가 [경쟁사 A], [**동 ***호] 형태로 보호됩니다.")
+    else:
+        st.title(f"📊 {my_realtor} 대표님을 위한 시장 동향")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -210,8 +233,10 @@ try:
         "🌀 매물 롤링 추적", "⏳ 인덱싱 효과 분석", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
+    # 탭 1: 브리핑
     with tab_report:
         st.subheader("브리핑 내용")
+        
         rank_str = " / ".join([f"{k} {v}위" for k, v in my_ranks_dict.items() if v != "권외"])
         
         danger_detail = ""
@@ -242,6 +267,7 @@ try:
 """
         st.text_area("마우스로 긁거나 터치하여 복사하세요.", value=briefing, height=450)
         
+    # 탭 2: 점유율
     with tab_ms:
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
@@ -261,6 +287,7 @@ try:
             fig.update_layout(xaxis_title="파워 점수", yaxis_title="")
             st.plotly_chart(fig, use_container_width=True)
 
+    # 탭 3: 내 매물 순위 현황
     with tab_danger:
         st.subheader("🚨 방어전 타겟 (1위 밀려난 매물)")
         if not danger_ls.empty:
@@ -270,6 +297,7 @@ try:
         else:
             st.info("현재 1위에서 밀려난 매물이 없습니다! 완벽한 방어 상태입니다.")
 
+    # 탭 4: 방치된 매물
     with tab_empty:
         st.subheader("🎯 공격 타겟 (6시간 이상 방치 빈집)")
         if not empty_houses.empty:
@@ -280,6 +308,7 @@ try:
         else:
             st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
+    # 탭 5: 롤링 추적
     with tab_tracker:
         st.subheader("🌀 특정 매물의 전체 페이지 롤링 현황")
         c1, c2 = st.columns(2)
@@ -308,6 +337,7 @@ try:
             t_hist['1위부동산'] = t_hist['1위부동산'].fillna("-")
             st.dataframe(t_hist[['수집일시', '전체순위표시', '1위부동산']], use_container_width=True)
 
+    # 탭 6: 인덱싱 효과 분석
     with tab_indexing:
         st.subheader("⏳ 광고 갱신 후 골든타임(12h) 인덱싱 성적표")
         idx_events = []
@@ -353,6 +383,7 @@ try:
         else:
             st.info("조건에 맞는 갱신 내역이 없습니다.")
 
+    # 탭 7: 광고 갱신 팩트
     with tab_timing:
         st.subheader("⏱️ 광고 갱신 팩트 (로그)")
         if not boosted_df.empty:
@@ -362,6 +393,7 @@ try:
         else:
             st.info("갱신 내역이 없습니다.")
             
+    # 탭 8: 경쟁사 분석
     with tab_stat:
         st.subheader("경쟁사 갱신 트렌드 요약")
         if not boosted_df.empty:
