@@ -26,19 +26,16 @@ REALTOR_MAP = load_realtor_map()
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
 
-# --- 🚀 [핵심 수정] 데모 모드 데이터 매핑 로직 ---
+# --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
-# 데모 모드라면 실제 데이터가 존재하는 'a123(더자이디엘)'을 타겟 ID로 삼음
 active_id = "a123" if IS_DEMO_MODE else user_id
-# 엑셀 파일 내에서 실제로 필터링(검색)할 상호명
 filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
-# 화면 상단 및 표에서 보여줄 상호명 (데모면 '체험용' 상호로 세탁)
 display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
 
 # --- 1. 웹사이트 기본 세팅 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# --- 3. 유틸리티 함수 (마스킹 로직 강화) ---
+# --- 3. 유틸리티 함수 ---
 def clean_realtor_name(name):
     pattern = r'공인중개사사무소|공인중개사|중개사무소|부동산|중개사|공인|중개|사무소'
     cleaned = re.sub(pattern, '', str(name)).strip()
@@ -47,10 +44,8 @@ def clean_realtor_name(name):
 def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
-        # 데이터 원본의 상호명(더자이디엘 등)이 나오면 체험용 명칭으로 교체
         if text == filter_realtor_name: return display_realtor
         return f"경쟁사 {hash(str(text)) % 100}"
-    # 동/호수 숫자는 별표 처리
     return re.sub(r'\d', '*', str(text))
 
 @st.cache_data(show_spinner=False)
@@ -143,11 +138,10 @@ try:
         cdf = ms_counts[ms_counts['단지명'] == comp].copy()
         if cdf.empty: continue
         cdf['순위'] = cdf['총점수'].rank(ascending=False, method='min')
-        # [수정] 데모 모드 대응: 필터 상호명으로 순위 확인
         my_r = cdf[cdf['부동산명'].str.contains(filter_realtor_name)]
         my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
-    # --- 🚨 관리자 전용 실시간 알림판 (시차 보정) ---
+    # --- 관리자 전용 알림 섹션 (시차 보정 반영) ---
     MASTER_ADMIN_ID = "a123" 
     if user_id == MASTER_ADMIN_ID:
         KST = timezone(timedelta(hours=9))
@@ -155,7 +149,7 @@ try:
         last_update_dt = df['수집일시'].max()
         alive_diff = now_kst - last_update_dt
         if alive_diff > timedelta(hours=2.5):
-            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
+            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** PC를 확인하세요. (최종수집: {last_update_dt.strftime('%m/%d %H:%M')})")
         if 'json_error' in st.session_state:
             st.warning(f"⚠️ **[관리자 알림] realtors.json 오류:** {st.session_state['json_error']}")
 
@@ -171,7 +165,6 @@ try:
         kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
         st.subheader(f"{kpi_rank}위" if kpi_rank != "권외" else "권외")
 
-    # [수정] 데모 대응: 필터 상호명으로 내 매물 리스트업
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -198,15 +191,10 @@ try:
     col3.metric("🎯 방치된 꿀매물 (최적타겟)", f"{len(empty_houses)}건")
 
     trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
-    trk['쌍둥이_식별자'] = trk.groupby(group_keys + ['수집일시']).cumcount()
-    fgk = group_keys + ['쌍둥이_식별자']
-    trk = trk.sort_values(fgk + ['수집일시'])
-    trk['이전_확인일자'] = trk.groupby(fgk)['확인일자'].shift(1)
-    trk['수집일시_Date'] = trk['수집일시'].dt.normalize()
+    trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-    c2 = trk['이전_확인일자'].isna() & ((trk['수집일시_Date'] - trk['확인일자_Date']).dt.days.between(0,1))
     
-    boosted_raw = trk[c1 | c2]
+    boosted_raw = trk[c1]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
     
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
@@ -223,13 +211,14 @@ try:
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     st.markdown("---")
 
-    # --- 탭 구성 ---
+    # --- 탭 구성 및 디자인 개편 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
     with tab_report:
+        # [신규 UI] 시안 반영 브리핑 박스
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
@@ -249,20 +238,39 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
+        # [강화된 UI] 프리미엄 통합팩 강조 가격 카드
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
-        col_p1, col_p2, col_p3 = st.columns(3)
-        card_html = """
-        <div style="position: relative; padding: 30px 20px; border-radius: 20px; background-color: white; border: 1px solid #e5e8eb; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center; height: 100%;">
-            <div style="position: absolute; top: -15px; right: 15px; background-color: #ef4444; color: white; padding: 6px 12px; border-radius: 10px; font-weight: 800; font-size: 14px;">20% OFF</div>
-            <div style="font-size: 20px; font-weight: 700; margin-bottom: 15px; color: #4b5563;">{title}</div>
-            <div style="color: #9ca3af; text-decoration: line-through; font-size: 16px;">{old_price}</div>
-            <div style="font-size: 32px; font-weight: 900; color: #3182f6; margin-bottom: 20px;">{new_price}</div>
-            <div style="font-size: 14px; color: #6b7280;">{desc}</div>
+        
+        col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1]) # 가운데 컬럼을 더 넓게 배치
+        
+        # 기본 카드 스타일
+        base_card = """
+        <div style="position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; height: 100%; margin-top: 15px;">
+            <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div>
+            <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div>
+            <div style="font-size: 28px; font-weight: 900; color: #64748b; margin-bottom: 15px;">{new_price}</div>
+            <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
         </div>
         """
-        with col_p1: st.markdown(card_html.format(title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="매일 아침 자동 생성되는<br>단지별 점유율 및 경쟁사 분석"), unsafe_allow_html=True)
-        with col_p2: st.markdown(card_html.format(title="⭐ 프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="분석 리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
-        with col_p3: st.markdown(card_html.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="소장님이 잠든 새벽에도 24시간<br>원하는 시간에 재광고 무한 실행"), unsafe_allow_html=True)
+        
+        # 강조형 카드 스타일 (프리미엄 통합팩용)
+        focus_card = """
+        <div style="position: relative; padding: 35px 20px; border-radius: 24px; background-color: white; border: 3px solid #3182f6; box-shadow: 0 15px 35px rgba(49, 130, 246, 0.15); text-align: center; height: 100%; transform: scale(1.05); z-index: 10;">
+            <div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); background-color: #3182f6; color: white; padding: 6px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; white-space: nowrap;">⭐ 소장님 베스트 선택</div>
+            <div style="position: absolute; top: 15px; right: 15px; background-color: #ef4444; color: white; padding: 5px 12px; border-radius: 10px; font-weight: 800; font-size: 14px; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);">최대 할인</div>
+            <div style="font-size: 22px; font-weight: 800; margin-bottom: 18px; color: #1e3a8a;">{title}</div>
+            <div style="color: #9ca3af; text-decoration: line-through; font-size: 17px; margin-bottom: 5px;">{old_price}</div>
+            <div style="font-size: 40px; font-weight: 950; color: #3182f6; margin-bottom: 25px;">{new_price}</div>
+            <div style="font-size: 15px; color: #1e293b; font-weight: 600; line-height: 1.6;">{desc}</div>
+        </div>
+        """
+        
+        with col_p1: st.markdown(base_card.format(title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
+        with col_p2: st.markdown(focus_card.format(title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>한 번에 관리하는 올인원 패키지"), unsafe_allow_html=True)
+        with col_p3: st.markdown(base_card.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
+
+        st.markdown("<br><br>", unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
@@ -326,7 +334,7 @@ try:
             st.dataframe(t_show, use_container_width=True)
 
     with tab_timing:
-        st.info("💡 **데이터 로그 가이드:** 수집된 데이터 중 가격이나 상태가 변경된 모든 '액션' 기록입니다. 경쟁사가 언제 움직였는지 증거를 확인하세요.")
+        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다.")
         if not boosted_raw.empty:
             show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '확인일자', '왜곡영역']].copy()
             show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
@@ -338,25 +346,21 @@ try:
         else: st.info("갱신 내역이 없습니다.")
             
     with tab_stat:
-        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
+        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들의 광고 지출 골든 타임입니다.")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            realtor_stats = boosted_df.groupby('부동산명').agg(
-                총횟수=('부동산명', 'count'), 
-                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
-                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
-            ).reset_index()
+            realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean()))), 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
-            
             c_a, c_b = st.columns(2)
-            stat_show = stat_df_final.copy()
-            stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
-            stat_show['평균시간'] = stat_show['평균시간'].apply(lambda x: f"{x}시")
-            c_a.dataframe(stat_show[['부동산명', '총횟수', '평균시간']], use_container_width=True)
-            
-            hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
-            fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
-            c_b.plotly_chart(fig3, use_container_width=True)
+            with c_a:
+                stat_show = stat_df_final.copy()
+                stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
+                stat_show['평균시간'] = stat_show['평균시간'].apply(lambda x: f"{x}시")
+                c_a.dataframe(stat_show[['부동산명', '총횟수', '평균시간']], use_container_width=True)
+            with c_b:
+                hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
+                fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
+                c_b.plotly_chart(fig3, use_container_width=True)
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
