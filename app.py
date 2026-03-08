@@ -63,6 +63,12 @@ def process_data(df):
     df = pd.merge(df, session_rep, on='세션ID', how='left')
     df['수집일시'] = df['대표수집일시']
     
+    # [추가] 2.5시간 이상 수집 공백기 판별 로직
+    session_times = df['수집일시'].drop_duplicates().sort_values()
+    gap_check = session_times.diff().dt.total_seconds() / 3600.0
+    gap_sessions = session_times[gap_check > 2.5].tolist()
+    df['공백후첫수집'] = df['수집일시'].isin(gap_sessions)
+    
     df['전체순위_숫자'] = pd.to_numeric(df['전체순위'].astype(str).str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
     df['묶음내순위_숫자'] = pd.to_numeric(df['묶음내순위'].astype(str).str.replace('단독', '1').str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
     
@@ -110,16 +116,15 @@ try:
     
     st.sidebar.write("**분석 기간 설정**")
     
-    # [수정] 날짜와 시간 입력을 분리하여 나란히 배치 (시간 범위 지정 가능)
-    col_d1, col_t1 = st.sidebar.columns([3, 2])
-    start_date = col_d1.date_input("시작일", min_time.date())
-    start_time = col_t1.time_input("시작시간", min_time.time())
+    # [수정] 날짜와 시간을 나란히 배치하여 시간 설정 UI 가시성 및 기능 극대화
+    col_sd, col_st = st.sidebar.columns([1, 1])
+    start_date = col_sd.date_input("시작일", min_time.date())
+    start_time = col_st.time_input("시작시간", min_time.time())
     
-    col_d2, col_t2 = st.sidebar.columns([3, 2])
-    end_date = col_d2.date_input("종료일", max_time.date())
-    end_time = col_t2.time_input("종료시간", max_time.time())
+    col_ed, col_et = st.sidebar.columns([1, 1])
+    end_date = col_ed.date_input("종료일", max_time.date())
+    end_time = col_et.time_input("종료시간", max_time.time())
     
-    # 선택된 날짜와 시간을 합쳐서 datetime 객체로 변환
     start_dt = datetime.combine(start_date, start_time)
     end_dt = datetime.combine(end_date, end_time)
     
@@ -201,7 +206,10 @@ try:
     trk['수집일시_Date'] = trk['수집일시'].dt.normalize()
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
     c2 = trk['이전_확인일자'].isna() & ((trk['수집일시_Date'] - trk['확인일자_Date']).dt.days.between(0,1))
-    boosted_df = trk[c1 | c2]
+    
+    # [수정] 2.5시간 이상 공백 후 수집된 데이터 필터링 적용 (가짜 쏠림 현상 방지)
+    boosted_raw = trk[c1 | c2]
+    boosted_df = boosted_raw[boosted_raw['공백후첫수집'] == False].copy()
     
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
     if not boosted_df.empty:
@@ -348,10 +356,13 @@ try:
 
     with tab_timing:
         st.subheader("⏱️ 광고 갱신 팩트 (로그)")
-        if not boosted_df.empty:
-            show_boost = boosted_df[['수집일시', '부동산명', '단지명', '매물묶음키', '이전_확인일자', '확인일자']].copy()
+        # [수정] 차트에서 제외된 공백기 데이터도 여기서는 내역 확인 가능하도록 원본 데이터 사용 및 비고란 추가
+        if not boosted_raw.empty:
+            show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '이전_확인일자', '확인일자', '공백후첫수집']].copy()
             show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
             show_boost['매물묶음키'] = show_boost['매물묶음키'].apply(mask_text)
+            show_boost['비고'] = show_boost['공백후첫수집'].apply(lambda x: "⚠️ 2.5h 이상 공백 제외됨" if x else "정상")
+            show_boost = show_boost.drop(columns=['공백후첫수집'])
             st.dataframe(show_boost, use_container_width=True)
         else: st.info("갱신 내역이 없습니다.")
             
