@@ -35,7 +35,7 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 카드 인터랙션, 브리핑 고도화)
+# 전역 스타일 주입 (탭 메뉴, 상단 지표 수평 정렬, 카드 인터랙션, 브리핑 고도화)
 st.markdown("""
     <style>
     /* 1. 탭 메뉴 글씨 확대 */
@@ -43,7 +43,33 @@ st.markdown("""
         font-size: 20px !important;
         font-weight: bold !important;
     }
-    /* 2. 서비스 신청 안내 카드 인터랙션 */
+    /* 2. 상단 KPI 커스텀 스타일 (노란색 박스 정렬용) */
+    .kpi-container {
+        background-color: white;
+        padding: 10px;
+        border-radius: 10px;
+    }
+    .kpi-title-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 40px;
+        margin-bottom: 10px;
+    }
+    .kpi-title {
+        font-size: 20px !important;
+        font-weight: bold !important;
+        color: #1e293b;
+        margin: 0 !important;
+    }
+    .kpi-value {
+        font-size: 38px !important;
+        font-weight: 800 !important;
+        color: #1e293b;
+        margin: 0 !important;
+        line-height: 1 !important;
+    }
+    /* 3. 서비스 신청 안내 카드 인터랙션 */
     .pricing-card {
         position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
         border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
@@ -61,14 +87,34 @@ st.markdown("""
     .focus-card:hover {
         transform: translateY(-10px) scale(1.08) !important;
     }
-    /* 3. 브리핑 카드 및 텍스트 스타일 */
+    /* 4. [고도화] 브리핑 카드 섹션 스타일 */
     .briefing-strategy-card {
-        background-color: white; padding: 20px; border-radius: 15px; border: 1px solid #e2e8f0; 
-        margin-bottom: 15px; transition: all 0.2s ease;
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 15px;
+        transition: all 0.2s ease;
     }
-    .briefing-strategy-card:hover { border-color: #3182f6; background-color: #fafcfe; }
-    .strategy-tag { display: inline-block; padding: 4px 12px; border-radius: 8px; font-size: 14px; font-weight: 800; margin-bottom: 10px; color: white; }
-    .briefing-content { font-size: 21px !important; line-height: 1.9 !important; font-weight: 600 !important; color: #334155; }
+    .briefing-strategy-card:hover {
+        border-color: #3182f6;
+        background-color: #fafcfe;
+    }
+    .strategy-tag {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 10px;
+        color: white;
+    }
+    .briefing-content {
+        font-size: 21px !important;
+        line-height: 1.9 !important;
+        font-weight: 600 !important;
+        color: #334155;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -188,14 +234,72 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- 메인 화면 시작 (상단 타이틀만 유지) ---
+    # --- 1. 상단 KPI 섹션 (노란색 박스: 완벽한 수평 정렬 보존) ---
     st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
-    if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    kpi_html = '<div class="kpi-container"><div class="kpi-title-row"><p class="kpi-title">{title}</p>{widget}</div><p class="kpi-value">{value}</p></div>'
 
-    # [상단 4개 지표 및 구분선 섹션 삭제 완료]
+    with col1:
+        c1_title_col, c1_sel_col = st.columns([1, 1.2])
+        c1_title_col.markdown("<p style='font-size: 20px; font-weight: bold; margin-top: 5px; color: #1e293b;'>🏆 내 점유율</p>", unsafe_allow_html=True)
+        kpi_comp = c1_sel_col.selectbox("단지", complex_list, label_visibility="collapsed", key="kpi_sel_final")
+        kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
+        st.markdown(f"<p class='kpi-value' style='margin-top: 10px;'>{kpi_rank}위</p>", unsafe_allow_html=True)
 
-    # --- 탭 구성 및 고도화된 UI ---
+    my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
+    danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
+    if not danger_ls.empty:
+        danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
+        danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
+    else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
+    
+    with col2:
+        st.markdown(kpi_html.format(title="🚨 상위 노출 실패 매물", widget="", value=f"{len(danger_ls)}건"), unsafe_allow_html=True)
+
+    bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
+    bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
+    bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
+    bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
+    lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
+    bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
+    mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
+    mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
+    tb = mb[mb['방치시간(시간)'] >= 6]
+    empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
+    empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
+    if not empty_houses.empty:
+        empty_houses = pd.merge(empty_houses, first_place_df, on=bundle_keys, how='left')
+        empty_houses['현재1위부동산'] = empty_houses['현재1위부동산'].fillna('알수없음')
+    else: empty_houses['현재1위부동산'] = pd.Series(dtype='str')
+    
+    with col3:
+        st.markdown(kpi_html.format(title="🎯 방치된 꿀매물 (최적타겟)", widget="", value=f"{len(empty_houses)}건"), unsafe_allow_html=True)
+
+    trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
+    trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
+    c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
+    boosted_raw = trk[c1]
+    boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
+    
+    top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
+    if not boosted_df.empty:
+        stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
+        top_spender_raw_name = stat_df.iloc[0]['부동산명']
+        masked_ts_name = mask_text(clean_realtor_name(top_spender_raw_name), True)
+        top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
+        top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
+        if not top_realtor_data.empty:
+            avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
+            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+            
+    with col4:
+        ts_val = f"<span style='font-size:24px;'>{top_spender}</span>" if len(top_spender) > 15 else top_spender
+        st.markdown(kpi_html.format(title="🔥 최대 지출 경쟁사", widget="", value=ts_val), unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # --- [고도화 4단계 적용] 탭 구성 및 작전판 스타일 브리핑 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
@@ -212,56 +316,84 @@ try:
         </div>
         """, unsafe_allow_html=True)
 
-        # 3대 전략 카드
-        my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
-        danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
-        if not danger_ls.empty:
-            danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
-            danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
-        else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
-
-        bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
-        bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
-        bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
-        bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
-        lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
-        bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
-        mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
-        mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
-        tb = mb[mb['방치시간(시간)'] >= 6]
-        empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
-        empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
-
-        trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
-        trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
-        c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-        boosted_raw = trk[c1]
-        boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
-        top_spender_raw_name = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False).iloc[0]['부동산명'] if not boosted_df.empty else ""
-        peak_hour_str = f"평균적으로 {int(round(boosted_df[boosted_df['부동산명'] == top_spender_raw_name]['수집일시'].dt.hour.mean()))}시 부근" if top_spender_raw_name else ""
-
+        # 3대 전략 카드 (초록색 박스 영역 고도화: 폰트 21px 보존)
         s_col1, s_col2, s_col3 = st.columns(3)
-        with s_col1:
-            st.markdown(f"""<div class="briefing-strategy-card"><span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span><div class="briefing-content">현재 대표님의 단지별 랭킹은<br><span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.</div></div>""", unsafe_allow_html=True)
-        with s_col2:
-            st.markdown(f"""<div class="briefing-strategy-card"><span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span><div class="briefing-content">상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.</div></div>""", unsafe_allow_html=True)
-        with s_col3:
-            st.markdown(f"""<div class="briefing-strategy-card"><span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span><div class="briefing-content">타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>최소 비용으로 상위권을 점령할 절호의 기회입니다.</div></div>""", unsafe_allow_html=True)
-
-        st.markdown(f"""<div class="briefing-strategy-card" style="border-left: 5px solid #f59e0b;"><span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span><div class="briefing-content">가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>{peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.</div></div>""", unsafe_allow_html=True)
         
+        with s_col1:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
+                <div class="briefing-content">
+                    현재 대표님의 단지별 랭킹은<br>
+                    <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with s_col2:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span>
+                <div class="briefing-content">
+                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
+                    즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with s_col3:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
+                <div class="briefing-content">
+                    타 부동산이 6시간 이상 방치한 빈집 매물이 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
+                    최소 비용으로 상위권을 점령할 절호의 기회입니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 경쟁사 인텔리전스 (단독 섹션)
+        st.markdown(f"""
+        <div class="briefing-strategy-card" style="border-left: 5px solid #f59e0b;">
+            <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
+            <div class="briefing-content">
+                가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
+                {peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 2. 서비스 신청 안내
         st.markdown("<h2 style='text-align:center; margin-bottom:30px; margin-top:50px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
-        card_content = """<div class="pricing-card {extra_class}"><div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div><div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div><div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div><div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px;">{new_price}</div><div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div></div>"""
+        
+        card_content = """
+        <div class="pricing-card {extra_class}">
+            <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div>
+            <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div>
+            <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px;">{new_price}</div>
+            <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
+        </div>
+        """
         with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
 
-        st.markdown(f"""<div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;"><h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3><p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">네이버 부동산의 치열한 순위 경쟁에서 대표님의 소중한 시간을 지켜드리는 기술입니다.<br><b>대표님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.</p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
+            <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
+            <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">
+                네이버 부동산의 치열한 순위 경쟁에서 대표님의 소중한 시간을 지켜드리는 기술입니다.<br>
+                <b>대표님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>
+                시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
-        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
+        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
         if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
@@ -322,7 +454,7 @@ try:
             st.dataframe(t_show, use_container_width=True)
 
     with tab_timing:
-        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다.")
+        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다. 경쟁사가 언제 움직였는지 증거를 확인하세요.")
         if not boosted_raw.empty:
             show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '확인일자', '왜곡영역']].copy()
             show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
@@ -334,11 +466,16 @@ try:
         else: st.info("갱신 내역이 없습니다.")
             
     with tab_stat:
-        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다.")
+        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean()))), 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())).reset_index()
+            realtor_stats = boosted_df.groupby('부동산명').agg(
+                총횟수=('부동산명', 'count'), 
+                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
+                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
+            ).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
+            
             c_a, c_b = st.columns(2)
             with c_a:
                 stat_show = stat_df_final.copy()
