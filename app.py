@@ -35,7 +35,7 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 상단 KPI 카드, 브리핑 고도화, 카드 인터랙션)
+# 전역 스타일 주입 (탭 메뉴, 카드 인터랙션, 브리핑 고도화)
 st.markdown("""
     <style>
     /* 1. 탭 메뉴 글씨 확대 */
@@ -43,41 +43,7 @@ st.markdown("""
         font-size: 20px !important;
         font-weight: bold !important;
     }
-    /* 2. [고도화] 상단 KPI 카드 전용 스타일 (2단계 반영) */
-    .kpi-stat-card {
-        background-color: white;
-        padding: 25px 20px;
-        border-radius: 20px;
-        border: 1px solid #e5e8eb;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-        height: 180px;
-        transition: all 0.3s ease;
-    }
-    .kpi-stat-card:hover {
-        border-color: #3182f6;
-        box-shadow: 0 10px 25px rgba(49, 130, 246, 0.08);
-    }
-    .kpi-stat-title {
-        font-size: 19px !important;
-        font-weight: 700 !important;
-        color: #64748b;
-        margin-bottom: 15px !important;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .kpi-stat-value {
-        font-size: 44px !important;
-        font-weight: 900 !important;
-        color: #1e293b;
-        margin: 0 !important;
-        line-height: 1 !important;
-    }
-    /* 내 점유율 드롭박스 너비 제한 */
-    .stSelectbox div[data-baseweb="select"] {
-        max-width: 140px !important;
-    }
-    /* 3. 서비스 신청 안내 카드 인터랙션 */
+    /* 2. 서비스 신청 안내 카드 인터랙션 */
     .pricing-card {
         position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
         border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
@@ -95,7 +61,7 @@ st.markdown("""
     .focus-card:hover {
         transform: translateY(-10px) scale(1.08) !important;
     }
-    /* 4. 브리핑 카드 및 텍스트 스타일 (4단계 고도화 유지) */
+    /* 3. 브리핑 카드 및 텍스트 스타일 */
     .briefing-strategy-card {
         background-color: white; padding: 20px; border-radius: 15px; border: 1px solid #e2e8f0; 
         margin-bottom: 15px; transition: all 0.2s ease;
@@ -222,89 +188,12 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- 1. [2단계 고도화] 상단 KPI 섹션 (프리미엄 카드화 및 칼각 정렬) ---
+    # --- 메인 화면 시작 (상단 타이틀만 유지) ---
     st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
     if IS_DEMO_MODE:
         st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
 
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown('<div class="kpi-stat-card">', unsafe_allow_html=True)
-        c1_title_row, c1_sel_row = st.columns([1, 1.1])
-        c1_title_row.markdown("<p class='kpi-stat-title'>🏆 내 점유율</p>", unsafe_allow_html=True)
-        kpi_comp = c1_sel_row.selectbox("단지", complex_list, label_visibility="collapsed", key="kpi_sel_final")
-        kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
-        st.markdown(f"<p class='kpi-stat-value'>{kpi_rank}위</p>", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
-    danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
-    if not danger_ls.empty:
-        danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
-        danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
-    else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
-    
-    with col2:
-        st.markdown(f"""
-        <div class="kpi-stat-card">
-            <p class="kpi-stat-title">🚨 상위 노출 실패 매물</p>
-            <p class="kpi-stat-value">{len(danger_ls)}건</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
-    bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
-    bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
-    bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
-    lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
-    bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
-    mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
-    mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
-    tb = mb[mb['방치시간(시간)'] >= 6]
-    empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
-    empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
-    if not empty_houses.empty:
-        empty_houses = pd.merge(empty_houses, first_place_df, on=bundle_keys, how='left')
-        empty_houses['현재1위부동산'] = empty_houses['현재1위부동산'].fillna('알수없음')
-    else: empty_houses['현재1위부동산'] = pd.Series(dtype='str')
-    
-    with col3:
-        st.markdown(f"""
-        <div class="kpi-stat-card">
-            <p class="kpi-stat-title">🎯 방치된 꿀매물 (최적타겟)</p>
-            <p class="kpi-stat-value">{len(empty_houses)}건</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
-    trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
-    c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-    boosted_raw = trk[c1]
-    boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
-    
-    top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
-    if not boosted_df.empty:
-        stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
-        top_spender_raw_name = stat_df.iloc[0]['부동산명']
-        masked_ts_name = mask_text(clean_realtor_name(top_spender_raw_name), True)
-        top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
-        top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
-        if not top_realtor_data.empty:
-            avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
-            
-    with col4:
-        # 글자 수에 따른 폰트 크기 자동 조절 로직 보존
-        ts_font = "32px" if len(top_spender) > 15 else "40px"
-        st.markdown(f"""
-        <div class="kpi-stat-card">
-            <p class="kpi-stat-title">🔥 최대 지출 경쟁사</p>
-            <p class="kpi-stat-value" style="font-size: {ts_font} !important;">{top_spender}</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("---")
+    # [상단 4개 지표 및 구분선 섹션 삭제 완료]
 
     # --- 탭 구성 및 고도화된 UI ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
@@ -313,6 +202,7 @@ try:
     ])
     
     with tab_report:
+        # 최상단 헤더
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:30px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 필승 전략 브리핑</h2>
@@ -321,6 +211,34 @@ try:
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # 3대 전략 카드
+        my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
+        danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
+        if not danger_ls.empty:
+            danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
+            danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
+        else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
+
+        bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
+        bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
+        bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
+        bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
+        lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
+        bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
+        mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
+        mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
+        tb = mb[mb['방치시간(시간)'] >= 6]
+        empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
+        empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
+
+        trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
+        trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
+        c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
+        boosted_raw = trk[c1]
+        boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
+        top_spender_raw_name = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False).iloc[0]['부동산명'] if not boosted_df.empty else ""
+        peak_hour_str = f"평균적으로 {int(round(boosted_df[boosted_df['부동산명'] == top_spender_raw_name]['수집일시'].dt.hour.mean()))}시 부근" if top_spender_raw_name else ""
 
         s_col1, s_col2, s_col3 = st.columns(3)
         with s_col1:
@@ -404,7 +322,7 @@ try:
             st.dataframe(t_show, use_container_width=True)
 
     with tab_timing:
-        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다. 경쟁사가 언제 움직였는지 증거를 확인하세요.")
+        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다.")
         if not boosted_raw.empty:
             show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '확인일자', '왜곡영역']].copy()
             show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
