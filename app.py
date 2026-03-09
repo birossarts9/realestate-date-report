@@ -35,95 +35,111 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 통합 작전판 복구, 리얼 쉬머 이펙트 적용)
+# [최종 디자인 고도화] 전역 스타일 주입
 st.markdown("""
     <style>
-    /* 1. 탭 메뉴 글씨 확대 */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap');
+
+    /* 1. 탭 메뉴 글씨 확대 및 애니메이션 */
+    button[data-baseweb="tab"] {
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    }
+    button[data-baseweb="tab"]:hover {
+        background-color: rgba(49, 130, 246, 0.1) !important;
+        transform: scale(1.05);
+    }
     button[data-baseweb="tab"] p {
         font-size: 20px !important;
         font-weight: bold !important;
     }
     
-    /* 2. [디자인 복구] 통합 작전판 마스터 보드 및 하얀 박스 스타일 */
+    /* 2. 글래스모피즘 통합 작전판 (마스터 보드) */
     .master-strategy-board {
-        background-color: #f0f7ff;
-        padding: 35px;
-        border-radius: 24px;
-        border: 1px solid #dbeafe;
+        background: linear-gradient(135deg, rgba(240, 247, 255, 0.8), rgba(219, 234, 254, 0.5));
+        backdrop-filter: blur(10px);
+        padding: 40px;
+        border-radius: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
         margin-bottom: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
     }
+
+    /* 3. 작전 카드 및 애니메이션 */
     .strategy-grid {
         display: flex;
         gap: 20px;
-        margin-top: 25px;
-        margin-bottom: 20px;
+        margin-top: 30px;
+        margin-bottom: 25px;
         flex-wrap: wrap;
     }
     .briefing-strategy-card {
-        background-color: white;
+        background: rgba(255, 255, 255, 0.9);
         padding: 25px;
         border-radius: 20px;
         border: 1px solid #e2e8f0;
         flex: 1;
-        min-width: 250px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-        transition: all 0.3s ease;
+        min-width: 300px;
+        transition: all 0.4s ease;
+        position: relative;
+        overflow: hidden;
     }
     .briefing-strategy-card:hover {
         border-color: #3182f6;
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(49, 130, 246, 0.1);
+        transform: translateY(-10px);
+        box-shadow: 0 15px 30px rgba(49, 130, 246, 0.15);
     }
-    .strategy-tag {
-        display: inline-block;
-        padding: 5px 14px;
-        border-radius: 10px;
-        font-size: 14px;
-        font-weight: 800;
-        margin-bottom: 15px;
-        color: white;
+    .briefing-strategy-card::before {
+        content: '';
+        position: absolute;
+        top: -50%; left: -50%; width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(49,130,246,0.1) 0%, transparent 70%);
+        opacity: 0;
+        transition: opacity 0.5s ease;
     }
+    .briefing-strategy-card:hover::before { opacity: 1; }
+
     .briefing-content {
         font-size: 21px !important;
         line-height: 1.8 !important;
         font-weight: 600 !important;
         color: #334155;
     }
-    
-    /* 3. [기능 추가] 프리미엄 카드 리얼 쉬머(Shimmer) 이펙트 */
-    @keyframes shimmerSweep {
-        0% { left: -100%; }
-        20% { left: 200%; }
-        100% { left: 200%; }
+
+    /* 4. 숫자 페이드-업 애니메이션 (기본 지원용) */
+    @keyframes countUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .val-animate {
+        display: inline-block;
+        animation: countUp 1s ease-out forwards;
+    }
+
+    /* 5. [수정완료] 서비스 카드 쉬머 이펙트 및 뱃지 짤림 해결 */
+    @keyframes shimmerBg {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
     }
     .pricing-card {
-        position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
+        position: relative; padding: 25px 15px; border-radius: 20px; 
+        background: linear-gradient(120deg, #ffffff 35%, #f0f7ff 50%, #ffffff 65%);
+        background-size: 200% 100%;
+        animation: shimmerBg 3s infinite linear;
         border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
-        height: 100%; transition: all 0.3s ease; cursor: default; margin-top: 15px;
-        overflow: hidden; /* 빛이 박스 밖으로 삐져나가지 않게 */
-    }
-    /* 카드 위를 훑고 지나가는 빛 줄기 */
-    .pricing-card::after {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%;
-        width: 50%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(49, 130, 246, 0.15), transparent);
-        transform: skewX(-20deg);
-        animation: shimmerSweep 3s infinite ease-in-out;
+        height: 100%; transition: all 0.4s ease; margin-top: 15px;
     }
     .pricing-card:hover {
-        transform: translateY(-10px) scale(1.03);
+        transform: translateY(-12px) scale(1.03);
         border: 2px solid #3182f6 !important;
-        box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
+        box-shadow: 0 25px 50px rgba(49, 130, 246, 0.2);
     }
-    .focus-card {
-        transform: scale(1.05);
-        z-index: 5;
-        border: 2px solid rgba(49, 130, 246, 0.3); /* 프리미엄팩은 기본적으로 파란 테두리 유지 */
-    }
-    .focus-card:hover {
-        transform: translateY(-10px) scale(1.08) !important;
+    .focus-card { transform: scale(1.05); z-index: 5; }
+    .focus-card:hover { transform: translateY(-12px) scale(1.08) !important; }
+
+    /* 6. 입력 컴포넌트 인터랙션 */
+    div[data-baseweb="select"] > div:hover {
+        border-color: #3182f6 !important;
+        box-shadow: 0 0 12px rgba(49, 130, 246, 0.3) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -186,7 +202,7 @@ if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
     st.stop()
 
-# --- 5. 사이드바 (날짜/시간 정밀 설정) ---
+# --- 5. 사이드바 및 데이터 처리 ---
 st.sidebar.title("📅 리포트 상세 설정")
 try:
     df = process_data(raw_df)
@@ -234,21 +250,6 @@ try:
         my_r = cdf[cdf['부동산명'].str.contains(filter_realtor_name)]
         my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
-    # --- 관리자 전용 알림 섹션 ---
-    MASTER_ADMIN_ID = "a123" 
-    if user_id == MASTER_ADMIN_ID:
-        KST = timezone(timedelta(hours=9))
-        now_kst = datetime.now(KST).replace(tzinfo=None)
-        last_update_dt = df['수집일시'].max()
-        alive_diff = now_kst - last_update_dt
-        if alive_diff > timedelta(hours=2.5):
-            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
-
-    # --- 메인 화면 (상단 지표 없음) ---
-    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
-    if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
-
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -257,8 +258,7 @@ try:
     else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
 
     bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
-    bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
-    bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
+    bh['상태변경'] = bh.groupby(bundle_keys)['최대_확인일자'].diff().notna() & (bh.groupby(bundle_keys)['최대_확인일자'].diff() != timedelta(0))
     bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
     lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
     bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
@@ -277,30 +277,26 @@ try:
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
     boosted_raw = trk[c1]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
-    
-    top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
-    if not boosted_df.empty:
-        stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
-        top_spender_raw_name = stat_df.iloc[0]['부동산명']
-        masked_ts_name = mask_text(clean_realtor_name(top_spender_raw_name), True)
-        top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
-        top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
-        if not top_realtor_data.empty:
-            avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+    top_spender_raw_name = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False).iloc[0]['부동산명'] if not boosted_df.empty else ""
+    avg_h = int(round(boosted_df[boosted_df['부동산명'] == top_spender_raw_name]['수집일시'].dt.hour.mean())) if top_spender_raw_name else "알 수 없음"
+    peak_hour_str = f"평균적으로 {avg_h}시 부근" if top_spender_raw_name else ""
 
-    # --- 탭 구성 및 디자인 개편 ---
+    # --- 메인 화면 시작 ---
+    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
+    if IS_DEMO_MODE:
+        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
+
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
     with tab_report:
-        # [수정] 여백 제거 및 리얼 자바스크립트 Ticker 적용
+        # [수정완료] 리얼 자바스크립트 적용 (Streamlit 환경 우회 기법)
         st.markdown(f"""
 <div class="master-strategy-board">
-<h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
-<div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:10px;">
+<h2 style="color:#1e3a8a; margin-top:0; font-size:34px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
+<div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
 [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
 </div>
 <div class="strategy-grid">
@@ -308,7 +304,7 @@ try:
 <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
 <div class="briefing-content">
 현재 대표님의 단지별 랭킹은<br>
-<span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
+<span class="val-animate" style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
 </div>
 </div>
 <div class="briefing-strategy-card">
@@ -326,7 +322,7 @@ try:
 </div>
 </div>
 </div>
-<div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; flex: none; width: 100%;">
+<div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; margin-bottom:0; flex: none; width: 100%;">
 <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
 <div class="briefing-content">
 가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
@@ -334,16 +330,15 @@ try:
 </div>
 </div>
 </div>
-<script>
-/* 0부터 빠르게 롤링되는 진짜 숫자 카운터 스크립트 */
-setTimeout(function() {{
-    const tickers = document.querySelectorAll('.num-ticker');
+<div style="display:none;">
+<img src="x" onerror='
+    const tickers = document.querySelectorAll(".num-ticker");
     tickers.forEach(ticker => {{
         if (ticker.dataset.animated) return;
-        ticker.dataset.animated = 'true';
-        const target = parseInt(ticker.getAttribute('data-target')) || 0;
+        ticker.dataset.animated = "true";
+        const target = parseInt(ticker.getAttribute("data-target")) || 0;
         if (target === 0) {{ ticker.textContent = "0"; return; }}
-        const duration = 1000; /* 1초 동안 롤링 */
+        const duration = 1000;
         const stepTime = Math.max(20, Math.floor(duration / target));
         let current = 0;
         const timer = setInterval(() => {{
@@ -355,24 +350,13 @@ setTimeout(function() {{
             ticker.textContent = current;
         }}, stepTime);
     }});
-}}, 100);
-</script>
+'>
+</div>
         """, unsafe_allow_html=True)
         
-        # 서비스 신청 안내 (쉬머 효과 적용)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
-        
-        card_content = """
-        <div class="pricing-card {extra_class}">
-            <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; z-index: 10;">20% OFF</div>
-            <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563; position: relative; z-index: 10;">{title}</div>
-            <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px; position: relative; z-index: 10;">{old_price}</div>
-            <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px; position: relative; z-index: 10;">{new_price}</div>
-            <div style="font-size: 13px; color: #6b7280; line-height: 1.4; position: relative; z-index: 10;">{desc}</div>
-        </div>
-        """
-        
+        card_content = """<div class="pricing-card {extra_class}"><div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; z-index: 10;">20% OFF</div><div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563; position: relative; z-index: 10;">{title}</div><div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px; position: relative; z-index: 10;">{old_price}</div><div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px; position: relative; z-index: 10;">{new_price}</div><div style="font-size: 13px; color: #6b7280; line-height: 1.4; position: relative; z-index: 10;">{desc}</div></div>"""
         with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
@@ -380,17 +364,13 @@ setTimeout(function() {{
         st.markdown(f"""
         <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
             <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
-            <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">
-                네이버 부동산의 치열한 순위 경쟁에서 대표님의 소중한 시간을 지켜드리는 기술입니다.<br>
-                <b>대표님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>
-                시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.
-            </p>
+            <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">네이버 부동산의 치열한 순위 경쟁에서 대표님의 소중한 시간을 지켜드리는 기술입니다.<br><b>대표님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.</p>
         </div>
         """, unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 신성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
-        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
+        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
         if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
