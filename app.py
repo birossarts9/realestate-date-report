@@ -35,37 +35,28 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
+# 전역 스타일 주입 (모바일 최적화 미디어 쿼리 추가)
 st.markdown("""
     <style>
-    /* 1. 탭 메뉴 글씨 확대 및 [3단계] 애니메이션 추가 */
-    button[data-baseweb="tab"] {
-        transition: all 0.3s ease !important;
-    }
-    button[data-baseweb="tab"]:hover {
-        background-color: #f0f7ff !important;
-        transform: translateY(-2px);
-    }
+    /* 1. 탭 메뉴 글씨 확대 */
     button[data-baseweb="tab"] p {
         font-size: 20px !important;
         font-weight: bold !important;
     }
     
-    /* 2. [고도화] 통합 작전판 마스터 컨테이너 스타일 */
+    /* 2. [디자인 복구] 통합 작전판 마스터 보드 및 하얀 박스 스타일 */
     .master-strategy-board {
         background-color: #f0f7ff;
-        padding: 40px;
-        border-radius: 28px;
+        padding: 35px;
+        border-radius: 24px;
         border: 1px solid #dbeafe;
         margin-bottom: 40px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.02);
     }
-    /* 3. 작전 카드 그리드 및 개별 카드 스타일 */
     .strategy-grid {
         display: flex;
         gap: 20px;
-        margin-top: 30px;
-        margin-bottom: 25px;
+        margin-top: 25px;
+        margin-bottom: 20px;
         flex-wrap: wrap;
     }
     .briefing-strategy-card {
@@ -74,13 +65,14 @@ st.markdown("""
         border-radius: 20px;
         border: 1px solid #e2e8f0;
         flex: 1;
-        min-width: 300px;
+        min-width: 250px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
         transition: all 0.3s ease;
     }
     .briefing-strategy-card:hover {
         border-color: #3182f6;
         transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(49, 130, 246, 0.08);
+        box-shadow: 0 10px 25px rgba(49, 130, 246, 0.1);
     }
     .strategy-tag {
         display: inline-block;
@@ -97,59 +89,59 @@ st.markdown("""
         font-weight: 600 !important;
         color: #334155;
     }
-    /* 4. 서비스 신청 안내 카드 스타일 */
+    
+    /* 3. [기능 추가] 프리미엄 카드 리얼 쉬머(Shimmer) 이펙트 */
+    @keyframes shimmerSweep {
+        0% { left: -100%; }
+        20% { left: 200%; }
+        100% { left: 200%; }
+    }
     .pricing-card {
         position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
         border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
         height: 100%; transition: all 0.3s ease; cursor: default; margin-top: 15px;
+        overflow: hidden; /* 빛이 박스 밖으로 삐져나가지 않게 */
+    }
+    /* 카드 위를 훑고 지나가는 빛 줄기 */
+    .pricing-card::after {
+        content: '';
+        position: absolute;
+        top: 0; left: -100%;
+        width: 50%; height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(49, 130, 246, 0.15), transparent);
+        transform: skewX(-20deg);
+        animation: shimmerSweep 3s infinite ease-in-out;
     }
     .pricing-card:hover {
         transform: translateY(-10px) scale(1.03);
         border: 2px solid #3182f6 !important;
         box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
     }
+    .focus-card {
+        transform: scale(1.05);
+        z-index: 5;
+        border: 2px solid rgba(49, 130, 246, 0.3); /* 프리미엄팩은 기본적으로 파란 테두리 유지 */
+    }
+    .focus-card:hover {
+        transform: translateY(-10px) scale(1.08) !important;
+    }
 
-    /* [요청 기능] 프리미엄 통합팩 전용 쉬머 & 보더 애니메이션 */
-    @keyframes shimmerBg {
-        0% { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-    }
-    @keyframes borderPulse {
-        0% { border-color: rgba(49, 130, 246, 0.3); box-shadow: 0 0 15px rgba(49, 130, 246, 0.1); }
-        50% { border-color: rgba(49, 130, 246, 1); box-shadow: 0 0 25px rgba(49, 130, 246, 0.5); }
-        100% { border-color: rgba(49, 130, 246, 0.3); box-shadow: 0 0 15px rgba(49, 130, 246, 0.1); }
-    }
-    .focus-card { 
-        transform: scale(1.05); 
-        z-index: 5; 
-        border: 2px solid #3182f6;
-        background: linear-gradient(120deg, #ffffff 30%, #eef2ff 50%, #ffffff 70%);
-        background-size: 200% 100%;
-        animation: shimmerBg 3s infinite linear, borderPulse 2s infinite ease-in-out;
-    }
-    .focus-card:hover { transform: translateY(-10px) scale(1.08) !important; }
-
-    /* 5. [신규 3단계] 입력 컴포넌트(드롭박스, 날짜) 및 데이터프레임 인터랙션 강화 */
-    /* 드롭박스 호버 시 테두리 빛남 효과 */
-    div[data-baseweb="select"] > div {
-        transition: all 0.3s ease !important;
-    }
-    div[data-baseweb="select"] > div:hover {
-        border-color: #3182f6 !important;
-        box-shadow: 0 0 8px rgba(49, 130, 246, 0.2) !important;
-    }
-    /* 날짜/시간 입력창 호버 효과 */
-    .stDateInput > div > div > input:hover, .stTimeInput > div > div > input:hover {
-        border-color: #3182f6 !important;
-        transition: all 0.3s ease !important;
-    }
-    /* 데이터프레임(표) 호버 시 입체감 부여 */
-    [data-testid="stDataFrame"] {
-        transition: all 0.3s ease !important;
-        border-radius: 10px;
-    }
-    [data-testid="stDataFrame"]:hover {
-        box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important;
+    /* 4. [최종 스텝] 모바일 최적화 (화면 너비 768px 이하일 때만 작동) */
+    @media (max-width: 768px) {
+        .master-strategy-board { padding: 20px; border-radius: 16px; margin-bottom: 20px; }
+        .master-strategy-board h2 { font-size: 24px !important; }
+        .master-strategy-board > div:nth-child(2) { font-size: 14px !important; margin-bottom: 15px !important; }
+        .strategy-grid { flex-direction: column; gap: 15px; margin-top: 10px; margin-bottom: 10px; }
+        .briefing-strategy-card { min-width: 100%; padding: 18px; }
+        .briefing-content { font-size: 16px !important; line-height: 1.6 !important; }
+        .strategy-tag { font-size: 12px; padding: 4px 10px; }
+        button[data-baseweb="tab"] p { font-size: 15px !important; }
+        .pricing-card { padding: 20px 10px; }
+        .pricing-card div:nth-child(2) { font-size: 16px !important; }
+        .pricing-card div:nth-child(4) { font-size: 22px !important; }
+        .pricing-card div:nth-child(5) { font-size: 12px !important; }
+        .focus-card { transform: scale(1.0); } /* 모바일에서는 화면이 꽉 차므로 스케일 업 해제 */
+        .focus-card:hover { transform: translateY(-5px) scale(1.0) !important; }
     }
     </style>
 """, unsafe_allow_html=True)
@@ -325,42 +317,65 @@ try:
     
     with tab_report:
         st.markdown(f"""
-        <div class="master-strategy-board">
-            <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
-            <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
-                [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
-            </div>
-            <div class="strategy-grid">
-                <div class="briefing-strategy-card">
-                    <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
-                    <div class="briefing-content">
-                        현재 대표님의 단지별 랭킹은<br>
-                        <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
-                    </div>
-                </div>
-                <div class="briefing-strategy-card">
-                    <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span>
-                    <div class="briefing-content">
-                        상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
-                        즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.
-                    </div>
-                </div>
-                <div class="briefing-strategy-card">
-                    <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
-                    <div class="briefing-content">
-                        타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
-                        최소 비용으로 상위권을 점령할 절호의 기회입니다.
-                    </div>
-                </div>
-            </div>
-            <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; margin-bottom:0;">
-                <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
-                <div class="briefing-content">
-                    가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
-                    {peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.
-                </div>
-            </div>
-        </div>
+<div class="master-strategy-board">
+<h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
+<div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:10px;">
+[📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
+</div>
+<div class="strategy-grid">
+<div class="briefing-strategy-card">
+<span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
+<div class="briefing-content">
+현재 대표님의 단지별 랭킹은<br>
+<span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
+</div>
+</div>
+<div class="briefing-strategy-card">
+<span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span>
+<div class="briefing-content">
+상위 노출에서 밀려난 매물이 <span style="color:#ef4444;"><span class="num-ticker" data-target="{len(danger_ls)}">0</span>건</span> 발견되었습니다.<br>
+즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.
+</div>
+</div>
+<div class="briefing-strategy-card">
+<span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
+<div class="briefing-content">
+타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;"><span class="num-ticker" data-target="{len(empty_houses)}">0</span>건</span> 입니다.<br>
+최소 비용으로 상위권을 점령할 절호의 기회입니다.
+</div>
+</div>
+</div>
+<div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; flex: none; width: 100%;">
+<span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
+<div class="briefing-content">
+가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
+{peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.
+</div>
+</div>
+</div>
+<script>
+/* 0부터 빠르게 롤링되는 진짜 숫자 카운터 스크립트 */
+setTimeout(function() {{
+    const tickers = document.querySelectorAll('.num-ticker');
+    tickers.forEach(ticker => {{
+        if (ticker.dataset.animated) return;
+        ticker.dataset.animated = 'true';
+        const target = parseInt(ticker.getAttribute('data-target')) || 0;
+        if (target === 0) {{ ticker.textContent = "0"; return; }}
+        const duration = 1000; /* 1초 동안 롤링 */
+        const stepTime = Math.max(20, Math.floor(duration / target));
+        let current = 0;
+        const timer = setInterval(() => {{
+            current += Math.max(1, Math.floor(target / (duration / stepTime)));
+            if (current >= target) {{
+                clearInterval(timer);
+                current = target;
+            }}
+            ticker.textContent = current;
+        }}, stepTime);
+    }});
+}}, 100);
+</script>
         """, unsafe_allow_html=True)
         
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
@@ -368,11 +383,11 @@ try:
         
         card_content = """
         <div class="pricing-card {extra_class}">
-            <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
-            <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div>
-            <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div>
-            <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px;">{new_price}</div>
-            <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
+            <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px; z-index: 10;">20% OFF</div>
+            <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563; position: relative; z-index: 10;">{title}</div>
+            <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px; position: relative; z-index: 10;">{old_price}</div>
+            <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px; position: relative; z-index: 10;">{new_price}</div>
+            <div style="font-size: 13px; color: #6b7280; line-height: 1.4; position: relative; z-index: 10;">{desc}</div>
         </div>
         """
         
