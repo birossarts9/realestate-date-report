@@ -35,7 +35,7 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴 및 상단 지표 레이아웃)
+# 전역 스타일 주입 (탭 메뉴, 상단 지표 레이아웃, 카드 인터랙션)
 st.markdown("""
     <style>
     /* 탭 메뉴 글씨 확대 */
@@ -49,9 +49,28 @@ st.markdown("""
         font-weight: bold !important;
         color: #1e293b !important;
     }
-    /* 내 점유율 드롭박스 너비 제한 및 정렬 */
+    /* 내 점유율 드롭박스 너비 제한 */
     .stSelectbox div[data-baseweb="select"] {
-        max-width: 180px !important;
+        max-width: 150px !important;
+    }
+    /* 서비스 신청 안내 카드 인터랙션 디자인 */
+    .pricing-card {
+        position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
+        border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
+        height: 100%; transition: all 0.3s ease; cursor: default; margin-top: 15px;
+    }
+    .pricing-card:hover {
+        transform: translateY(-10px) scale(1.03);
+        border: 2px solid #3182f6 !important;
+        box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
+    }
+    .focus-card {
+        transform: scale(1.05);
+        z-index: 5;
+        border: 1px solid #e5e8eb; /* 기본 상태 테두리 제거 (색상만) */
+    }
+    .focus-card:hover {
+        transform: translateY(-10px) scale(1.08) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -172,14 +191,20 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- 1. 상단 KPI 섹션 (글씨 키우기 및 드롭박스 정렬) ---
+    # --- 1. 상단 KPI 섹션 (높이 및 드롭박스 위치 최적화) ---
+    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
+    if IS_DEMO_MODE:
+        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
+
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.markdown("<p style='font-size: 22px; font-weight: bold; margin-bottom: 5px;'>🏆 내 점유율</p>", unsafe_allow_html=True)
-        kpi_comp = st.selectbox("단지 선택", complex_list, label_visibility="collapsed", key="kpi_sel")
+        # 제목과 드롭박스를 한 줄로 배치하여 높이 확보
+        c1_title, c1_sel = st.columns([1.2, 1])
+        c1_title.markdown("<p style='font-size: 20px; font-weight: bold; margin-top: 5px;'>🏆 내 점유율</p>", unsafe_allow_html=True)
+        kpi_comp = c1_sel.selectbox("단지 선택", complex_list, label_visibility="collapsed", key="kpi_sel")
         kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
-        # 드롭박스 때문에 밀리는 높이를 맞추기 위해 마진 조정
-        st.markdown(f"<h3 style='margin-top: -5px;'>{kpi_rank}위" if kpi_rank != "권외" else "<h3 style='margin-top: -5px;'>권외", unsafe_allow_html=True)
+        # Metric 값과 높이를 맞추기 위한 여백 조정
+        st.markdown(f"<h2 style='margin-top: 12px; font-weight: 800;'>{kpi_rank}위</h2>", unsafe_allow_html=True)
 
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
@@ -233,7 +258,7 @@ try:
     ])
     
     with tab_report:
-        # [수정] 브리핑 박스 디자인 및 폰트 크기
+        # 브리핑 박스 디자인 및 폰트 크기 통일
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
@@ -253,33 +278,8 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # [수정] 프리미엄 서비스 안내 (모두 호버 기능 추가 + 통합팩 강조)
+        # 서비스 신청 안내 (호버 디자인 통합)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
-        
-        # 스타일 정의 (호버 시 스케일 업 및 보더 강조)
-        st.markdown("""
-        <style>
-        .pricing-card {
-            position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
-            border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
-            height: 100%; transition: all 0.3s ease; cursor: default;
-        }
-        .pricing-card:hover {
-            transform: translateY(-10px) scale(1.03);
-            border: 2px solid #3182f6;
-            box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
-        }
-        .focus-card {
-            transform: scale(1.05);
-            border: 2px solid #3182f6;
-            z-index: 5;
-        }
-        .focus-card:hover {
-            transform: translateY(-10px) scale(1.08);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         
         card_content = """
@@ -339,7 +339,6 @@ try:
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 1위를 점령할 수 있습니다.")
         if not empty_houses.empty:
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
-            # [수정] 방치시간 정수화
             empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
@@ -386,8 +385,13 @@ try:
         st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean()))), 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())).reset_index()
+            realtor_stats = boosted_df.groupby('부동산명').agg(
+                총횟수=('부동산명', 'count'), 
+                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
+                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
+            ).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
+            
             c_a, c_b = st.columns(2)
             with c_a:
                 stat_show = stat_df_final.copy()
