@@ -32,8 +32,18 @@ active_id = "a123" if IS_DEMO_MODE else user_id
 filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
 display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
 
-# --- 1. 웹사이트 기본 세팅 ---
+# --- 1. 웹사이트 기본 세팅 및 UI 폰트 강화 (CSS) ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
+
+# [신규] 탭 메뉴 글씨 크기 확대를 위한 스타일 주입
+st.markdown("""
+    <style>
+    button[data-baseweb="tab"] p {
+        font-size: 20px !important;
+        font-weight: bold !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 3. 유틸리티 함수 ---
 def clean_realtor_name(name):
@@ -149,7 +159,7 @@ try:
         last_update_dt = df['수집일시'].max()
         alive_diff = now_kst - last_update_dt
         if alive_diff > timedelta(hours=2.5):
-            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** PC를 확인하세요. (최종수집: {last_update_dt.strftime('%m/%d %H:%M')})")
+            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
         if 'json_error' in st.session_state:
             st.warning(f"⚠️ **[관리자 알림] realtors.json 오류:** {st.session_state['json_error']}")
 
@@ -206,7 +216,7 @@ try:
         top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
         if not top_realtor_data.empty:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f", 평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
             
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     st.markdown("---")
@@ -218,22 +228,22 @@ try:
     ])
     
     with tab_report:
-        # 1. 최상단 브리핑 섹션
+        # [수정 반영] 브리핑 박스 글씨 크기 정교화
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
-            <p style="font-size:22px; line-height:1.8; color:#334155; white-space: pre-wrap; font-weight:500;">
-[📅 이실장 시장 동향 브리핑]
-(기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')})
-
+            <div style="font-size:18px; color:#64748b; margin-bottom:15px; font-weight:bold;">
+                [📅 이실장 시장 동향 브리핑] ({start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')})
+            </div>
+            <p style="font-size:21px; line-height:1.9; color:#334155; white-space: pre-wrap; font-weight:600; margin-top:10px;">
 📈 시장 지표 현황:
-- 대표님의 현재 단지별 랭킹: [{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]
-- 상위 노출에서 밀려난 방어전 타겟: {len(danger_ls)}건 (즉시 재광고 추천)
-- 6시간 이상 방치된 빈집 공격 타겟: {len(empty_houses)}건 (1위 탈환 가능)
+- 대표님의 현재 단지별 랭킹: <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span>
+- 상위 노출에서 밀려난 방어전 타겟: <span style="color:#ef4444;">{len(danger_ls)}건</span> (즉시 재광고 추천)
+- 6시간 이상 방치된 빈집 공격 타겟: <span style="color:#10b981;">{len(empty_houses)}건</span> (1위 탈환 가능)
 
 🔥 경쟁사 동향:
-- 가장 활발한 경쟁사: [{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]
-- {peak_hour_str} 해당 시간을 피해 광고를 올리거나, 자동화 솔루션을 활용하세요.
+- 가장 활발한 경쟁사: <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span>
+- {peak_hour_str} 해당 시간대를 피해 광고를 올리거나, 자동화 솔루션을 활용하세요.
             </p>
         </div>
         """, unsafe_allow_html=True)
@@ -265,13 +275,13 @@ try:
         with col_p2: st.markdown(focus_card.format(title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>한 번에 관리하는 올인원 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(base_card.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
 
-        # 3. [신규 추가] 광고 자동화 기능 상세 설명 (직관적인 위치)
+        # 3. [수정 반영] 광고 자동화 기능 상세 설명 (제목 색상 변경)
         st.markdown(f"""
         <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
-            <h3 style="color:#0f172a; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
+            <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
             <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">
-                네이버 부동산의 치열한 순위 경쟁에서 소장님의 소중한 시간을 지켜드리는 기술입니다.<br>
-                <b>소장님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>
+                네이버 부동산의 치열한 순위 경쟁에서 대표님의 소중한 시간을 지켜드리는 기술입니다.<br>
+                <b>대표님이 잠든 새벽 2시에도, 퇴근 후 저녁 8시에도</b> 설정한 황금 시간대에 맞춰<br>
                 시스템이 <b>365일 24시간 자동으로 재광고</b>를 실행하여 매물을 최상단에 고정시킵니다.
             </p>
         </div>
@@ -310,7 +320,9 @@ try:
     with tab_empty:
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 1위를 점령할 수 있습니다.")
         if not empty_houses.empty:
+            # [수정 반영] 방치된 시간 정수화
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
+            empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
             empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
