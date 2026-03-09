@@ -35,7 +35,7 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (모바일 최적화 미디어 쿼리 추가)
+# 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
 st.markdown("""
     <style>
     /* 1. 탭 메뉴 글씨 확대 및 [3단계] 애니메이션 추가 */
@@ -150,37 +150,6 @@ st.markdown("""
     }
     [data-testid="stDataFrame"]:hover {
         box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important;
-    }
-
-    /* 6. [신규] 모바일 환경 반응형 최적화 (Mobile Optimization) */
-    @media screen and (max-width: 768px) {
-        /* 탭 메뉴 글씨 축소 */
-        button[data-baseweb="tab"] p {
-            font-size: 16px !important;
-        }
-        /* 작전판 마스터 보드 여백 축소 */
-        .master-strategy-board {
-            padding: 20px !important;
-            border-radius: 20px !important;
-        }
-        /* 작전 카드 가로폭 100% 채움 및 글씨 축소 */
-        .briefing-strategy-card {
-            min-width: 100% !important;
-            padding: 15px !important;
-        }
-        .briefing-content {
-            font-size: 16px !important;
-            line-height: 1.6 !important;
-        }
-        /* 모바일에서 프리미엄 카드 확대 비율 축소 (화면 밖으로 나감 방지) */
-        .focus-card {
-            transform: scale(1.0) !important;
-            margin-top: 20px !important;
-            margin-bottom: 20px !important;
-        }
-        .focus-card:hover {
-            transform: translateY(-5px) scale(1.02) !important;
-        }
     }
     </style>
 """, unsafe_allow_html=True)
