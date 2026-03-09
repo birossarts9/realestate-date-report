@@ -32,15 +32,26 @@ active_id = "a123" if IS_DEMO_MODE else user_id
 filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
 display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
 
-# --- 1. 웹사이트 기본 세팅 및 UI 폰트 강화 (CSS) ---
+# --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# [신규] 탭 메뉴 글씨 크기 확대를 위한 스타일 주입
+# 전역 스타일 주입 (탭 메뉴 및 상단 지표 레이아웃)
 st.markdown("""
     <style>
+    /* 탭 메뉴 글씨 확대 */
     button[data-baseweb="tab"] p {
         font-size: 20px !important;
         font-weight: bold !important;
+    }
+    /* KPI 지표 타이틀 글씨 확대 */
+    [data-testid="stMetricLabel"] {
+        font-size: 22px !important;
+        font-weight: bold !important;
+        color: #1e293b !important;
+    }
+    /* 내 점유율 드롭박스 너비 제한 및 정렬 */
+    .stSelectbox div[data-baseweb="select"] {
+        max-width: 180px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -151,7 +162,7 @@ try:
         my_r = cdf[cdf['부동산명'].str.contains(filter_realtor_name)]
         my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
-    # --- 관리자 전용 알림 섹션 (시차 보정 반영) ---
+    # --- 관리자 전용 알림 섹션 ---
     MASTER_ADMIN_ID = "a123" 
     if user_id == MASTER_ADMIN_ID:
         KST = timezone(timedelta(hours=9))
@@ -160,20 +171,15 @@ try:
         alive_diff = now_kst - last_update_dt
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
-        if 'json_error' in st.session_state:
-            st.warning(f"⚠️ **[관리자 알림] realtors.json 오류:** {st.session_state['json_error']}")
 
-    # --- 메인 화면 시작 ---
-    st.title(f"📊 {display_realtor} 대표님을 위한 시장 동향")
-    if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
-
+    # --- 1. 상단 KPI 섹션 (글씨 키우기 및 드롭박스 정렬) ---
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.write("🏆 **내 점유율**")
-        kpi_comp = st.selectbox("단지 선택", complex_list, label_visibility="collapsed")
+        st.markdown("<p style='font-size: 22px; font-weight: bold; margin-bottom: 5px;'>🏆 내 점유율</p>", unsafe_allow_html=True)
+        kpi_comp = st.selectbox("단지 선택", complex_list, label_visibility="collapsed", key="kpi_sel")
         kpi_rank = my_ranks_dict.get(kpi_comp, "권외")
-        st.subheader(f"{kpi_rank}위" if kpi_rank != "권외" else "권외")
+        # 드롭박스 때문에 밀리는 높이를 맞추기 위해 마진 조정
+        st.markdown(f"<h3 style='margin-top: -5px;'>{kpi_rank}위" if kpi_rank != "권외" else "<h3 style='margin-top: -5px;'>권외", unsafe_allow_html=True)
 
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
@@ -203,7 +209,6 @@ try:
     trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-    
     boosted_raw = trk[c1]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
     
@@ -228,7 +233,7 @@ try:
     ])
     
     with tab_report:
-        # [수정 반영] 브리핑 박스 글씨 크기 정교화
+        # [수정] 브리핑 박스 디자인 및 폰트 크기
         st.markdown(f"""
         <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
@@ -248,34 +253,49 @@ try:
         </div>
         """, unsafe_allow_html=True)
         
-        # 2. 서비스 신청 안내 (프리미엄 통합팩 강조 디자인)
+        # [수정] 프리미엄 서비스 안내 (모두 호버 기능 추가 + 통합팩 강조)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
+        
+        # 스타일 정의 (호버 시 스케일 업 및 보더 강조)
+        st.markdown("""
+        <style>
+        .pricing-card {
+            position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
+            border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
+            height: 100%; transition: all 0.3s ease; cursor: default;
+        }
+        .pricing-card:hover {
+            transform: translateY(-10px) scale(1.03);
+            border: 2px solid #3182f6;
+            box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
+        }
+        .focus-card {
+            transform: scale(1.05);
+            border: 2px solid #3182f6;
+            z-index: 5;
+        }
+        .focus-card:hover {
+            transform: translateY(-10px) scale(1.08);
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         
-        base_card = """
-        <div style="position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; height: 100%; margin-top: 15px;">
+        card_content = """
+        <div class="pricing-card {extra_class}">
             <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
             <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div>
             <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div>
-            <div style="font-size: 28px; font-weight: 900; color: #64748b; margin-bottom: 15px;">{new_price}</div>
+            <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px;">{new_price}</div>
             <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
         </div>
         """
-        focus_card = """
-        <div style="position: relative; padding: 35px 20px; border-radius: 24px; background-color: white; border: 3px solid #3182f6; box-shadow: 0 15px 35px rgba(49, 130, 246, 0.15); text-align: center; height: 100%; transform: scale(1.05); z-index: 10;">
-            <div style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); background-color: #3182f6; color: white; padding: 6px 20px; border-radius: 20px; font-weight: 800; font-size: 14px; white-space: nowrap;">⭐ 소장님 베스트 선택</div>
-            <div style="position: absolute; top: 15px; right: 15px; background-color: #ef4444; color: white; padding: 5px 12px; border-radius: 10px; font-weight: 800; font-size: 14px; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);">최대 할인</div>
-            <div style="font-size: 22px; font-weight: 800; margin-bottom: 18px; color: #1e3a8a;">{title}</div>
-            <div style="color: #9ca3af; text-decoration: line-through; font-size: 17px; margin-bottom: 5px;">{old_price}</div>
-            <div style="font-size: 40px; font-weight: 950; color: #3182f6; margin-bottom: 25px;">{new_price}</div>
-            <div style="font-size: 15px; color: #1e293b; font-weight: 600; line-height: 1.6;">{desc}</div>
-        </div>
-        """
-        with col_p1: st.markdown(base_card.format(title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
-        with col_p2: st.markdown(focus_card.format(title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>한 번에 관리하는 올인원 패키지"), unsafe_allow_html=True)
-        with col_p3: st.markdown(base_card.format(title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
+        
+        with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
+        with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
+        with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
 
-        # 3. [수정 반영] 광고 자동화 기능 상세 설명 (제목 색상 변경)
         st.markdown(f"""
         <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
             <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
@@ -286,8 +306,6 @@ try:
             </p>
         </div>
         """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
@@ -320,8 +338,8 @@ try:
     with tab_empty:
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 1위를 점령할 수 있습니다.")
         if not empty_houses.empty:
-            # [수정 반영] 방치된 시간 정수화
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
+            # [수정] 방치시간 정수화
             empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
@@ -368,13 +386,8 @@ try:
         st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-            realtor_stats = boosted_df.groupby('부동산명').agg(
-                총횟수=('부동산명', 'count'), 
-                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
-                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
-            ).reset_index()
+            realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean()))), 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
-            
             c_a, c_b = st.columns(2)
             with c_a:
                 stat_show = stat_df_final.copy()
