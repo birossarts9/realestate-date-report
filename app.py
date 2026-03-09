@@ -154,7 +154,8 @@ def mask_text(text, is_agent=False):
 def process_data(df):
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df.sort_values('수집일시')
-    time_diff_mins = df['수집일시'].diff().total_seconds() / 60.0
+    # [버그 수정 완료] .dt 누락 복구
+    time_diff_mins = df['수집일시'].diff().dt.total_seconds() / 60.0
     df['새_세션'] = (time_diff_mins > 5) | time_diff_mins.isna()
     df['세션ID'] = df['새_세션'].cumsum()
     session_rep = df.groupby('세션ID')['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
@@ -243,6 +244,22 @@ try:
         my_r = cdf[cdf['부동산명'].str.contains(filter_realtor_name)]
         my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
+    # --- 관리자 전용 알림 섹션 ---
+    MASTER_ADMIN_ID = "a123" 
+    if user_id == MASTER_ADMIN_ID:
+        KST = timezone(timedelta(hours=9))
+        now_kst = datetime.now(KST).replace(tzinfo=None)
+        last_update_dt = df['수집일시'].max()
+        alive_diff = now_kst - last_update_dt
+        if alive_diff > timedelta(hours=2.5):
+            st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
+
+    # --- 1. 클린 메인 화면 ---
+    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
+    if IS_DEMO_MODE:
+        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
+
+    # --- 데이터 계산 로직 ---
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -274,18 +291,13 @@ try:
     avg_h = int(round(boosted_df[boosted_df['부동산명'] == top_spender_raw_name]['수집일시'].dt.hour.mean())) if top_spender_raw_name else "알 수 없음"
     peak_hour_str = f"평균적으로 {avg_h}시 부근" if top_spender_raw_name else ""
 
-    # --- 메인 화면 시작 ---
-    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
-    if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
-
+    # --- 탭 구성 및 디자인 개편 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
     with tab_report:
-        # [고도화 적용] 마스터 작전판 레이아웃
         st.markdown(f"""
 <div class="master-strategy-board">
     <h2 style="color:#1e3a8a; margin-top:0; font-size:34px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
