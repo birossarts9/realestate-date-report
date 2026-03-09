@@ -35,7 +35,7 @@ display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DE
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 상단 지표 수평 정렬, 카드 인터랙션)
+# 전역 스타일 주입 (탭 메뉴, 상단 지표 수평 정렬, 카드 인터랙션, 브리핑 고도화)
 st.markdown("""
     <style>
     /* 1. 탭 메뉴 글씨 확대 */
@@ -69,7 +69,7 @@ st.markdown("""
         margin: 0 !important;
         line-height: 1 !important;
     }
-    /* 3. 서비스 신청 안내 카드 인터랙션 (호버 시에만 파란 테두리) */
+    /* 3. 서비스 신청 안내 카드 인터랙션 */
     .pricing-card {
         position: relative; padding: 25px 15px; border-radius: 20px; background-color: white; 
         border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center; 
@@ -84,11 +84,36 @@ st.markdown("""
         transform: scale(1.05);
         z-index: 5;
     }
-    /* 4. 브리핑 텍스트 크기 강제 통일 (초록색 박스용) */
-    .briefing-content, .briefing-content p, .briefing-content li, .briefing-content span {
+    .focus-card:hover {
+        transform: translateY(-10px) scale(1.08) !important;
+    }
+    /* 4. [고도화] 브리핑 카드 섹션 스타일 */
+    .briefing-strategy-card {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 15px;
+        transition: all 0.2s ease;
+    }
+    .briefing-strategy-card:hover {
+        border-color: #3182f6;
+        background-color: #fafcfe;
+    }
+    .strategy-tag {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 800;
+        margin-bottom: 10px;
+        color: white;
+    }
+    .briefing-content {
         font-size: 21px !important;
         line-height: 1.9 !important;
         font-weight: 600 !important;
+        color: #334155;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -209,18 +234,13 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- 1. [핵심 수정] 상단 KPI 섹션 (노란색 박스: 완벽한 수평 정렬) ---
+    # --- 1. 상단 KPI 섹션 (노란색 박스: 완벽한 수평 정렬 보존) ---
     st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
-    if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
-
-    col1, col2, col3, col4 = st.columns(4)
     
-    # 공통 마크다운 템플릿 (디자인 통일)
+    col1, col2, col3, col4 = st.columns(4)
     kpi_html = '<div class="kpi-container"><div class="kpi-title-row"><p class="kpi-title">{title}</p>{widget}</div><p class="kpi-value">{value}</p></div>'
 
     with col1:
-        # 제목 옆에 드롭박스 배치
         c1_title_col, c1_sel_col = st.columns([1, 1.2])
         c1_title_col.markdown("<p style='font-size: 20px; font-weight: bold; margin-top: 5px; color: #1e293b;'>🏆 내 점유율</p>", unsafe_allow_html=True)
         kpi_comp = c1_sel_col.selectbox("단지", complex_list, label_visibility="collapsed", key="kpi_sel_final")
@@ -274,41 +294,77 @@ try:
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
             
     with col4:
-        # 글자 수가 많아질 경우를 대비해 폰트 크기 미세 조정
         ts_val = f"<span style='font-size:24px;'>{top_spender}</span>" if len(top_spender) > 15 else top_spender
         st.markdown(kpi_html.format(title="🔥 최대 지출 경쟁사", widget="", value=ts_val), unsafe_allow_html=True)
 
     st.markdown("---")
 
-    # --- 탭 구성 및 디자인 개편 ---
+    # --- [고도화 4단계 적용] 탭 구성 및 작전판 스타일 브리핑 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
     
     with tab_report:
-        # [핵심 수정] 초록색 박스 영역: 모든 텍스트 크기를 21px로 강제 통일
+        # 최상단 헤더
         st.markdown(f"""
-        <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:40px;">
-            <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 시장 브리핑</h2>
-            <div style="font-size:18px; color:#64748b; margin-bottom:15px; font-weight:bold;">
-                [📅 이실장 시장 동향 브리핑] ({start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')})
+        <div style="background-color:#f0f7ff; padding:30px; border-radius:20px; border-left: 8px solid #3182f6; margin-bottom:30px;">
+            <h2 style="color:#1e3a8a; margin-top:0; font-size:32px;">📊 오늘의 필승 전략 브리핑</h2>
+            <div style="font-size:18px; color:#64748b; font-weight:bold;">
+                [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
             </div>
-            <div class="briefing-content">
-📈 시장 지표 현황:<br>
-- 대표님의 현재 단지별 랭킹: <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span><br>
-- 상위 노출에서 밀려난 방어전 타겟: <span style="color:#ef4444;">{len(danger_ls)}건</span> (즉시 재광고 추천)<br>
-- 6시간 이상 방치된 빈집 공격 타겟: <span style="color:#10b981;">{len(empty_houses)}건</span> (1위 탈환 가능)<br><br>
+        </div>
+        """, unsafe_allow_html=True)
 
-🔥 경쟁사 동향:<br>
-- 가장 활발한 경쟁사: <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span><br>
-- {peak_hour_str} 해당 시간대를 피해 광고를 올리거나, 자동화 솔루션을 활용하세요.
+        # 3대 전략 카드 (초록색 박스 영역 고도화: 폰트 21px 보존)
+        s_col1, s_col2, s_col3 = st.columns(3)
+        
+        with s_col1:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
+                <div class="briefing-content">
+                    현재 대표님의 단지별 랭킹은<br>
+                    <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with s_col2:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span>
+                <div class="briefing-content">
+                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
+                    즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with s_col3:
+            st.markdown(f"""
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
+                <div class="briefing-content">
+                    타 부동산이 6시간 이상 방치한 빈집 매물이 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
+                    최소 비용으로 상위권을 점령할 절호의 기회입니다.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 경쟁사 인텔리전스 (단독 섹션)
+        st.markdown(f"""
+        <div class="briefing-strategy-card" style="border-left: 5px solid #f59e0b;">
+            <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
+            <div class="briefing-content">
+                가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
+                {peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # [핵심 수정] 서비스 신청 안내 (프리미엄 통합팩 상시 테두리 제거 및 호버 파란색 테두리 통합)
-        st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
+        # 2. 서비스 신청 안내
+        st.markdown("<h2 style='text-align:center; margin-bottom:30px; margin-top:50px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         
         card_content = """
@@ -320,7 +376,6 @@ try:
             <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
         </div>
         """
-        
         with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
