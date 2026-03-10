@@ -34,9 +34,9 @@ user_id = query_params.get("id", "a123")
 # 이 부분은 기존 로직에 영향을 주지 않는 독립적인 엔진입니다.
 def log_visitor_to_gsheets(uid):
     # [수정] 대표님, 아래 URL에 아까 발급받은 '웹 앱 URL'을 따옴표 안에 넣어주세요.
-    WEB_APP_URL = "여기에_발급받은_배포_URL을_넣으세요"
+    WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
-    if WEB_APP_URL == "여기에_발급받은_배포_URL을_넣으세요":
+    if WEB_APP_URL == "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec":
         return
         
     try:
@@ -519,3 +519,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
