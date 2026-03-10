@@ -58,7 +58,7 @@ filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자
 display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
-st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
+st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
 
 # 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
 st.markdown("""
@@ -234,7 +234,7 @@ def load_server_data():
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 # [신규] 로딩 중 영문 문구 대신 브랜드 로딩 애니메이션 적용
-with st.spinner("🚀 이실장이 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
+with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
 
 if raw_df is None:
@@ -360,7 +360,7 @@ try:
         <div class="master-strategy-board">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
             <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
-                [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
+                [📅 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
             </div>
             <div class="strategy-grid">
                 <div class="briefing-strategy-card">
@@ -422,7 +422,7 @@ try:
             </p>
         </div>
         """, unsafe_allow_html=True)
-        st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
+        st.info("🏦 **결제 계좌:** 하나은행 173-910-317-90907 (예금주: 신성우)  \n📞 **문의:** 010-8416-2806")
 
     with tab_ms:
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
@@ -521,3 +521,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
