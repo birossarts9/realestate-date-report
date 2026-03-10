@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 # [추가] 웹훅 통신 및 속도 개선을 위한 라이브러리
 import requests
 import threading
-# [추가] 구글 시트 연동을 위한 라이브러리 (기존 선언 유지)
+# [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
 
 # --- [1] 비밀 장부(JSON) 로드 로직 ---
@@ -29,9 +29,10 @@ REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-user_id = query_params.get("id", "a123") 
+# [수정] 기본 URL 접속 시 특정 업체 정보 노출 방지를 위해 기본값을 'demo'로 변경
+user_id = query_params.get("id", "demo") 
 
-# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리) ---
+# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리로 접속 속도 해결) ---
 def log_visitor_to_gsheets(uid):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
@@ -45,6 +46,7 @@ def log_visitor_to_gsheets(uid):
 
     threading.Thread(target=send_log, daemon=True).start()
 
+# 세션당 한 번만 로깅 수행
 if 'visit_logged' not in st.session_state:
     log_visitor_to_gsheets(user_id)
     st.session_state['visit_logged'] = True
@@ -227,11 +229,11 @@ def load_server_data():
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # [성능개선] Calamine 엔진 사용
+    # [성능개선] Calamine 엔진을 사용하여 엑셀 읽기 속도를 대폭 향상
     df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-# --- [수정] 로딩 애니메이션 및 문구 커스텀 ---
+# [신규] 로딩 중 영문 문구 대신 브랜드 로딩 애니메이션 적용
 with st.spinner("🚀 이실장이 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
 
@@ -248,7 +250,7 @@ try:
     st.sidebar.subheader("⏰ 분석 기간 설정")
     col_sd, col_st = st.sidebar.columns(2)
     
-    # [수정] 기본 시작일을 '종료일(최신데이터) 기준 일주일 전'으로 설정
+    # [수정] 접속 초기 지연 방지를 위해 기본 분석 기간을 최근 7일로 설정
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
     s_d = col_sd.date_input("시작일", default_start_date)
     s_t = col_st.time_input("시작시간", min_time.time())
