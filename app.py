@@ -230,7 +230,8 @@ def load_server_data():
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    df_list = [pd.read_excel(f) for f in xlsx_files]
+    # [성능개선] Calamine 엔진을 사용하여 엑셀 읽기 속도를 대폭 향상
+    df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 raw_df = load_server_data()
