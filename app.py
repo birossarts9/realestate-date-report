@@ -6,9 +6,10 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
-# [추가] 웹훅 통신 및 성능 최적화를 위한 라이브러리
+# [추가] 웹훅 통신 및 속도 개선을 위한 라이브러리
 import requests
 import threading
+# [추가] 구글 시트 연동을 위한 라이브러리 (기존 선언 유지)
 from streamlit_gsheets import GSheetsConnection
 
 # --- [1] 비밀 장부(JSON) 로드 로직 ---
@@ -30,12 +31,12 @@ REALTOR_MAP = load_realtor_map()
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
 
-# --- [신규] 구글 시트 유입 로깅 로직 (비동기 속도 최적화) ---
+# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리로 접속 속도 해결) ---
 def log_visitor_to_gsheets(uid):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
-    # [개선] 구글 시트가 응답할 때까지 기다리지 않고 즉시 대시보드를 띄우는 내부 함수
-    def send_log_request():
+    # 전송을 담당하는 내부 함수 (화면 로딩과 별개로 작동)
+    def send_log():
         try:
             KST = timezone(timedelta(hours=9))
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
@@ -43,8 +44,8 @@ def log_visitor_to_gsheets(uid):
         except:
             pass 
 
-    # [핵심] 백그라운드 스레드에서 전송 (화면 로딩 방해 금지)
-    threading.Thread(target=send_log_request, daemon=True).start()
+    # [핵심] 스레드를 사용하여 구글 서버 응답을 기다리지 않고 즉시 다음 코드 실행
+    threading.Thread(target=send_log, daemon=True).start()
 
 # 세션당 한 번만 로깅 수행
 if 'visit_logged' not in st.session_state:
@@ -229,22 +230,8 @@ def load_server_data():
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # [성능개선] 엔진을 'openpyxl'로 명시하여 속도를 높임
-    df_list = [pd.read_excel(f, engine='openpyxl') for f in xlsx_files]
+    df_list = [pd.read_excel(f) for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
-
-# --- [신규] 무거운 분석 로직을 별도로 캐싱하여 속도 개선 ---
-@st.cache_data(show_spinner=False)
-def run_heavy_analysis(t_df, filter_realtor_name, bundle_keys):
-    # 내 매물 순위 현황 계산
-    my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
-    
-    # 전체 1위 부동산 정보 미리 계산
-    latest_t = t_df.groupby(bundle_keys)['수집일시'].max().reset_index()
-    first_place_master = pd.merge(t_df, latest_t, on=bundle_keys+['수집일시'])
-    first_place_master = first_place_master[first_place_master['묶음내순위_숫자']==1][bundle_keys+['부동산명']].rename(columns={'부동산명':'현재1위부동산'}).drop_duplicates(subset=bundle_keys)
-    
-    return my_ls, first_place_master
 
 raw_df = load_server_data()
 if raw_df is None:
@@ -281,10 +268,10 @@ try:
     complex_list = sorted(t_df['단지명'].dropna().unique().tolist())
     complex_list_with_all = ["전체 단지"] + complex_list
 
-    # [성능개선] 무거운 데이터 처리 로직을 캐시 함수로 호출
-    my_ls, first_place_df = run_heavy_analysis(t_df, filter_realtor_name, tuple(bundle_keys))
+    latest_t = t_df.groupby(bundle_keys)['수집일시'].max().reset_index()
+    first_place_df = pd.merge(t_df, latest_t, on=bundle_keys+['수집일시'])
+    first_place_df = first_place_df[first_place_df['묶음내순위_숫자']==1][bundle_keys+['부동산명']].rename(columns={'부동산명':'현재1위부동산'}).drop_duplicates(subset=bundle_keys)
 
-    # --- [데이터 처리 로직 보존] ---
     uniq = t_df.drop_duplicates(subset=['매물번호', '부동산명', '단지명']).copy()
     uniq['묶음_총개수'] = uniq.groupby(bundle_keys)['부동산명'].transform('count')
     uniq['파워점수'] = 10 + (10 / uniq['묶음내순위_숫자']) + (uniq['묶음_총개수'] * 0.1)
@@ -314,7 +301,8 @@ try:
     if IS_DEMO_MODE:
         st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
 
-    # --- [위험 매물 & 빈집 분석 보존] ---
+    # --- [데이터 처리 로직 보존] ---
+    my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
         danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
@@ -355,7 +343,7 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 개편 (기존과 동일) ---
+    # --- 탭 구성 및 디자인 개편 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", 
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
@@ -447,9 +435,6 @@ try:
             fig = px.bar(top10, x='총점수', y='부동산명_축약', orientation='h', title=f"{mask_text(filter_comp)} 점유율 Top 10", text='총점수', color_discrete_sequence=['#3182f6'])
             st.plotly_chart(fig, use_container_width=True)
 
-    # ... (이하 탭 로직은 기존 코드와 100% 동일하므로 보존) ...
-    # (danger, empty, rolling, timing, stat 탭 로직은 위에서 계산된 최적화 데이터를 사용함)
-    
     with tab_danger:
         st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 즉시 재광고를 실행하여 최상단 자리를 탈환하세요.")
         if not danger_ls.empty:
