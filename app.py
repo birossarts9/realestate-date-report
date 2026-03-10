@@ -33,12 +33,9 @@ user_id = query_params.get("id", "a123")
 # --- [신규] 구글 시트 유입 로깅 로직 ---
 # 이 부분은 기존 로직에 영향을 주지 않는 독립적인 엔진입니다.
 def log_visitor_to_gsheets(uid):
-    # [수정] 대표님, 아래 URL에 아까 발급받은 '웹 앱 URL'을 따옴표 안에 넣어주세요.
+    # 실제 발급받은 배포 URL
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
-    if WEB_APP_URL == "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec":
-        return
-        
     try:
         # 현재 시간 (KST 기준)
         KST = timezone(timedelta(hours=9))
@@ -456,7 +453,7 @@ try:
             empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
-            empty_show['현재1위부동산'] = empty_houses['현재1위부동산'].apply(lambda x: mask_text(x, True))
+            empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
             st.dataframe(empty_show, use_container_width=True)
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
@@ -520,3 +517,5 @@ try:
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
 
+이게 최종 코드야. 봐줘. 
+참고로 id는 demo로 들어갔어
