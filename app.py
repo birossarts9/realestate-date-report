@@ -29,10 +29,10 @@ REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-# [수정] 기본 URL 접속 시 특정 업체 정보 노출 방지를 위해 기본값을 'demo'로 변경
+# 기본 접속 시 체험판(demo)으로 연결되도록 설정
 user_id = query_params.get("id", "demo") 
 
-# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리로 접속 속도 해결) ---
+# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리) ---
 def log_visitor_to_gsheets(uid):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
@@ -46,7 +46,6 @@ def log_visitor_to_gsheets(uid):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# 세션당 한 번만 로깅 수행
 if 'visit_logged' not in st.session_state:
     log_visitor_to_gsheets(user_id)
     st.session_state['visit_logged'] = True
@@ -57,8 +56,20 @@ active_id = "a123" if IS_DEMO_MODE else user_id
 filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
 display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
 
+# --- [수정] 마스킹 로직 고도화 (이름 매칭 및 고정형 번호 부여) ---
+def mask_text(text, is_agent=False):
+    if not IS_DEMO_MODE: return text
+    if is_agent:
+        # [수정] 포함 여부로 판단하여 이름이 약간 달라도 내 부동산을 정확히 찾아냄
+        if filter_realtor_name in str(text): return display_realtor
+        # [수정] hash() 대신 고정 값을 사용하여 새로고침해도 경쟁사 번호가 바뀌지 않음
+        stable_id = sum(ord(c) for c in str(text)) % 100
+        return f"경쟁사 {stable_id}"
+    # 숫자 마스킹 (단지명/동호수 보호)
+    return re.sub(r'\d', '*', str(text))
+
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
-st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
+st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
 
 # 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
 st.markdown("""
@@ -185,13 +196,6 @@ def clean_realtor_name(name):
     cleaned = re.sub(pattern, '', str(name)).strip()
     return cleaned if cleaned else str(name)
 
-def mask_text(text, is_agent=False):
-    if not IS_DEMO_MODE: return text
-    if is_agent:
-        if text == filter_realtor_name: return display_realtor
-        return f"경쟁사 {hash(str(text)) % 100}"
-    return re.sub(r'\d', '*', str(text))
-
 @st.cache_data(show_spinner=False)
 def process_data(df):
     df['수집일시'] = pd.to_datetime(df['수집일시'])
@@ -229,12 +233,12 @@ def load_server_data():
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # [성능개선] Calamine 엔진을 사용하여 엑셀 읽기 속도를 대폭 향상
+    # Calamine 엔진 사용하여 속도 향상
     df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-# [신규] 로딩 중 영문 문구 대신 브랜드 로딩 애니메이션 적용
-with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
+# 브랜드 로딩 애니메이션 적용
+with st.spinner("🚀 이실장이 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
 
 if raw_df is None:
@@ -250,7 +254,7 @@ try:
     st.sidebar.subheader("⏰ 분석 기간 설정")
     col_sd, col_st = st.sidebar.columns(2)
     
-    # [수정] 접속 초기 지연 방지를 위해 기본 분석 기간을 최근 7일로 설정
+    # 기본 분석 기간을 최근 7일로 설정하여 초기 로딩 속도 최적화
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
     s_d = col_sd.date_input("시작일", default_start_date)
     s_t = col_st.time_input("시작시간", min_time.time())
@@ -360,7 +364,7 @@ try:
         <div class="master-strategy-board">
             <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
             <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
-                [📅 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
+                [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
             </div>
             <div class="strategy-grid">
                 <div class="briefing-strategy-card">
@@ -422,7 +426,7 @@ try:
             </p>
         </div>
         """, unsafe_allow_html=True)
-        st.info("🏦 **결제 계좌:** 하나은행 173-910-317-90907 (예금주: 신성우)  \n📞 **문의:** 010-8416-2806")
+        st.info("🏦 **결제 계좌:** 신한은행 110-388-348507 (예금주: 장성우)  \n📞 **문의:** 010-6502-2105")
 
     with tab_ms:
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
@@ -521,4 +525,3 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
-
