@@ -6,6 +6,8 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
+# [추가] 구글 시트 연동을 위한 라이브러리
+from streamlit_gsheets import GSheetsConnection
 
 # --- [1] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
@@ -25,6 +27,39 @@ REALTOR_MAP = load_realtor_map()
 # URL 파라미터 인식
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
+
+# --- [신규] 구글 시트 유입 로깅 로직 ---
+# 이 부분은 기존 로직에 영향을 주지 않는 독립적인 엔진입니다.
+def log_visitor_to_gsheets(uid):
+    try:
+        # 구글 시트 연결 (Secrets에 설정된 gsheets 설정을 따름)
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        
+        # 현재 시간 (KST 기준)
+        KST = timezone(timedelta(hours=9))
+        now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 기존 데이터 읽기 (Sheet1 기준)
+        # 만약 시트가 비어있다면 에러가 날 수 있으므로 예외처리 포함
+        try:
+            existing_data = conn.read(worksheet="Sheet1", ttl=0)
+        except:
+            existing_data = pd.DataFrame(columns=["timestamp", "user_id"])
+        
+        # 새 로그 생성
+        new_log = pd.DataFrame([{"timestamp": now_str, "user_id": uid}])
+        
+        # 데이터 결합 및 업데이트
+        updated_df = pd.concat([existing_data, new_log], ignore_index=True)
+        conn.update(worksheet="Sheet1", data=updated_df)
+    except Exception as e:
+        # 로깅 실패가 서비스 중단으로 이어지지 않도록 print만 수행
+        print(f"Logging Failed: {e}")
+
+# 세션당 한 번만 로깅 수행
+if 'visit_logged' not in st.session_state:
+    log_visitor_to_gsheets(user_id)
+    st.session_state['visit_logged'] = True
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
