@@ -5,4 +5,5 @@ requests
 openpyxl
 st-gsheets-connection
 streamlit-autorefresh
+python-calamine
 
