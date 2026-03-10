@@ -6,6 +6,8 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
+# [추가] 웹훅 통신을 위한 라이브러리
+import requests
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
 
@@ -31,27 +33,20 @@ user_id = query_params.get("id", "a123")
 # --- [신규] 구글 시트 유입 로깅 로직 ---
 # 이 부분은 기존 로직에 영향을 주지 않는 독립적인 엔진입니다.
 def log_visitor_to_gsheets(uid):
-    try:
-        # 구글 시트 연결 (Secrets에 설정된 gsheets 설정을 따름)
-        conn = st.connection("gsheets", type=GSheetsConnection)
+    # [수정] 대표님, 아래 URL에 아까 발급받은 '웹 앱 URL'을 따옴표 안에 넣어주세요.
+    WEB_APP_URL = "여기에_발급받은_배포_URL을_넣으세요"
+    
+    if WEB_APP_URL == "여기에_발급받은_배포_URL을_넣으세요":
+        return
         
+    try:
         # 현재 시간 (KST 기준)
         KST = timezone(timedelta(hours=9))
         now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
         
-        # 기존 데이터 읽기 (Sheet1 기준)
-        # 만약 시트가 비어있다면 에러가 날 수 있으므로 예외처리 포함
-        try:
-            existing_data = conn.read(worksheet="Sheet1", ttl=0)
-        except:
-            existing_data = pd.DataFrame(columns=["timestamp", "user_id"])
+        # 구글 시트 웹훅으로 데이터 전송 (GET 방식)
+        requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}", timeout=5)
         
-        # 새 로그 생성
-        new_log = pd.DataFrame([{"timestamp": now_str, "user_id": uid}])
-        
-        # 데이터 결합 및 업데이트
-        updated_df = pd.concat([existing_data, new_log], ignore_index=True)
-        conn.update(worksheet="Sheet1", data=updated_df)
     except Exception as e:
         # 로깅 실패가 서비스 중단으로 이어지지 않도록 print만 수행
         print(f"Logging Failed: {e}")
@@ -461,7 +456,7 @@ try:
             empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
-            empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
+            empty_show['현재1위부동산'] = empty_houses['현재1위부동산'].apply(lambda x: mask_text(x, True))
             st.dataframe(empty_show, use_container_width=True)
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
