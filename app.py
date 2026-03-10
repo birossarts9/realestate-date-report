@@ -517,5 +517,4 @@ try:
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
 
-이게 최종 코드야. 봐줘. 
-참고로 id는 demo로 들어갔어
+
