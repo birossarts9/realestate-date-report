@@ -31,11 +31,10 @@ REALTOR_MAP = load_realtor_map()
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
 
-# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리로 접속 속도 해결) ---
+# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리) ---
 def log_visitor_to_gsheets(uid):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
-    # 전송을 담당하는 내부 함수 (화면 로딩과 별개로 작동)
     def send_log():
         try:
             KST = timezone(timedelta(hours=9))
@@ -44,10 +43,8 @@ def log_visitor_to_gsheets(uid):
         except:
             pass 
 
-    # [핵심] 스레드를 사용하여 구글 서버 응답을 기다리지 않고 즉시 다음 코드 실행
     threading.Thread(target=send_log, daemon=True).start()
 
-# 세션당 한 번만 로깅 수행
 if 'visit_logged' not in st.session_state:
     log_visitor_to_gsheets(user_id)
     st.session_state['visit_logged'] = True
@@ -224,17 +221,20 @@ def process_data(df):
     
     return df
 
-@st.cache_data(ttl=600)
+@st.cache_data(show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # [성능개선] Calamine 엔진을 사용하여 엑셀 읽기 속도를 대폭 향상
+    # [성능개선] Calamine 엔진 사용
     df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-raw_df = load_server_data()
+# --- [수정] 로딩 애니메이션 및 문구 커스텀 ---
+with st.spinner("🚀 이실장이 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
+    raw_df = load_server_data()
+
 if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
     st.stop()
@@ -247,7 +247,10 @@ try:
 
     st.sidebar.subheader("⏰ 분석 기간 설정")
     col_sd, col_st = st.sidebar.columns(2)
-    s_d = col_sd.date_input("시작일", min_time.date())
+    
+    # [수정] 기본 시작일을 '종료일(최신데이터) 기준 일주일 전'으로 설정
+    default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
+    s_d = col_sd.date_input("시작일", default_start_date)
     s_t = col_st.time_input("시작시간", min_time.time())
     start_dt = datetime.combine(s_d, s_t)
     
