@@ -6,10 +6,10 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
+# [추가] 웹훅 통신을 위한 라이브러리
 import requests
+# [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
-# [추가] 주기적 신호를 위한 라이브러리
-from streamlit_autorefresh import st_autorefresh
 
 # --- [1] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
@@ -30,28 +30,28 @@ REALTOR_MAP = load_realtor_map()
 query_params = st.query_params
 user_id = query_params.get("id", "a123") 
 
-# --- [신규] 구글 시트 유입 로깅 로직 (고도화 버전) ---
-def log_visitor_to_gsheets(uid, status="ENTER"):
-    # 대표님의 실제 배포 URL
+# --- [신규] 구글 시트 유입 로깅 로직 ---
+# 이 부분은 기존 로직에 영향을 주지 않는 독립적인 엔진입니다.
+def log_visitor_to_gsheets(uid):
+    # 실제 발급받은 배포 URL
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
     try:
+        # 현재 시간 (KST 기준)
         KST = timezone(timedelta(hours=9))
         now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-        # status 파라미터를 추가하여 전송
-        requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}&status={status}", timeout=5)
+        
+        # 구글 시트 웹훅으로 데이터 전송 (GET 방식)
+        requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}", timeout=5)
+        
     except Exception as e:
+        # 로깅 실패가 서비스 중단으로 이어지지 않도록 print만 수행
         print(f"Logging Failed: {e}")
 
-# 1. 첫 접속 로깅 (세션 시작 시 1회)
+# 세션당 한 번만 로깅 수행
 if 'visit_logged' not in st.session_state:
-    log_visitor_to_gsheets(user_id, status="ENTER")
+    log_visitor_to_gsheets(user_id)
     st.session_state['visit_logged'] = True
-
-# 2. 하트비트 로깅 (60초마다 시트에 'PING' 신호를 보냄)
-# 이 코드가 실행되는 동안은 웹브라우저가 1분마다 자동으로 신호를 쏩니다.
-st_autorefresh(interval=60 * 1000, key="heartbeat")
-log_visitor_to_gsheets(user_id, status="PING")
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
