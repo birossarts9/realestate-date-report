@@ -75,7 +75,7 @@ def mask_text(text, is_agent=False):
     return re.sub(r'\d', '*', str(text))
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
-st.set_page_config(page_title="이실장 시장 통계 리포트", page_icon="📈", layout="wide")
+st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
 
 # 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
 st.markdown("""
@@ -244,7 +244,7 @@ def load_server_data():
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 # 브랜드 로딩 애니메이션 적용
-with st.spinner("🚀 이실장이 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
+with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
 
 if raw_df is None:
@@ -368,9 +368,9 @@ try:
     with tab_report:
         st.markdown(f"""
         <div class="master-strategy-board">
-        <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 필승 전략 브리핑</h2>
+        <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
         <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
-        [📅 이실장 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
+        [📅 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
         </div>
         <div class="strategy-grid">
         <div class="briefing-strategy-card">
@@ -381,10 +381,10 @@ try:
         </div>
         </div>
         <div class="briefing-strategy-card">
-        <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 즉시 탈환 필요</span>
+        <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 탈환 필요</span>
         <div class="briefing-content">
         상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
-        즉시 재광고를 통해 1위 자리를 탈환하는 것을 권장합니다.
+        재광고를 통해 상위권 탈환하는 것을 권장합니다.
         </div>
         </div>
         <div class="briefing-strategy-card">
@@ -452,7 +452,7 @@ try:
             st.plotly_chart(fig, use_container_width=True)
 
     with tab_danger:
-        st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 즉시 재광고를 실행하여 최상단 자리를 탈환하세요.")
+        st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 재광고를 실행하여 최상단 자리를 탈환하세요.")
         if not danger_ls.empty:
             danger_show = danger_ls[['수집일시', '단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산']].copy()
             danger_show['동/호수'] = danger_show['동/호수'].apply(mask_text)
@@ -462,7 +462,7 @@ try:
         else: st.info("현재 1위에서 밀려난 매물이 없습니다!")
 
     with tab_empty:
-        st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 1위를 점령할 수 있습니다.")
+        st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 상위권 점령할 수 있습니다.")
         if not empty_houses.empty:
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
             empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
@@ -508,7 +508,7 @@ try:
         else: st.info("갱신 내역이 없습니다.")
 
     with tab_stat:
-        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다. (야간 저빈도 업체는 통계에서 제외됩니다.)")
+        st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다.")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
             realtor_stats = boosted_df.groupby('부동산명').agg(
@@ -531,3 +531,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
