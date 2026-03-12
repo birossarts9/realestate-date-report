@@ -35,7 +35,7 @@ user_id = query_params.get("id", "demo")
 # --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리) ---
 def log_visitor_to_gsheets(uid):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
-
+    
     def send_log():
         try:
             KST = timezone(timedelta(hours=9))
@@ -53,8 +53,14 @@ if 'visit_logged' not in st.session_state:
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
 active_id = "a123" if IS_DEMO_MODE else user_id
-filter_realtor_name = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
-display_realtor = REALTOR_MAP.get("demo", "성우부동산(체험용)") if IS_DEMO_MODE else filter_realtor_name
+
+# [긴급 버그 수정] realtors.json이 딕셔너리({ }) 형태로 바뀌었을 때를 대비한 안전 장치
+raw_realtor = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
+filter_realtor_name = raw_realtor.get("name", "더자이디엘") if isinstance(raw_realtor, dict) else str(raw_realtor)
+
+raw_demo = REALTOR_MAP.get("demo", "성우부동산(체험용)")
+demo_name = raw_demo.get("name", "성우부동산(체험용)") if isinstance(raw_demo, dict) else str(raw_demo)
+display_realtor = demo_name if IS_DEMO_MODE else filter_realtor_name
 
 # --- [수정] 마스킹 로직 고도화 (이름 매칭 및 고정형 번호 부여) ---
 def mask_text(text, is_agent=False):
@@ -62,7 +68,7 @@ def mask_text(text, is_agent=False):
     if is_agent:
         # [수정] 포함 여부로 판단하여 이름이 약간 달라도 내 부동산을 정확히 찾아냄
         if filter_realtor_name in str(text): return display_realtor
-        # [수정] hash() 대신 고정 값을 사용하여 새로고침해도 경쟁사 번호가 바뀌지 않음
+        # [수정] hash() 대신 고정 값을 사용하여 새로고침해도경쟁사 번호가 바뀌지 않음
         stable_id = sum(ord(c) for c in str(text)) % 100
         return f"경쟁사 {stable_id}"
     # 숫자 마스킹 (단지명/동호수 보호)
