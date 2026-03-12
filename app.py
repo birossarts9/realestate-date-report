@@ -379,7 +379,7 @@ try:
         top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
         if not top_realtor_data.empty:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f", 평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
             
     col4.metric("🔥 최대 지출 경쟁사", top_spender)
     st.markdown("---")
@@ -525,3 +525,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
