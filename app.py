@@ -32,23 +32,26 @@ query_params = st.query_params
 # 기본 접속 시 체험판(demo)으로 연결되도록 설정
 user_id = query_params.get("id", "demo")
 
-# --- [신규] 구글 시트 유입 로깅 로직 (비동기 처리) ---
-def log_visitor_to_gsheets(uid):
+# --- [신규/개선] 구글 시트 유입 및 활동 로깅 로직 (비동기 처리) ---
+def log_visitor_to_gsheets(uid, action="접속"):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
     def send_log():
         try:
             KST = timezone(timedelta(hours=9))
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}", timeout=10)
+            # action 파라미터를 추가하여 어떤 활동을 하는지 기록
+            requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}&action={action}", timeout=10)
         except:
             pass
 
     threading.Thread(target=send_log, daemon=True).start()
 
+# 최초 접속 로그
 if 'visit_logged' not in st.session_state:
-    log_visitor_to_gsheets(user_id)
+    log_visitor_to_gsheets(user_id, "신규접속")
     st.session_state['visit_logged'] = True
+    st.session_state['last_action'] = "신규접속"
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
@@ -56,7 +59,12 @@ active_id = "a123" if IS_DEMO_MODE else user_id
 
 # [긴급 버그 수정] realtors.json이 딕셔너리({ }) 형태로 바뀌었을 때를 대비한 안전 장치
 raw_realtor = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
-filter_realtor_name = raw_realtor.get("name", "더자이디엘") if isinstance(raw_realtor, dict) else str(raw_realtor)
+if isinstance(raw_realtor, dict):
+    filter_realtor_name = raw_realtor.get("name", "더자이디엘")
+    target_complexes = raw_realtor.get("complexes", [])
+else:
+    filter_realtor_name = str(raw_realtor)
+    target_complexes = []
 
 raw_demo = REALTOR_MAP.get("demo", "성우부동산(체험용)")
 demo_name = raw_demo.get("name", "성우부동산(체험용)") if isinstance(raw_demo, dict) else str(raw_demo)
@@ -66,21 +74,16 @@ display_realtor = demo_name if IS_DEMO_MODE else filter_realtor_name
 def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
-        # [수정] 포함 여부로 판단하여 이름이 약간 달라도 내 부동산을 정확히 찾아냄
         if filter_realtor_name in str(text): return display_realtor
-        # [수정] hash() 대신 고정 값을 사용하여 새로고침해도경쟁사 번호가 바뀌지 않음
         stable_id = sum(ord(c) for c in str(text)) % 100
         return f"경쟁사 {stable_id}"
-    # 숫자 마스킹 (단지명/동호수 보호)
     return re.sub(r'\d', '*', str(text))
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
 
-# 전역 스타일 주입 (탭 메뉴, 통합 작전판, 카드 인터랙션 + 3단계 애니메이션 추가)
 st.markdown("""
 <style>
-/* 1. 탭 메뉴 글씨 확대 및 [3단계] 애니메이션 추가 */
 button[data-baseweb="tab"] {
     transition: all 0.3s ease !important;
 }
@@ -92,8 +95,6 @@ button[data-baseweb="tab"] p {
     font-size: 20px !important;
     font-weight: bold !important;
 }
-
-/* 2. [고도화] 통합 작전판 마스터 컨테이너 스타일 */
 .master-strategy-board {
     background-color: #f0f7ff;
     padding: 40px;
@@ -102,7 +103,6 @@ button[data-baseweb="tab"] p {
     margin-bottom: 40px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.02);
 }
-/* 3. 작전 카드 그리드 및 개별 카드 스타일 */
 .strategy-grid {
     display: flex;
     gap: 20px;
@@ -139,7 +139,6 @@ button[data-baseweb="tab"] p {
     font-weight: 600 !important;
     color: #334155;
 }
-/* 4. 서비스 신청 안내 카드 스타일 */
 .pricing-card {
     position: relative; padding: 25px 15px; border-radius: 20px; background-color: white;
     border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center;
@@ -150,8 +149,6 @@ button[data-baseweb="tab"] p {
     border: 2px solid #3182f6 !important;
     box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
 }
-
-/* [요청 기능] 프리미엄 통합팩 전용 쉬머 & 보더 애니메이션 */
 @keyframes shimmerBg {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
@@ -170,9 +167,6 @@ button[data-baseweb="tab"] p {
     animation: shimmerBg 3s infinite linear, borderPulse 2s infinite ease-in-out;
 }
 .focus-card:hover { transform: translateY(-10px) scale(1.08) !important; }
-
-/* 5. [신규 3단계] 입력 컴포넌트(드롭박스, 날짜) 및 데이터프레임 인터랙션 강화 */
-/* 드롭박스 호버 시 테두리 빛남 효과 */
 div[data-baseweb="select"] > div {
     transition: all 0.3s ease !important;
 }
@@ -180,12 +174,10 @@ div[data-baseweb="select"] > div:hover {
     border-color: #3182f6 !important;
     box-shadow: 0 0 8px rgba(49, 130, 246, 0.2) !important;
 }
-/* 날짜/시간 입력창 호버 효과 */
 .stDateInput > div > div > input:hover, .stTimeInput > div > div > input:hover {
     border-color: #3182f6 !important;
     transition: all 0.3s ease !important;
 }
-/* 데이터프레임(표) 호버 시 입체감 부여 */
 [data-testid="stDataFrame"] {
     transition: all 0.3s ease !important;
     border-radius: 10px;
@@ -212,38 +204,31 @@ def process_data(df):
     session_rep = df.groupby('세션ID')['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
     df = pd.merge(df, session_rep, on='세션ID', how='left')
     df['수집일시'] = df['대표수집일시']
-
     session_times = df['수집일시'].drop_duplicates().sort_values()
     gap_check = session_times.diff().dt.total_seconds() / 3600.0
     gap_starts = session_times[gap_check > 2.5].tolist()
-
     df['왜곡영역'] = False
     for start_time in gap_starts:
         df.loc[(df['수집일시'] >= start_time) & (df['수집일시'] < start_time + timedelta(hours=1)), '왜곡영역'] = True
-
     df['전체순위_숫자'] = pd.to_numeric(df['전체순위'].astype(str).str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
     df['묶음내순위_숫자'] = pd.to_numeric(df['묶음내순위'].astype(str).str.replace('단독', '1').str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
-
     for col in ['동/호수', '층/타입', '거래방식', '가격']:
         if col in df.columns: df[col] = df[col].fillna("")
-
     df['확인일자'] = df['확인일자'].apply(lambda x: str(x).strip() if pd.notna(x) else pd.NA)
     df['확인일자_Date'] = pd.to_datetime(df['확인일자'], format='%y.%m.%d', errors='coerce')
     df['매물묶음키'] = df.apply(lambda r: f"{r['동/호수']} | {r['층/타입']} | {r['거래방식']} | {r['가격']}", axis=1)
-
     return df
 
-@st.cache_data(show_spinner=False)
+# [요청 개선] ttl=43200(12시간)을 설정하여 하루 2번 자동으로 엑셀을 새로 읽어옵니다.
+@st.cache_data(ttl=43200, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # Calamine 엔진 사용하여 속도 향상
     df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-# 브랜드 로딩 애니메이션 적용
 with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
 
@@ -251,28 +236,26 @@ if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
     st.stop()
 
-# --- 5. 사이드바 (날짜/시간 정밀 설정) ---
 st.sidebar.title("📅 리포트 상세 설정")
 try:
     df = process_data(raw_df)
     min_time, max_time = df['수집일시'].min(), df['수집일시'].max()
-
     st.sidebar.subheader("⏰ 분석 기간 설정")
     col_sd, col_st = st.sidebar.columns(2)
-
-    # 기본 분석 기간을 최근 7일로 설정하여 초기 로딩 속도 최적화
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
     s_d = col_sd.date_input("시작일", default_start_date)
     s_t = col_st.time_input("시작시간", min_time.time())
     start_dt = datetime.combine(s_d, s_t)
-
     col_ed, col_et = st.sidebar.columns(2)
     e_d = col_ed.date_input("종료일", max_time.date())
     e_t = col_et.time_input("종료시간", max_time.time())
     end_dt = datetime.combine(e_d, e_t)
-
     mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
     t_df = df[mask].copy()
+
+    # 장부 필터링 로직
+    if target_complexes:
+        t_df = t_df[t_df['단지명'].isin(target_complexes)].copy()
 
     if t_df.empty:
         st.error("설정한 기간에 데이터가 없습니다.")
@@ -283,11 +266,9 @@ try:
     group_keys = bundle_keys + ['부동산명']
     complex_list = sorted(t_df['단지명'].dropna().unique().tolist())
     complex_list_with_all = ["전체 단지"] + complex_list
-
     latest_t = t_df.groupby(bundle_keys)['수집일시'].max().reset_index()
     first_place_df = pd.merge(t_df, latest_t, on=bundle_keys+['수집일시'])
     first_place_df = first_place_df[first_place_df['묶음내순위_숫자']==1][bundle_keys+['부동산명']].rename(columns={'부동산명':'현재1위부동산'}).drop_duplicates(subset=bundle_keys)
-
     uniq = t_df.drop_duplicates(subset=['매물번호', '부동산명', '단지명']).copy()
     uniq['묶음_총개수'] = uniq.groupby(bundle_keys)['부동산명'].transform('count')
     uniq['파워점수'] = 10 + (10 / uniq['묶음내순위_숫자']) + (uniq['묶음_총개수'] * 0.1)
@@ -302,7 +283,6 @@ try:
         my_r = cdf[cdf['부동산명'].str.contains(filter_realtor_name)]
         my_ranks_dict[comp] = int(my_r['순위'].iloc[0]) if not my_r.empty else "권외"
 
-    # --- 관리자 전용 알림 섹션 ---
     MASTER_ADMIN_ID = "a123"
     if user_id == MASTER_ADMIN_ID:
         KST = timezone(timedelta(hours=9))
@@ -312,12 +292,12 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- 1. 클린 메인 화면 ---
-    st.markdown(f"### 📊 {display_realtor} 대표님을 위한 시장 동향")
+    # [요청 개선] 상단 타이틀 폰트 크기를 대폭 확대 (HTML 태그 사용)
+    st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
+    
     if IS_DEMO_MODE:
         st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
 
-    # --- [데이터 처리 로직 보존] ---
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -344,10 +324,8 @@ try:
     trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-
     boosted_raw = trk[c1]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
-
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
     if not boosted_df.empty:
         stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
@@ -365,7 +343,11 @@ try:
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
 
+    # [요청 개선] 각 탭을 누를 때마다 어떤 탭을 보는지 실시간 로깅 (무한 반복 방지 로직 포함)
     with tab_report:
+        if st.session_state.get('last_action') != "요약리포트":
+            log_visitor_to_gsheets(user_id, "요약리포트 열람")
+            st.session_state['last_action'] = "요약리포트"
         st.markdown(f"""
         <div class="master-strategy-board">
         <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
@@ -404,10 +386,8 @@ try:
         </div>
         </div>
         """, unsafe_allow_html=True)
-
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
-
         card_content = """
         <div class="pricing-card {extra_class}">
         <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
@@ -417,11 +397,9 @@ try:
         <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
         </div>
         """
-
         with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
-
         st.markdown(f"""
         <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
         <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
@@ -435,6 +413,9 @@ try:
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) \n📞 **문의:** 010-8416-2806")
 
     with tab_ms:
+        if st.session_state.get('last_action') != "점유율":
+            log_visitor_to_gsheets(user_id, "점유율탭 열람")
+            st.session_state['last_action'] = "점유율"
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
@@ -452,6 +433,9 @@ try:
             st.plotly_chart(fig, use_container_width=True)
 
     with tab_danger:
+        if st.session_state.get('last_action') != "순위현황":
+            log_visitor_to_gsheets(user_id, "내매물순위 열람")
+            st.session_state['last_action'] = "순위현황"
         st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 재광고를 실행하여 최상단 자리를 탈환하세요.")
         if not danger_ls.empty:
             danger_show = danger_ls[['수집일시', '단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산']].copy()
@@ -462,6 +446,9 @@ try:
         else: st.info("현재 1위에서 밀려난 매물이 없습니다!")
 
     with tab_empty:
+        if st.session_state.get('last_action') != "방치매물":
+            log_visitor_to_gsheets(user_id, "방치매물탭 열람")
+            st.session_state['last_action'] = "방치매물"
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 상위권 점령할 수 있습니다.")
         if not empty_houses.empty:
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
@@ -517,7 +504,6 @@ try:
                 늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
             ).reset_index()
             stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
-
             c_a, c_b = st.columns(2)
             with c_a:
                 stat_show = stat_df_final.copy()
@@ -531,4 +517,3 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
-
