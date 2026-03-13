@@ -15,11 +15,15 @@ from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components  # [추가] 퇴장 로그 및 튜토리얼 기능을 위한 컴포넌트
 
 # --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
-# 브라우저 접속 시 무작위 고유 ID를 생성하여 세션이 유지되는 동안(새로고침 전까지) 사용합니다.
-if 'session_uuid' not in st.session_state:
-    st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
+# sid가 URL에 고정되어 새로고침 시에도 UUID가 바뀌지 않도록 유지합니다.
+if 'sid' in st.query_params:
+    st.session_state['session_uuid'] = st.query_params['sid']
+else:
+    if 'session_uuid' not in st.session_state:
+        st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
+    st.query_params['sid'] = st.session_state['session_uuid']
 
-# 첫 실행 여부 확인을 위한 가드 (로그 폭주 및 반복 실행 방지용)
+# 첫 실행 여부 확인을 위한 가드
 if 'is_initialized' not in st.session_state:
     st.session_state['is_initialized'] = False
 
@@ -61,10 +65,7 @@ def log_visitor_to_gsheets(uid, action="접속"):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# [입장 로그] 최초 접속 시 딱 한 번만 "입장"으로 기록 (중간 활동 및 반복 로그 모두 제거됨)
-if 'visit_logged' not in st.session_state:
-    log_visitor_to_gsheets(tracking_id, "입장")
-    st.session_state['visit_logged'] = True
+# [기존 Python 입장 로그 삭제] -> 하단 JS 영역으로 이동하여 유령 로그 원천 차단
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
@@ -362,7 +363,7 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 (요청에 따라 '광고 갱신 팩트' 삭제) ---
+    # --- 탭 구성 및 디자인 (요청에 따라 '광고 갱신 팩트' 탭 완전 삭제) ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물",
         "📉 단지 별 노출 현황", "📊 경쟁사 요약"
@@ -519,18 +520,26 @@ try:
     # 모든 렌더링이 끝난 후 초기화 완료 플래그 설정
     st.session_state['is_initialized'] = True
 
-    # --- [4] 퇴장 로그 로직 (JavaScript 삽입) ---
-    # navigator.sendBeacon을 사용하여 브라우저 종료 직전 GAS로 '퇴장' 신호를 보냅니다.
+    # --- [핵심] 입/퇴장 로그 JavaScript (유령 로그 완벽 차단) ---
+    # Python 코드가 아닌, 사용자의 '브라우저'가 로드될 때만 입장 신호를 보냅니다.
+    # navigator.sendBeacon을 사용하여 탭을 닫을 때 신속하게 퇴장 신호를 보냅니다.
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
-    exit_script = f"""
+    log_script = f"""
     <script>
+    // 1. 입장 로그 (브라우저가 렌더링을 시작할 때 딱 한 번 실행)
+    if (!window.alreadyLogged) {{
+        fetch("{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=입장");
+        window.alreadyLogged = true;
+    }}
+
+    // 2. 퇴장 로그 (브라우저 탭을 닫거나 새로고침할 때 실행)
     window.addEventListener('beforeunload', function (event) {{
-        const url = "{WEB_APP_URL}?timestamp=" + new Date().toISOString() + "&user_id={tracking_id}&action=퇴장";
-        navigator.sendBeacon(url);
+        const exitUrl = "{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=퇴장";
+        navigator.sendBeacon(exitUrl);
     }});
     </script>
     """
-    components.html(exit_script, height=0)
+    components.html(log_script, height=0)
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
