@@ -5,6 +5,7 @@ import re
 import os
 import glob
 import json
+import uuid  # [추가] 사용자를 고유하게 식별하기 위해 필요합니다.
 from datetime import datetime, timedelta, timezone
 # [추가] 웹훅 통신 및 속도 개선을 위한 라이브러리
 import requests
@@ -12,7 +13,12 @@ import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
 
-# --- [1] 비밀 장부(JSON) 로드 로직 ---
+# --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
+# 브라우저 접속 시 무작위 고유 ID를 생성하여 세션이 유지되는 동안(새로고침 전까지) 사용합니다.
+if 'session_uuid' not in st.session_state:
+    st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
+
+# --- [2] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
     if os.path.exists("realtors.json"):
         with open("realtors.json", "r", encoding="utf-8") as f:
@@ -32,7 +38,10 @@ query_params = st.query_params
 # 기본 접속 시 체험판(demo)으로 연결되도록 설정
 user_id = query_params.get("id", "demo")
 
-# --- [신규/개선] 구글 시트 유입 및 활동 로깅 로직 (비동기 처리) ---
+# 최종 트래킹 ID 생성 (예: demo_a1b2c3d4)
+tracking_id = f"{user_id}_{st.session_state['session_uuid']}"
+
+# --- [3] 구글 시트 유입 및 활동 로깅 로직 (비동기 처리) ---
 def log_visitor_to_gsheets(uid, action="접속"):
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
@@ -40,16 +49,16 @@ def log_visitor_to_gsheets(uid, action="접속"):
         try:
             KST = timezone(timedelta(hours=9))
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            # action 파라미터를 추가하여 어떤 활동을 하는지 기록
+            # action 파라미터를 정확히 전달
             requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}&action={action}", timeout=10)
         except:
             pass
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# 최초 접속 로그
+# 최초 접속 로그 (새로고침 전까지 딱 한 번만 실행)
 if 'visit_logged' not in st.session_state:
-    log_visitor_to_gsheets(user_id, "신규접속")
+    log_visitor_to_gsheets(tracking_id, "신규접속")
     st.session_state['visit_logged'] = True
     st.session_state['last_action'] = "신규접속"
 
@@ -219,14 +228,14 @@ def process_data(df):
     df['매물묶음키'] = df.apply(lambda r: f"{r['동/호수']} | {r['층/타입']} | {r['거래방식']} | {r['가격']}", axis=1)
     return df
 
-# [요청 개선] ttl=43200(12시간)을 설정하여 하루 2번 자동으로 엑셀을 새로 읽어옵니다.
 @st.cache_data(ttl=43200, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    df_list = [pd.read_excel(f, engine='calamine') for f in xlsx_files]
+    # engine='openpyxl' 대신 더 빠른 'calamine'이나 기본값 사용
+    df_list = [pd.read_excel(f) for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
@@ -246,14 +255,20 @@ try:
     s_d = col_sd.date_input("시작일", default_start_date)
     s_t = col_st.time_input("시작시간", min_time.time())
     start_dt = datetime.combine(s_d, s_t)
+
+    # [로깅 포인트] 시작일 변경 감지
+    if st.session_state.get('last_s_d') != str(s_d):
+        log_visitor_to_gsheets(tracking_id, f"분석기간변경: {s_d}")
+        st.session_state['last_s_d'] = str(s_d)
+
     col_ed, col_et = st.sidebar.columns(2)
     e_d = col_ed.date_input("종료일", max_time.date())
     e_t = col_et.time_input("종료시간", max_time.time())
     end_dt = datetime.combine(e_d, e_t)
+    
     mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
     t_df = df[mask].copy()
 
-    # 장부 필터링 로직
     if target_complexes:
         t_df = t_df[t_df['단지명'].isin(target_complexes)].copy()
 
@@ -292,7 +307,6 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # [요청 개선] 상단 타이틀 폰트 크기를 대폭 확대 (HTML 태그 사용)
     st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
     
     if IS_DEMO_MODE:
@@ -337,17 +351,14 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 개편 ---
+    # --- 탭 구성 및 디자인 ---
     tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물",
         "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
     ])
 
-    # [요청 개선] 각 탭을 누를 때마다 어떤 탭을 보는지 실시간 로깅 (무한 반복 방지 로직 포함)
     with tab_report:
-        if st.session_state.get('last_action') != "요약리포트":
-            log_visitor_to_gsheets(user_id, "요약리포트 열람")
-            st.session_state['last_action'] = "요약리포트"
+        # 요약 리포트는 첫 화면이므로 별도 로깅 없이 '신규접속'으로 갈음 (중복 방지)
         st.markdown(f"""
         <div class="master-strategy-board">
         <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
@@ -413,11 +424,15 @@ try:
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) \n📞 **문의:** 010-8416-2806")
 
     with tab_ms:
-        if st.session_state.get('last_action') != "점유율":
-            log_visitor_to_gsheets(user_id, "점유율탭 열람")
-            st.session_state['last_action'] = "점유율"
-        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다. (공식: 10점 + 순위 가중치 + 단지 규모 가산점)")
+        st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
+        
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
+        
+        # [로깅 포인트] 단지 필터 변경 시에만 로그 발생 (이 사람이 정말 둘러보고 있다는 증거)
+        if st.session_state.get('last_ms_comp') != filter_comp:
+            log_visitor_to_gsheets(tracking_id, f"점유율조회: {filter_comp}")
+            st.session_state['last_ms_comp'] = filter_comp
+
         ms_df = ms_counts.copy()
         if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
         agg_ms = ms_df.groupby('부동산명').agg({'매물건수':'sum', '총점수':'sum'}).reset_index().sort_values('총점수', ascending=False)
@@ -433,22 +448,22 @@ try:
             st.plotly_chart(fig, use_container_width=True)
 
     with tab_danger:
-        if st.session_state.get('last_action') != "순위현황":
-            log_visitor_to_gsheets(user_id, "내매물순위 열람")
-            st.session_state['last_action'] = "순위현황"
         st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 재광고를 실행하여 최상단 자리를 탈환하세요.")
         if not danger_ls.empty:
             danger_show = danger_ls[['수집일시', '단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산']].copy()
             danger_show['동/호수'] = danger_show['동/호수'].apply(mask_text)
             danger_show['단지명'] = danger_show['단지명'].apply(mask_text)
             danger_show['현재1위부동산'] = danger_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
+            
+            # [로깅 포인트] 데이터프레임이 화면에 그려질 때 '순위이탈조회' 로그
+            if st.session_state.get('danger_viewed') != True:
+                log_visitor_to_gsheets(tracking_id, "순위이탈현황 조회")
+                st.session_state['danger_viewed'] = True
+                
             st.dataframe(danger_show, use_container_width=True)
         else: st.info("현재 1위에서 밀려난 매물이 없습니다!")
 
     with tab_empty:
-        if st.session_state.get('last_action') != "방치매물":
-            log_visitor_to_gsheets(user_id, "방치매물탭 열람")
-            st.session_state['last_action'] = "방치매물"
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 상위권 점령할 수 있습니다.")
         if not empty_houses.empty:
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
@@ -456,6 +471,12 @@ try:
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
             empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
+            
+            # [로깅 포인트] 방치매물 조회 로그
+            if st.session_state.get('empty_viewed') != True:
+                log_visitor_to_gsheets(tracking_id, "방치매물 조회")
+                st.session_state['empty_viewed'] = True
+                
             st.dataframe(empty_show, use_container_width=True)
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
@@ -463,8 +484,15 @@ try:
         st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
         c1, c2 = st.columns(2)
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
+        
+        # [로깅 포인트] 노출 현황 단지 선택 시 로그
+        if st.session_state.get('last_tr_comp') != tr_comp:
+            log_visitor_to_gsheets(tracking_id, f"노출현황조회: {tr_comp}")
+            st.session_state['last_tr_comp'] = tr_comp
+
         bundle_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist())
         tr_bundle = c2.selectbox("매물 묶음 선택", bundle_list, key="tr_bundle")
+        
         if tr_comp and tr_bundle:
             bdf = t_df[(t_df['단지명'] == tr_comp) & (t_df['매물묶음키'] == tr_bundle)]
             def get_bundle_state(grp):
