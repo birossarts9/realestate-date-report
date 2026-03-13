@@ -12,12 +12,16 @@ import requests
 import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
-import streamlit.components.v1 as components  # [추가] 퇴장 로그 기능을 위한 컴포넌트
+import streamlit.components.v1 as components  # [추가] 퇴장 로그 및 튜토리얼 기능을 위한 컴포넌트
 
 # --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
 # 브라우저 접속 시 무작위 고유 ID를 생성하여 세션이 유지되는 동안(새로고침 전까지) 사용합니다.
 if 'session_uuid' not in st.session_state:
     st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
+
+# 첫 실행 여부 확인을 위한 가드 (로그 폭주 및 반복 실행 방지용)
+if 'is_initialized' not in st.session_state:
+    st.session_state['is_initialized'] = False
 
 # --- [2] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
@@ -57,7 +61,7 @@ def log_visitor_to_gsheets(uid, action="접속"):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# [입장 로그 전송] 최초 접속 시 딱 한 번만 "입장"으로 기록
+# [입장 로그] 최초 접속 시 딱 한 번만 "입장"으로 기록 (5분 반복 로그 없음)
 if 'visit_logged' not in st.session_state:
     log_visitor_to_gsheets(tracking_id, "입장")
     st.session_state['visit_logged'] = True
@@ -304,8 +308,19 @@ try:
 
     st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
     
+    # --- [신규] 데모 유저용 튜토리얼 안내창 ---
     if IS_DEMO_MODE:
-        st.info("💡 체험판 모드입니다. 타 부동산 실명과 상세 주소는 보호 처리되었습니다.")
+        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=True):
+            st.markdown("""
+            **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
+            
+            1. **📋 요약 리포트:** 단지별 내 순위와 **'탈환이 필요한 매물'**을 한눈에 브리핑해 드립니다.
+            2. **🏆 점유율(M/S):** 경쟁사 대비 나의 지배력을 **'파워점수'**로 수치화하여 보여줍니다.
+            3. **🎯 방치된 매물:** 타 부동산이 6시간 이상 관리하지 않은 **'빈집'**을 공략 포인트로 짚어줍니다.
+            4. **⏱️ 광고 갱신 팩트:** 경쟁 부동산이 주로 움직이는 **'황금 시간대'**를 분석해 드립니다.
+            
+            *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
+            """)
 
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
@@ -517,7 +532,6 @@ try:
 
     # --- [4] 퇴장 로그 로직 (JavaScript 삽입) ---
     # 사용자가 탭을 닫거나 새로고침할 때 GAS로 '퇴장' 액션을 보냅니다.
-    # navigator.sendBeacon을 사용하여 브라우저 종료 직전 마지막으로 신호를 쏩니다.
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     exit_script = f"""
     <script>
