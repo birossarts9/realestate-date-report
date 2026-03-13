@@ -236,10 +236,43 @@ def process_data(df):
 @st.cache_data(ttl=43200, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
-    if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
-    if not xlsx_files: return None
-    df_list = [pd.read_excel(f) for f in xlsx_files]
+    
+    # 1. 한국 시간 기준으로 현재 날짜 확인
+    KST = timezone(timedelta(hours=9))
+    now = datetime.now(KST)
+    
+    target_files = []
+    
+    # 2. 이번 달 파일 이름 계산 (예: data_2026_03.xlsx)
+    current_file = f"data_{now.strftime('%Y_%m')}.xlsx"
+    target_files.append(current_file)
+    
+    # 3. 10일 유예(Rolling Window) 로직 적용
+    if now.day <= 10:
+        # 오늘이 10일 이하인 경우, 지난 달 파일 이름도 타겟 리스트에 추가
+        last_month = now.replace(day=1) - timedelta(days=1)
+        last_month_file = f"data_{last_month.strftime('%Y_%m')}.xlsx"
+        target_files.append(last_month_file)
+        
+    # 만약 기존에 사용하던 'data.xlsx'가 있다면 추가 (호환성 유지)
+    if os.path.exists(os.path.join(current_dir, "data.xlsx")): 
+        target_files.append("data.xlsx")
+
+    # 4. 타겟 리스트에 있는 파일 중 실제로 존재하는 파일만 읽어오기
+    df_list = []
+    for file_name in target_files:
+        file_path = os.path.join(current_dir, file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_excel(file_path)
+                df_list.append(df)
+            except Exception:
+                pass # 파일이 깨졌거나 읽을 수 없으면 무시
+
+    if not df_list: 
+        return None
+        
+    # 5. 읽어온 데이터프레임 병합 및 완전한 중복 제거
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
 with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
@@ -543,3 +576,4 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
