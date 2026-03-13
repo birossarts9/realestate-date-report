@@ -12,14 +12,12 @@ import requests
 import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
+import streamlit.components.v1 as components  # [추가] 퇴장 로그 기능을 위한 컴포넌트
 
 # --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
+# 브라우저 접속 시 무작위 고유 ID를 생성하여 세션이 유지되는 동안(새로고침 전까지) 사용합니다.
 if 'session_uuid' not in st.session_state:
     st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
-
-# 첫 실행 여부 확인을 위한 가드 (로그 폭주 방지용)
-if 'is_initialized' not in st.session_state:
-    st.session_state['is_initialized'] = False
 
 # --- [2] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
@@ -59,11 +57,10 @@ def log_visitor_to_gsheets(uid, action="접속"):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# 최초 접속 로그 (새로고침 전까지 딱 한 번만 실행)
+# [입장 로그 전송] 최초 접속 시 딱 한 번만 "입장"으로 기록
 if 'visit_logged' not in st.session_state:
-    log_visitor_to_gsheets(tracking_id, "신규접속")
+    log_visitor_to_gsheets(tracking_id, "입장")
     st.session_state['visit_logged'] = True
-    st.session_state['last_action'] = "신규접속"
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
@@ -259,11 +256,6 @@ try:
     s_t = col_st.time_input("시작시간", min_time.time())
     start_dt = datetime.combine(s_d, s_t)
 
-    # [로깅 포인트] 분석 기간 변경 감지 (첫 로드 이후 유저가 직접 바꿀 때만 로그 발송)
-    if st.session_state['is_initialized'] and st.session_state.get('last_s_d') != str(s_d):
-        log_visitor_to_gsheets(tracking_id, f"분석기간변경: {s_d}")
-        st.session_state['last_s_d'] = str(s_d)
-
     col_ed, col_et = st.sidebar.columns(2)
     e_d = col_ed.date_input("종료일", max_time.date())
     e_t = col_et.time_input("종료시간", max_time.time())
@@ -428,12 +420,6 @@ try:
     with tab_ms:
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
-        
-        # [로깅 포인트] 단지 필터 변경 시에만 로그 발생
-        if st.session_state['is_initialized'] and st.session_state.get('last_ms_comp') != filter_comp:
-            log_visitor_to_gsheets(tracking_id, f"점유율조회: {filter_comp}")
-            st.session_state['last_ms_comp'] = filter_comp
-
         ms_df = ms_counts.copy()
         if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
         agg_ms = ms_df.groupby('부동산명').agg({'매물건수':'sum', '총점수':'sum'}).reset_index().sort_values('총점수', ascending=False)
@@ -473,12 +459,6 @@ try:
         st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
         c1, c2 = st.columns(2)
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
-        
-        # [로깅 포인트] 노출 현황 단지 선택 시 로그
-        if st.session_state['is_initialized'] and st.session_state.get('last_tr_comp') != tr_comp:
-            log_visitor_to_gsheets(tracking_id, f"노출현황조회: {tr_comp}")
-            st.session_state['last_tr_comp'] = tr_comp
-
         bundle_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist())
         tr_bundle = c2.selectbox("매물 묶음 선택", bundle_list, key="tr_bundle")
         
@@ -534,6 +514,20 @@ try:
 
     # 모든 렌더링이 끝난 후 초기화 완료 플래그 설정
     st.session_state['is_initialized'] = True
+
+    # --- [4] 퇴장 로그 로직 (JavaScript 삽입) ---
+    # 사용자가 탭을 닫거나 새로고침할 때 GAS로 '퇴장' 액션을 보냅니다.
+    # navigator.sendBeacon을 사용하여 브라우저 종료 직전 마지막으로 신호를 쏩니다.
+    WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
+    exit_script = f"""
+    <script>
+    window.addEventListener('beforeunload', function (event) {{
+        const url = "{WEB_APP_URL}?timestamp=" + new Date().toISOString() + "&user_id={tracking_id}&action=퇴장";
+        navigator.sendBeacon(url);
+    }});
+    </script>
+    """
+    components.html(exit_script, height=0)
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
