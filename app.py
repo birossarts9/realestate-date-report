@@ -61,7 +61,7 @@ def log_visitor_to_gsheets(uid, action="접속"):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# [입장 로그] 최초 접속 시 딱 한 번만 "입장"으로 기록 (5분 반복 로그 없음)
+# [입장 로그] 최초 접속 시 딱 한 번만 "입장"으로 기록 (중간 활동 및 반복 로그 모두 제거됨)
 if 'visit_logged' not in st.session_state:
     log_visitor_to_gsheets(tracking_id, "입장")
     st.session_state['visit_logged'] = True
@@ -238,7 +238,6 @@ def load_server_data():
     xlsx_files = glob.glob(os.path.join(current_dir, "data_*.xlsx"))
     if os.path.exists("data.xlsx"): xlsx_files.append("data.xlsx")
     if not xlsx_files: return None
-    # engine='openpyxl' 대신 더 빠른 'calamine'이나 기본값 사용
     df_list = [pd.read_excel(f) for f in xlsx_files]
     return pd.concat(df_list, ignore_index=True).drop_duplicates()
 
@@ -363,10 +362,10 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 ---
-    tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_timing, tab_stat = st.tabs([
+    # --- 탭 구성 및 디자인 (요청에 따라 '광고 갱신 팩트' 삭제) ---
+    tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_stat = st.tabs([
         "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물",
-        "📉 단지 별 노출 현황", "⏱️ 광고 갱신 팩트", "📊 경쟁사 요약"
+        "📉 단지 별 노출 현황", "📊 경쟁사 요약"
     ])
 
     with tab_report:
@@ -496,18 +495,6 @@ try:
             t_show['1위부동산'] = t_show['1위부동산'].apply(lambda x: mask_text(x, True))
             st.dataframe(t_show, use_container_width=True)
 
-    with tab_timing:
-        st.info("💡 **데이터 로그 가이드:** 가격이나 상태가 변경된 실시간 기록입니다. 경쟁사가 언제 움직였는지 증거를 확인하세요.")
-        if not boosted_raw.empty:
-            show_boost = boosted_raw[['수집일시', '부동산명', '단지명', '매물묶음키', '확인일자', '왜곡영역']].copy()
-            show_boost['부동산명'] = show_boost['부동산명'].apply(lambda x: mask_text(x, True))
-            show_boost['단지명'] = show_boost['단지명'].apply(mask_text)
-            show_boost['매물묶음키'] = show_boost['매물묶음키'].apply(mask_text)
-            show_boost['비고'] = show_boost['왜곡영역'].apply(lambda x: "⚠️ 분석제외" if x else "정상")
-            show_boost = show_boost.drop(columns=['왜곡영역'])
-            st.dataframe(show_boost.sort_values('수집일시', ascending=False), use_container_width=True)
-        else: st.info("갱신 내역이 없습니다.")
-
     with tab_stat:
         st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다.")
         if not boosted_df.empty:
@@ -533,7 +520,7 @@ try:
     st.session_state['is_initialized'] = True
 
     # --- [4] 퇴장 로그 로직 (JavaScript 삽입) ---
-    # 사용자가 탭을 닫거나 새로고침할 때 GAS로 '퇴장' 액션을 보냅니다.
+    # navigator.sendBeacon을 사용하여 브라우저 종료 직전 GAS로 '퇴장' 신호를 보냅니다.
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     exit_script = f"""
     <script>
@@ -547,4 +534,3 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
-
