@@ -14,9 +14,12 @@ import threading
 from streamlit_gsheets import GSheetsConnection
 
 # --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
-# 브라우저 접속 시 무작위 고유 ID를 생성하여 세션이 유지되는 동안(새로고침 전까지) 사용합니다.
 if 'session_uuid' not in st.session_state:
     st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
+
+# 첫 실행 여부 확인을 위한 가드 (로그 폭주 방지용)
+if 'is_initialized' not in st.session_state:
+    st.session_state['is_initialized'] = False
 
 # --- [2] 비밀 장부(JSON) 로드 로직 ---
 def load_realtor_map():
@@ -256,8 +259,8 @@ try:
     s_t = col_st.time_input("시작시간", min_time.time())
     start_dt = datetime.combine(s_d, s_t)
 
-    # [로깅 포인트] 시작일 변경 감지
-    if st.session_state.get('last_s_d') != str(s_d):
+    # [로깅 포인트] 분석 기간 변경 감지 (첫 로드 이후 유저가 직접 바꿀 때만 로그 발송)
+    if st.session_state['is_initialized'] and st.session_state.get('last_s_d') != str(s_d):
         log_visitor_to_gsheets(tracking_id, f"분석기간변경: {s_d}")
         st.session_state['last_s_d'] = str(s_d)
 
@@ -358,7 +361,6 @@ try:
     ])
 
     with tab_report:
-        # 요약 리포트는 첫 화면이므로 별도 로깅 없이 '신규접속'으로 갈음 (중복 방지)
         st.markdown(f"""
         <div class="master-strategy-board">
         <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
@@ -425,11 +427,10 @@ try:
 
     with tab_ms:
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
-        
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         
-        # [로깅 포인트] 단지 필터 변경 시에만 로그 발생 (이 사람이 정말 둘러보고 있다는 증거)
-        if st.session_state.get('last_ms_comp') != filter_comp:
+        # [로깅 포인트] 단지 필터 변경 시에만 로그 발생
+        if st.session_state['is_initialized'] and st.session_state.get('last_ms_comp') != filter_comp:
             log_visitor_to_gsheets(tracking_id, f"점유율조회: {filter_comp}")
             st.session_state['last_ms_comp'] = filter_comp
 
@@ -454,12 +455,6 @@ try:
             danger_show['동/호수'] = danger_show['동/호수'].apply(mask_text)
             danger_show['단지명'] = danger_show['단지명'].apply(mask_text)
             danger_show['현재1위부동산'] = danger_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
-            
-            # [로깅 포인트] 데이터프레임이 화면에 그려질 때 '순위이탈조회' 로그
-            if st.session_state.get('danger_viewed') != True:
-                log_visitor_to_gsheets(tracking_id, "순위이탈현황 조회")
-                st.session_state['danger_viewed'] = True
-                
             st.dataframe(danger_show, use_container_width=True)
         else: st.info("현재 1위에서 밀려난 매물이 없습니다!")
 
@@ -471,12 +466,6 @@ try:
             empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
             empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
             empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
-            
-            # [로깅 포인트] 방치매물 조회 로그
-            if st.session_state.get('empty_viewed') != True:
-                log_visitor_to_gsheets(tracking_id, "방치매물 조회")
-                st.session_state['empty_viewed'] = True
-                
             st.dataframe(empty_show, use_container_width=True)
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
@@ -486,7 +475,7 @@ try:
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
         
         # [로깅 포인트] 노출 현황 단지 선택 시 로그
-        if st.session_state.get('last_tr_comp') != tr_comp:
+        if st.session_state['is_initialized'] and st.session_state.get('last_tr_comp') != tr_comp:
             log_visitor_to_gsheets(tracking_id, f"노출현황조회: {tr_comp}")
             st.session_state['last_tr_comp'] = tr_comp
 
@@ -542,6 +531,9 @@ try:
                 hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
                 fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
                 c_b.plotly_chart(fig3, use_container_width=True)
+
+    # 모든 렌더링이 끝난 후 초기화 완료 플래그 설정
+    st.session_state['is_initialized'] = True
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
