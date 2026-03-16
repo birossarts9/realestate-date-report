@@ -90,8 +90,9 @@ def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
         if filter_realtor_name in str(text): return display_realtor
-        stable_id = sum(ord(c) for c in str(text)) % 100
-        return f"경쟁사 {stable_id}"
+        # 글자의 위치값(i+1)을 곱하고 1000으로 나누어 중복(해시 충돌) 확률을 극단적으로 낮춤
+        stable_id = sum(ord(c) * (i + 1) for i, c in enumerate(str(text))) % 1000
+        return f"경쟁사 {stable_id:03d}"
     return re.sub(r'\d', '*', str(text))
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
