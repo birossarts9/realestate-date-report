@@ -5,7 +5,6 @@ import re
 import os
 import glob
 import json
-import uuid  # [추가] 사용자를 고유하게 식별하기 위해 필요합니다.
 from datetime import datetime, timedelta, timezone
 # [추가] 웹훅 통신 및 속도 개선을 위한 라이브러리
 import requests
@@ -13,15 +12,6 @@ import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components  # [추가] 퇴장 로그 및 튜토리얼 기능을 위한 컴포넌트
-
-# --- [1] 사용자 고유 식별 세션 관리 (UI 수정 없이 유입 구분) ---
-# sid가 URL에 고정되어 새로고침 시에도 UUID가 바뀌지 않도록 유지합니다.
-if 'sid' in st.query_params:
-    st.session_state['session_uuid'] = st.query_params['sid']
-else:
-    if 'session_uuid' not in st.session_state:
-        st.session_state['session_uuid'] = str(uuid.uuid4())[:8]
-    st.query_params['sid'] = st.session_state['session_uuid']
 
 # 첫 실행 여부 확인을 위한 가드
 if 'is_initialized' not in st.session_state:
@@ -51,10 +41,14 @@ user_id = query_params.get("id", "demo")
 ref_id = query_params.get("ref", "unknown") 
 
 # 최종 트래킹 ID (ref 값도 묶어서 GAS로 전송)
-tracking_id = f"user:{user_id}_ref:{ref_id}_sid:{st.session_state['session_uuid']}"
+tracking_id = f"user:{user_id}_ref:{ref_id}"
 
-# --- [3] 구글 시트 유입 및 활동 로깅 로직 (비동기 처리) ---
+# --- [3] 구글 시트 유입 및 활동 로깅 로직 ---
 def log_visitor_to_gsheets(uid, action="접속"):
+    # 🛑 [핵심 방어막] ref가 unknown(봇 또는 관리자 단순 접속)이면 로그 발송 취소
+    if "ref:unknown" in uid:
+        return 
+        
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     
     def send_log():
