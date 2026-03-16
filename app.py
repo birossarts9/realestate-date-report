@@ -61,14 +61,18 @@ def log_visitor_to_gsheets(uid, action="접속"):
         try:
             KST = timezone(timedelta(hours=9))
             now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            # action 파라미터를 정확히 전달
             requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}&action={action}", timeout=10)
         except:
             pass
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# [기존 Python 입장 로그 삭제] -> 하단 JS 영역으로 이동하여 유령 로그 원천 차단
+# ==========================================================
+# 🛑 [수정 1] 최초 접속 시 딱 한 번만 '입장' 로그 전송
+# ==========================================================
+if not st.session_state.get('entry_logged', False):
+    log_visitor_to_gsheets(tracking_id, action="입장")
+    st.session_state['entry_logged'] = True
 
 # --- 🚀 데모 모드 데이터 매핑 로직 ---
 IS_DEMO_MODE = (user_id == "demo")
@@ -399,7 +403,7 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 (요청에 따라 '광고 갱신 팩트' 탭 완전 삭제) ---
+    # --- 탭 구성 및 디자인 ---
     selected_menu = st.radio(
         "메뉴 선택",
         ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약"],
@@ -407,14 +411,17 @@ try:
         label_visibility="collapsed"
     )
 
-    # 2. [핵심] 중복 로그 방지 문지기 로직
+    # ==========================================================
+    # 🛑 [수정 3] 중복 및 최초 화면 로그 발송 방지
+    # ==========================================================
     if 'last_logged_menu' not in st.session_state:
-        st.session_state['last_logged_menu'] = ""
-
-    # 사용자가 누른 메뉴가 방금 전 메뉴와 다를 때만! 구글 시트로 로그 전송
-    if st.session_state['last_logged_menu'] != selected_menu:
-        log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
+        # 첫 접속 시: 현재 메뉴를 저장만 하고 로그는 쏘지 않음 ('입장'으로 퉁침)
         st.session_state['last_logged_menu'] = selected_menu
+    else:
+        # 이후 접속 시: 메뉴가 달라졌을 때만 로그 전송
+        if st.session_state['last_logged_menu'] != selected_menu:
+            log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
+            st.session_state['last_logged_menu'] = selected_menu
 
     if selected_menu == "📋 요약 리포트":
         st.markdown(f"""
@@ -567,19 +574,11 @@ try:
     # 모든 렌더링이 끝난 후 초기화 완료 플래그 설정
     st.session_state['is_initialized'] = True
 
-    # --- [핵심] 입/퇴장 로그 JavaScript (유령 로그 완벽 차단) ---
-    # Python 코드가 아닌, 사용자의 '브라우저'가 로드될 때만 입장 신호를 보냅니다.
-    # navigator.sendBeacon을 사용하여 탭을 닫을 때 신속하게 퇴장 신호를 보냅니다.
+    # --- [핵심] 입/퇴장 로그 JavaScript ---
     WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
     log_script = f"""
     <script>
-    // 1. 입장 로그 (브라우저가 렌더링을 시작할 때 딱 한 번 실행)
-    if (!window.alreadyLogged) {{
-        fetch("{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=입장");
-        window.alreadyLogged = true;
-    }}
-
-    // 2. 퇴장 로그 (브라우저 탭을 닫거나 새로고침할 때 실행)
+    // 🛑 [수정 2] JS 입장 로그는 삭제하고, 퇴장 로그만 유지합니다.
     window.addEventListener('beforeunload', function (event) {{
         const exitUrl = "{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=퇴장";
         navigator.sendBeacon(exitUrl);
