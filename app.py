@@ -44,11 +44,14 @@ REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-# 기본 접속 시 체험판(demo)으로 연결되도록 설정
+# 기존 코드
 user_id = query_params.get("id", "demo")
 
-# 최종 트래킹 ID 생성 (예: demo_a1b2c3d4)
-tracking_id = f"{user_id}_{st.session_state['session_uuid']}"
+# 추가할 코드 (ref 파라미터 읽기)
+ref_id = query_params.get("ref", "unknown") 
+
+# 최종 트래킹 ID (ref 값도 묶어서 GAS로 전송)
+tracking_id = f"user:{user_id}_ref:{ref_id}_sid:{st.session_state['session_uuid']}"
 
 # --- [3] 구글 시트 유입 및 활동 로깅 로직 (비동기 처리) ---
 def log_visitor_to_gsheets(uid, action="접속"):
@@ -397,12 +400,23 @@ try:
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
     # --- 탭 구성 및 디자인 (요청에 따라 '광고 갱신 팩트' 탭 완전 삭제) ---
-    tab_report, tab_ms, tab_danger, tab_empty, tab_rolling, tab_stat = st.tabs([
-        "📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물",
-        "📉 단지 별 노출 현황", "📊 경쟁사 요약"
-    ])
+    selected_menu = st.radio(
+        "메뉴 선택",
+        ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
-    with tab_report:
+    # 2. [핵심] 중복 로그 방지 문지기 로직
+    if 'last_logged_menu' not in st.session_state:
+        st.session_state['last_logged_menu'] = ""
+
+    # 사용자가 누른 메뉴가 방금 전 메뉴와 다를 때만! 구글 시트로 로그 전송
+    if st.session_state['last_logged_menu'] != selected_menu:
+        log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
+        st.session_state['last_logged_menu'] = selected_menu
+
+    if selected_menu == "📋 요약 리포트":
         st.markdown(f"""
         <div class="master-strategy-board">
         <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
@@ -467,7 +481,7 @@ try:
         """, unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) \n📞 **문의:** 010-8416-2806")
 
-    with tab_ms:
+    elif selected_menu == "🏆 점유율(M/S)":
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
         ms_df = ms_counts.copy()
@@ -484,7 +498,7 @@ try:
             fig = px.bar(top10, x='총점수', y='부동산명_축약', orientation='h', title=f"{mask_text(filter_comp)} 점유율 Top 10", text='총점수', color_discrete_sequence=['#3182f6'])
             st.plotly_chart(fig, use_container_width=True)
 
-    with tab_danger:
+    elif selected_menu == "🚨 내 매물 순위 현황":
         st.info("💡 **방어전 가이드:** 경쟁 부동산에 밀려 1위 자리에서 이탈한 매물들입니다. 재광고를 실행하여 최상단 자리를 탈환하세요.")
         if not danger_ls.empty:
             danger_show = danger_ls[['수집일시', '단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산']].copy()
@@ -494,7 +508,7 @@ try:
             st.dataframe(danger_show, use_container_width=True)
         else: st.info("현재 1위에서 밀려난 매물이 없습니다!")
 
-    with tab_empty:
+    elif selected_menu == "🎯 방치된 매물":
         st.info("💡 **공격 타겟 가이드:** 타 부동산들이 6시간 이상 관리하지 않아 '방치'된 매물들입니다. 이 틈을 타 광고를 올리면 아주 쉽게 상위권 점령할 수 있습니다.")
         if not empty_houses.empty:
             empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
@@ -505,7 +519,7 @@ try:
             st.dataframe(empty_show, use_container_width=True)
         else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
 
-    with tab_rolling:
+    elif selected_menu == "📉 단지 별 노출 현황":
         st.info("💡 **순위 롤링 가이드:** 네이버 부동산은 이용자마다 순위를 다르게 보여줍니다. 본 차트는 실시간 추적을 통해 내 매물의 실제 평균 노출 위치를 분석합니다.")
         c1, c2 = st.columns(2)
         tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
@@ -529,7 +543,7 @@ try:
             t_show['1위부동산'] = t_show['1위부동산'].apply(lambda x: mask_text(x, True))
             st.dataframe(t_show, use_container_width=True)
 
-    with tab_stat:
+    elif selected_menu == "📊 경쟁사 요약":
         st.info("💡 **경쟁사 분석 가이드:** 라이벌 업체들이 주로 광고비를 지출하는 루틴을 분석합니다.")
         if not boosted_df.empty:
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
@@ -576,4 +590,3 @@ try:
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
-
