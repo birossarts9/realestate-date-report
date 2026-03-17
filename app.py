@@ -345,7 +345,7 @@ try:
     
     # --- [신규] 데모 유저용 튜토리얼 안내창 ---
     if IS_DEMO_MODE:
-        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=True):
+        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=false):
             st.markdown("""
             **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
             
