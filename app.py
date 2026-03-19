@@ -363,24 +363,7 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
-    
-    # --- [신규] 데모 유저용 튜토리얼 안내창 ---
-    if IS_DEMO_MODE:
-        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
-            st.markdown("""
-            **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
-            
-            1. **📋 요약 리포트:** 단지별 내 순위와 다양한 정보를 요약하여 한눈에 브리핑해 드립니다.
-            2. **🏆 점유율(M/S):** 경쟁사 대비 나의 점유율을 '점수'로 수치화하여 보여줍니다.
-            3. **🚨 내 매물 순위 현황:** 현재 내 매물이 '몇 위'인지, 그 매물의 1위 부동산은 어디인지를 보여줍니다.
-            4. **📉 단지 별 노출 현황:** 네이버 부동산에서 찾고자 하는 '단지의 순위'를 확인할 수 있습니다. 
-            5. **🎯 방치된 매물:** 다른 부동산이 6시간 이상 관리하지 않은 '빈집'을 공략 포인트로 짚어줍니다.
-            6. **📊 경쟁사 요약:** 경쟁 부동산이 주로 움직이는 '황금 시간대'를 분석해 드립니다.
-            
-            *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
-            """)
-
+    # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -420,35 +403,13 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- 탭 구성 및 디자인 ---
-    selected_menu = st.radio(
-        "메뉴 선택",
-        ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
+    # --- [신규] 브리핑 문자열 조합 ---
+    KST = timezone(timedelta(hours=9))
+    today_date = datetime.now(KST).strftime('%Y-%m-%d')
+    rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
+    if not rank_summary: rank_summary = "분석된 순위 없음"
 
-    # ==========================================================
-    # 🛑 [수정 3] 중복 및 최초 화면 로그 발송 방지
-    # ==========================================================
-    if 'last_logged_menu' not in st.session_state:
-        # 첫 접속 시: 현재 메뉴를 저장만 하고 로그는 쏘지 않음 ('입장'으로 퉁침)
-        st.session_state['last_logged_menu'] = selected_menu
-    else:
-        # 이후 접속 시: 메뉴가 달라졌을 때만 로그 전송
-        if st.session_state['last_logged_menu'] != selected_menu:
-            log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
-            st.session_state['last_logged_menu'] = selected_menu
-
-    if selected_menu == "📋 요약 리포트":
-        # 1. 데이터 계산
-        KST = timezone(timedelta(hours=9))
-        today_date = datetime.now(KST).strftime('%Y-%m-%d')
-        rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
-        if not rank_summary: rank_summary = "분석된 순위 없음"
-
-        # 2. 복사할 문자열 (기존과 동일)
-        briefing_text = f"""[📅 {today_date} 오전 시장 상황 보고]
+    briefing_text = f"""[📅 {today_date} 오전 시장 상황 보고]
 
 안녕하세요, {display_realtor} 대표님.
 오늘 아침 분석된 시장 랭킹 및 경쟁사 동향 보고입니다.
@@ -480,33 +441,76 @@ try:
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 (PC 열람 권장)""".replace("`", "'")
 
-        # --- UI 시작: 파란 박스 제거 후 깔끔한 텍스트로만 출력 ---
-        st.markdown(f"""
-        <div style="font-size:24px; color:#1e3a8a; font-weight:800; margin-top:10px; margin-bottom:15px; letter-spacing:-1px;">
-            📅 작전판 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
-        </div>
-        """, unsafe_allow_html=True)
+    # --- [UI 출력] 은밀한 링크 버튼이 결합된 메인 타이틀 ---
+    components.html(f"""
+    <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
+        <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
+        <button id="copyBtn" style="
+            background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; transition: all 0.2s; outline: none;
+        " title="오늘의 브리핑 문구 복사">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+            <span id="copyMsg" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+        </button>
+    </div>
+    <script>
+    document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
+    document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
 
-        # --- [버튼] 크기 축소 및 하단 간격(height) 대폭 축소 ---
-        components.html(f"""
-            <button id="copyBtn" style="
-                background-color: #3182f6; color: white; border: none; padding: 10px 18px;
-                border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px;
-                font-family: sans-serif; box-shadow: 0 4px 6px rgba(49, 130, 246, 0.2);
-            ">📱 브리핑 복사</button>
-            <script>
-            document.getElementById('copyBtn').onclick = function() {{
-                const text = `{briefing_text}`;
-                navigator.clipboard.writeText(text).then(function() {{
-                    const btn = document.getElementById('copyBtn');
-                    btn.innerText = '✅ 복사 완료!'; btn.style.backgroundColor = '#10b981';
-                    setTimeout(() => {{ btn.innerText = '📱 브리핑 복사'; btn.style.backgroundColor = '#3182f6'; }}, 2000);
-                }});
-            }};
-            </script>
-        """, height=50) # height를 85에서 50으로 줄여서 밑의 카드와 거리를 좁힘
+    document.getElementById('copyBtn').onclick = function() {{
+        const text = `{briefing_text}`;
+        navigator.clipboard.writeText(text).then(function() {{
+            const btn = document.getElementById('copyBtn');
+            const msg = document.getElementById('copyMsg');
+            btn.style.color = '#10b981';
+            msg.innerText = '✅ 복사완료';
+            msg.style.opacity = '1';
+            setTimeout(() => {{
+                btn.style.color = '#b0bec5';
+                msg.style.opacity = '0';
+            }}, 2000);
+        }});
+    }};
+    </script>
+    """, height=80)
 
-        # --- 하단 전략 카드들 (master-strategy-board가 사라졌으므로 들여쓰기 조정 없이 바로 출력) ---
+    # --- [신규] 데모 유저용 튜토리얼 안내창 ---
+    if IS_DEMO_MODE:
+        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
+            st.markdown("""
+            **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
+            
+            1. **📋 요약 리포트:** 단지별 내 순위와 다양한 정보를 요약하여 한눈에 브리핑해 드립니다.
+            2. **🏆 점유율(M/S):** 경쟁사 대비 나의 점유율을 '점수'로 수치화하여 보여줍니다.
+            3. **🚨 내 매물 순위 현황:** 현재 내 매물이 '몇 위'인지, 그 매물의 1위 부동산은 어디인지를 보여줍니다.
+            4. **📉 단지 별 노출 현황:** 네이버 부동산에서 찾고자 하는 '단지의 순위'를 확인할 수 있습니다. 
+            5. **🎯 방치된 매물:** 다른 부동산이 6시간 이상 관리하지 않은 '빈집'을 공략 포인트로 짚어줍니다.
+            6. **📊 경쟁사 요약:** 경쟁 부동산이 주로 움직이는 '황금 시간대'를 분석해 드립니다.
+            
+            *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
+            """)
+
+    # --- 탭 구성 및 디자인 ---
+    selected_menu = st.radio(
+        "메뉴 선택",
+        ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    # ==========================================================
+    # 🛑 [수정 3] 중복 및 최초 화면 로그 발송 방지
+    # ==========================================================
+    if 'last_logged_menu' not in st.session_state:
+        # 첫 접속 시: 현재 메뉴를 저장만 하고 로그는 쏘지 않음 ('입장'으로 퉁침)
+        st.session_state['last_logged_menu'] = selected_menu
+    else:
+        # 이후 접속 시: 메뉴가 달라졌을 때만 로그 전송
+        if st.session_state['last_logged_menu'] != selected_menu:
+            log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
+            st.session_state['last_logged_menu'] = selected_menu
+
+    if selected_menu == "📋 요약 리포트":
+        # 요약 리포트 내부 출력 시작 (복잡한 텍스트/버튼 제거)
         st.markdown(f"""
         <div class="strategy-grid" style="margin-top: 5px;">
             <div class="briefing-strategy-card">
@@ -531,7 +535,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
                 </div>
             </div>
         </div>
-        <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:0px; margin-bottom:0;">
+        
+        <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:0px; margin-bottom:30px;">
             <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
             <div class="briefing-content">
                 가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
