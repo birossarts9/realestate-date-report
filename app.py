@@ -6,7 +6,7 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
-# [추가] 웹훅 통신 및 속도 개선을 위한 라이브러리
+# [추가] 웹훅 통신 및 속도 개선을 위한` 라이브러리
 import requests
 import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
@@ -202,16 +202,26 @@ div[data-baseweb="select"] > div:hover {
     box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important;
 }
 
-/* 라디오 버튼(메뉴 탭) 글자 크기 대폭 상향 */
+/* 체험판 튜토리얼 텍스트 크기 조정 및 라디오 버튼과의 간격 확보 */
+div[data-testid="stExpander"] summary p {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+}
+div[data-testid="stExpander"] {
+    margin-bottom: 20px !important;
+}
+
+/* 라디오 버튼(메뉴 탭) 글자 크기 하향 (모바일 최적화) */
 div[data-testid="stRadio"] label p {
-    font-size: 26px !important; 
+    font-size: 18px !important; /* 26px에서 18px로 대폭 축소 */
     font-weight: 800 !important;
     color: #1e3a8a !important;
 }
 
-/* 탭 사이 간격 넓히기 */
+/* 탭 사이 간격 줄이기 */
 div[data-testid="stRadio"] > div {
-    gap: 40px !important;
+    gap: 15px !important; /* 모바일을 위해 간격 축소 */
+    flex-wrap: wrap !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -470,36 +480,35 @@ try:
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 (PC 열람 권장)""".replace("`", "'")
 
-        # --- UI 시작: 제목 없이 분석 기간만 크게 노출 ---
+        # --- UI 시작: 파란 박스 제거 후 깔끔한 텍스트로만 출력 ---
         st.markdown(f"""
-        <div class="master-strategy-board">
-        <div style="font-size:32px; color:#1e3a8a; font-weight:800; margin-bottom:30px; letter-spacing:-1px;">
+        <div style="font-size:24px; color:#1e3a8a; font-weight:800; margin-top:10px; margin-bottom:15px; letter-spacing:-1px;">
             📅 작전판 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
         </div>
         """, unsafe_allow_html=True)
 
-        # --- [버튼] 복사 버튼 ---
+        # --- [버튼] 크기 축소 및 하단 간격(height) 대폭 축소 ---
         components.html(f"""
             <button id="copyBtn" style="
-                background-color: #3182f6; color: white; border: none; padding: 14px 28px;
-                border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 18px;
-                font-family: sans-serif; box-shadow: 0 4px 12px rgba(49, 130, 246, 0.3);
-            ">📱 소장님 전송용 브리핑 복사하기</button>
+                background-color: #3182f6; color: white; border: none; padding: 10px 18px;
+                border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 15px;
+                font-family: sans-serif; box-shadow: 0 4px 6px rgba(49, 130, 246, 0.2);
+            ">📱 브리핑 복사</button>
             <script>
             document.getElementById('copyBtn').onclick = function() {{
                 const text = `{briefing_text}`;
                 navigator.clipboard.writeText(text).then(function() {{
                     const btn = document.getElementById('copyBtn');
                     btn.innerText = '✅ 복사 완료!'; btn.style.backgroundColor = '#10b981';
-                    setTimeout(() => {{ btn.innerText = '📱 소장님 전송용 브리핑 복사하기'; btn.style.backgroundColor = '#3182f6'; }}, 2000);
+                    setTimeout(() => {{ btn.innerText = '📱 브리핑 복사'; btn.style.backgroundColor = '#3182f6'; }}, 2000);
                 }});
             }};
             </script>
-        """, height=85)
+        """, height=50) # height를 85에서 50으로 줄여서 밑의 카드와 거리를 좁힘
 
-        # --- 하단 전략 카드들 ---
+        # --- 하단 전략 카드들 (master-strategy-board가 사라졌으므로 들여쓰기 조정 없이 바로 출력) ---
         st.markdown(f"""
-        <div class="strategy-grid">
+        <div class="strategy-grid" style="margin-top: 5px;">
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
                 <div class="briefing-content">
@@ -522,15 +531,18 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
                 </div>
             </div>
         </div>
-        <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; margin-bottom:0;">
+        <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:0px; margin-bottom:0;">
             <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
             <div class="briefing-content">
                 가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
                 {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
             </div>
         </div>
-        </div>
         """, unsafe_allow_html=True)
+
+        # 프리미엄 서비스 안내 (이하 기존과 동일)
+        st.markdown("<h2 style='text-align:center; margin-bottom:30px; margin-top:50px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
+        # ... (생략) ...
 
         # 서비스 안내 (기존과 동일)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
