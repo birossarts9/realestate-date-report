@@ -540,10 +540,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
         </div>
         """, unsafe_allow_html=True)
 
-        # 프리미엄 서비스 안내 (이하 기존과 동일)
-        st.markdown("<h2 style='text-align:center; margin-bottom:30px; margin-top:50px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
-        # ... (생략) ...
-
         # 서비스 안내 (기존과 동일)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
