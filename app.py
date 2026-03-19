@@ -419,44 +419,123 @@ try:
             st.session_state['last_logged_menu'] = selected_menu
 
     if selected_menu == "📋 요약 리포트":
+        # 1. 브리핑에 들어갈 데이터 미리 계산
+        KST = timezone(timedelta(hours=9))
+        today_date = datetime.now(KST).strftime('%Y-%m-%d')
+        
+        # 내 순위 요약 문자열 생성
+        rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
+        if not rank_summary: rank_summary = "분석된 순위 없음"
+
+        # 2. 복사될 문자열 생성 (줄바꿈 \n 처리 및 특수문자 치환)
+        briefing_text = f"""[📅 {today_date} 오전 시장 상황 보고]
+
+안녕하세요, {display_realtor} 대표님.
+오늘 아침 분석된 시장 랭킹 및 경쟁사 동향 보고입니다.
+
+1. 🛡️ 현재 우리 부동산 노출 현황
+- 종합 랭킹: [{rank_summary}]
+- 1위 이탈 매물: {len(danger_ls)}건 발견
+(현재 경쟁사에 밀려 상단 노출이 중단된 상태입니다. 재광고가 필요합니다.)
+
+2. 🎯 오늘 오전 '빈집' 공략 포인트
+- 방치 매물: {len(empty_houses)}건 탐지
+- 상세: 타 부동산이 6시간 이상 광고를 갱신하지 않은 구역입니다.
+(지금 즉시 갱신 시, 최소 비용으로 최상단 노출을 뺏어올 수 있는 황금 구간입니다.)
+
+3. 📡 주요 경쟁사 동향
+- 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
+- {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
+
+----------------------------------------
+
+🤖 [광고 자동화 솔루션 안내]
+대표님은 중개만 하세요. 랭킹 관리는 저희가 자동으로 처리합니다.
+
+- 실시간 빈집 감지 및 1위 탈환
+- 24시간 자동 상단 노출 고정
+- 골든타임 최적화 광고 배치
+
+👇 상세 데이터 및 자동화 설정 확인
+https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
+(PC 열람 권장)""".replace("`", "'")
+
+        # --- UI 시작: 메인 보드 헤더 ---
         st.markdown(f"""
         <div class="master-strategy-board">
         <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
+        """, unsafe_allow_html=True)
+
+        # --- [버튼] 보이지 않는 곳에서 복사만 수행 ---
+        components.html(f"""
+            <button id="copyBtn" style="
+                background-color: #3182f6;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 16px;
+                font-family: sans-serif;
+                box-shadow: 0 4px 6px rgba(49, 130, 246, 0.2);
+                transition: all 0.2s;
+            ">📱 소장님 전송용 브리핑 복사하기</button>
+            <script>
+            document.getElementById('copyBtn').onclick = function() {{
+                const text = `{briefing_text}`;
+                navigator.clipboard.writeText(text).then(function() {{
+                    const btn = document.getElementById('copyBtn');
+                    btn.innerText = '✅ 복사 완료!';
+                    btn.style.backgroundColor = '#10b981';
+                    setTimeout(() => {{
+                        btn.innerText = '📱 소장님 전송용 브리핑 복사하기';
+                        btn.style.backgroundColor = '#3182f6';
+                    }}, 2000);
+                }});
+            }};
+            </script>
+        """, height=70)
+
+        # --- 나머지 카드 UI들 연동 ---
+        st.markdown(f"""
         <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
         [📅 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
         </div>
         <div class="strategy-grid">
-        <div class="briefing-strategy-card">
-        <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
-        <div class="briefing-content">
-        현재 대표님의 단지별 랭킹은<br>
-        <span style="color:#3182f6;">[{" / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외']) if any(v != '권외' for v in my_ranks_dict.values()) else '분석된 순위 없음'}]</span> 입니다.
-        </div>
-        </div>
-        <div class="briefing-strategy-card">
-        <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 탈환 필요</span>
-        <div class="briefing-content">
-        상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
-        재광고를 통해 상위권 탈환하는 것을 권장합니다.
-        </div>
-        </div>
-        <div class="briefing-strategy-card">
-        <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
-        <div class="briefing-content">
-        타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
-        최소 비용으로 상위권을 점령할 절호의 기회입니다.
-        </div>
-        </div>
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
+                <div class="briefing-content">
+                    현재 대표님의 단지별 랭킹은<br>
+                    <span style="color:#3182f6;">[{rank_summary}]</span> 입니다.
+                </div>
+            </div>
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 탈환 필요</span>
+                <div class="briefing-content">
+                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
+                    재광고를 통해 상위권 탈환을 권장합니다.
+                </div>
+            </div>
+            <div class="briefing-strategy-card">
+                <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
+                <div class="briefing-content">
+                    타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
+                    최소 비용으로 상위권을 점령할 기회입니다.
+                </div>
+            </div>
         </div>
         <div class="briefing-strategy-card" style="border-left: 6px solid #f59e0b; margin-top:10px; margin-bottom:0;">
-        <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
-        <div class="briefing-content">
-        가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
-        {peak_hour_str} 해당 시간대를 피해 전략적으로 광고를 배치하거나 자동화 솔루션으로 선점하십시오.
-        </div>
+            <span class="strategy-tag" style="background-color:#f59e0b;">📡 경쟁사 인텔리전스</span>
+            <div class="briefing-content">
+                가장 활발하게 광고 중인 경쟁사는 <span style="color:#f59e0b;">[{mask_text(clean_realtor_name(top_spender_raw_name), True) if top_spender_raw_name else '없음'}]</span> 이며,<br>
+                {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
+            </div>
         </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # --- 프리미엄 서비스 안내 (기존과 동일) ---
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         card_content = """
@@ -471,7 +550,8 @@ try:
         with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
-        st.markdown(f"""
+        
+        st.markdown("""
         <div style="margin-top:50px; padding:30px; background-color:#f8fafc; border-radius:20px; border: 1px solid #e2e8f0; text-align:center;">
         <h3 style="color:#3182f6; margin-bottom:15px;">🤖 광고 자동화 솔루션이란?</h3>
         <p style="font-size:18px; color:#475569; line-height:1.7; margin:0;">
@@ -482,7 +562,6 @@ try:
         </div>
         """, unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) \n📞 **문의:** 010-8416-2806")
-
     elif selected_menu == "🏆 점유율(M/S)":
         st.info("💡 **점유율 가이드:** 매물 순위와 규모를 기반으로 파워점수를 산정하여 단지별 랭킹을 보여줍니다.")
         filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
