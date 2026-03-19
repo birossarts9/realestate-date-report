@@ -201,6 +201,18 @@ div[data-baseweb="select"] > div:hover {
 [data-testid="stDataFrame"]:hover {
     box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important;
 }
+
+/* 라디오 버튼(메뉴 탭) 글자 크기 대폭 상향 */
+div[data-testid="stRadio"] label p {
+    font-size: 26px !important; 
+    font-weight: 800 !important;
+    color: #1e3a8a !important;
+}
+
+/* 탭 사이 간격 넓히기 */
+div[data-testid="stRadio"] > div {
+    gap: 40px !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -419,15 +431,13 @@ try:
             st.session_state['last_logged_menu'] = selected_menu
 
     if selected_menu == "📋 요약 리포트":
-        # 1. 브리핑에 들어갈 데이터 미리 계산
+        # 1. 데이터 계산
         KST = timezone(timedelta(hours=9))
         today_date = datetime.now(KST).strftime('%Y-%m-%d')
-        
-        # 내 순위 요약 문자열 생성
         rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
         if not rank_summary: rank_summary = "분석된 순위 없음"
 
-        # 2. 복사될 문자열 생성 (줄바꿈 \n 처리 및 특수문자 치환)
+        # 2. 복사할 문자열 (기존과 동일)
         briefing_text = f"""[📅 {today_date} 오전 시장 상황 보고]
 
 안녕하세요, {display_realtor} 대표님.
@@ -460,48 +470,35 @@ try:
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 (PC 열람 권장)""".replace("`", "'")
 
-        # --- UI 시작: 메인 보드 헤더 ---
+        # --- UI 시작: 제목 없이 분석 기간만 크게 노출 ---
         st.markdown(f"""
         <div class="master-strategy-board">
-        <h2 style="color:#1e3a8a; margin-top:0; font-size:32px; margin-bottom:12px;">📊 오늘의 전략 브리핑 (실시간)</h2>
+        <div style="font-size:32px; color:#1e3a8a; font-weight:800; margin-bottom:30px; letter-spacing:-1px;">
+            📅 작전판 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
+        </div>
         """, unsafe_allow_html=True)
 
-        # --- [버튼] 보이지 않는 곳에서 복사만 수행 ---
+        # --- [버튼] 복사 버튼 ---
         components.html(f"""
             <button id="copyBtn" style="
-                background-color: #3182f6;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 10px;
-                cursor: pointer;
-                font-weight: bold;
-                font-size: 16px;
-                font-family: sans-serif;
-                box-shadow: 0 4px 6px rgba(49, 130, 246, 0.2);
-                transition: all 0.2s;
+                background-color: #3182f6; color: white; border: none; padding: 14px 28px;
+                border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 18px;
+                font-family: sans-serif; box-shadow: 0 4px 12px rgba(49, 130, 246, 0.3);
             ">📱 소장님 전송용 브리핑 복사하기</button>
             <script>
             document.getElementById('copyBtn').onclick = function() {{
                 const text = `{briefing_text}`;
                 navigator.clipboard.writeText(text).then(function() {{
                     const btn = document.getElementById('copyBtn');
-                    btn.innerText = '✅ 복사 완료!';
-                    btn.style.backgroundColor = '#10b981';
-                    setTimeout(() => {{
-                        btn.innerText = '📱 소장님 전송용 브리핑 복사하기';
-                        btn.style.backgroundColor = '#3182f6';
-                    }}, 2000);
+                    btn.innerText = '✅ 복사 완료!'; btn.style.backgroundColor = '#10b981';
+                    setTimeout(() => {{ btn.innerText = '📱 소장님 전송용 브리핑 복사하기'; btn.style.backgroundColor = '#3182f6'; }}, 2000);
                 }});
             }};
             </script>
-        """, height=70)
+        """, height=85)
 
-        # --- 나머지 카드 UI들 연동 ---
+        # --- 하단 전략 카드들 ---
         st.markdown(f"""
-        <div style="font-size:18px; color:#64748b; font-weight:bold; margin-bottom:30px;">
-        [📅 작전판] 분석 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}
-        </div>
         <div class="strategy-grid">
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
@@ -535,7 +532,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
         </div>
         """, unsafe_allow_html=True)
 
-        # --- 프리미엄 서비스 안내 (기존과 동일) ---
+        # 서비스 안내 (기존과 동일)
         st.markdown("<h2 style='text-align:center; margin-bottom:30px;'>💳 프리미엄 서비스 안내</h2>", unsafe_allow_html=True)
         col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
         card_content = """
