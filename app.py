@@ -691,11 +691,3 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
-
-<service_account_key.json>
-
-AI 개요
-부동산 데이터 수집/분석/시각화(market_crawler.py, app.py, dashboard.py 등)를 위한 파이썬 자동화 코드 및 최신 매물/부동산 DB 포함.
-
-service_account_key.json
-
