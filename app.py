@@ -22,7 +22,7 @@ creds_dict = st.secrets["gcp_service_account"]
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
 
 # 3. 인증 진행
-client = gspread.authorize(creds)  <-- 이런 식으로 쓰고 있을 거야
+client = gspread.authorize(creds)
 
 # 첫 실행 여부 확인을 위한 가드
 if 'is_initialized' not in st.session_state:
