@@ -234,41 +234,45 @@ def clean_realtor_name(name):
 
 @st.cache_data(show_spinner=False)
 def process_data(df):
-    # 1. 기본 날짜 및 데이터 형식 처리
-    df['수집일시'] = pd.to_datetime(df['수집일시'], errors='coerce')
+    df['수집일시'] = pd.to_datetime(df['수집일시'])
+    df = df.sort_values('수집일시')
+    time_diff_mins = df['수집일시'].diff().dt.total_seconds() / 60.0
+    df['새_세션'] = (time_diff_mins > 5) | time_diff_mins.isna()
+    df['세션ID'] = df['새_세션'].cumsum()
+    session_rep = df.groupby('세션ID')['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
+    df = pd.merge(df, session_rep, on='세션ID', how='left')
+    df['수집일시'] = df['대표수집일시']
+    session_times = df['수집일시'].drop_duplicates().sort_values()
+    gap_check = session_times.diff().dt.total_seconds() / 3600.0
+    gap_starts = session_times[gap_check > 2.5].tolist()
     
-    # 2. 순위 데이터를 숫자로 변환 (에러 발생 원인 해결)
-    # 문자로 된 순위를 숫자로 바꿔야 그래프를 그릴 수 있어.
-    if '전체순위' in df.columns:
-        df['전체순위_숫자'] = pd.to_numeric(df['전체순위'], errors='coerce').fillna(99)
+    df['왜곡영역'] = False
+    for start_time in gap_starts:
+        df.loc[(df['수집일시'] >= start_time) & (df['수집일시'] < start_time + timedelta(hours=1)), '왜곡영역'] = True
+        
+    df['전체순위_숫자'] = pd.to_numeric(df['전체순위'].astype(str).str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
+    df['묶음내순위_숫자'] = pd.to_numeric(df['묶음내순위'].astype(str).str.replace('단독', '1').str.replace(r'[^0-9]', '', regex=True), errors='coerce').fillna(999).astype(int)
     
-    if '묶음내순위' in df.columns:
-        # 이 부분이 사라져서 에러가 났던 거야. 다시 채워 넣었어.
-        df['묶음내순위_숫자'] = pd.to_numeric(df['묶음내순위'], errors='coerce').fillna(1)
-    
-    # 3. 고유번호(articleNo) 하이브리드 로직 적용
-    # 과거 백업본(번호없음)과 신규 데이터(번호있음)를 합쳐주는 과정이야.
+    for col in ['동/호수', '층/타입', '거래방식', '가격']:
+        if col in df.columns: df[col] = df[col].fillna("")
+        
+    df['확인일자'] = df['확인일자'].apply(lambda x: str(x).strip() if pd.notna(x) else pd.NA)
+    df['확인일자_Date'] = pd.to_datetime(df['확인일자'], format='%y.%m.%d', errors='coerce')
+
+    # 🚨 [추가됨] 고유번호(articleNo) 하이브리드 매칭 로직
     if '고유번호' not in df.columns:
         df['고유번호'] = '기록없음'
-        
     df['고유번호'] = df['고유번호'].fillna('기록없음')
     
-    # 4. 매물 식별키(Key) 생성
-    # 고유번호가 있으면 번호로, 없으면 기존 방식(동+가격 등)으로 매물을 구분해.
     def make_bundle_key(row):
         art_no = str(row['고유번호']).strip()
         if art_no != '기록없음' and art_no != '번호없음' and art_no != '':
             return art_no
         else:
-            # 과거 데이터를 위한 백업 식별 방식
-            return f"{row.get('동/호수', '미상')} | {row.get('층/타입', '미상')} | {row.get('가격', '0')}"
+            return f"{row['동/호수']} | {row['층/타입']} | {row['거래방식']} | {row['가격']}"
             
     df['매물묶음키'] = df.apply(make_bundle_key, axis=1)
     
-    # 5. 확인일자 날짜 변환
-    if '확인일자' in df.columns:
-        df['확인일자_Date'] = pd.to_datetime(df['확인일자'], format='%y.%m.%d', errors='coerce')
-        
     return df
 
 @st.cache_data(ttl=43200, show_spinner=False)
@@ -687,3 +691,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
+
+<service_account_key.json>
+
+AI 개요
+부동산 데이터 수집/분석/시각화(market_crawler.py, app.py, dashboard.py 등)를 위한 파이썬 자동화 코드 및 최신 매물/부동산 DB 포함.
+
+service_account_key.json
+
