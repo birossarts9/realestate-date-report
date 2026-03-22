@@ -12,6 +12,17 @@ import threading
 # [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components  # [추가] 퇴장 로그 및 튜토리얼 기능을 위한 컴포넌트
+from oauth2client.service_account import ServiceAccountCredentials
+
+# 1. 시트 접근 권한 설정
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+# 2. 파일 대신 st.secrets(금고)에서 키 뭉치를 가져오기
+creds_dict = st.secrets["gcp_service_account"]
+creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+
+# 3. 인증 진행
+client = gspread.authorize(creds)  <-- 이런 식으로 쓰고 있을 거야
 
 # 첫 실행 여부 확인을 위한 가드
 if 'is_initialized' not in st.session_state:
