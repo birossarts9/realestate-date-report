@@ -239,6 +239,34 @@ div[data-testid="stRadio"] > div {
 """, unsafe_allow_html=True)
 
 # --- 3. 유틸리티 함수 ---
+
+# --- [신규] 구글 시트 1번 탭(VIP)과 2번 탭(로그) 연동 ---
+@st.cache_data(ttl=600, show_spinner=False)
+def load_renewal_logs():
+    try:
+        # 시트 ID 입력 (엔진 코드에 있던 ID 사용)
+        SHEET_ID = "1yEllJWWNwsd5FMvvgwSIvA46j10XU_8MxpRAWcs-ba8"
+        doc = client.open_by_key(SHEET_ID)
+        
+        # 1번 탭 데이터 (인덱스 0)
+        sheet1 = doc.get_worksheet(0)
+        df1 = pd.DataFrame(sheet1.get_all_values())
+        if not df1.empty:
+            df1.columns = df1.iloc[0] # 첫 줄을 헤더로
+            df1 = df1[1:]
+            
+        # 2번 탭 데이터 (인덱스 1)
+        sheet2 = doc.get_worksheet(1)
+        df2 = pd.DataFrame(sheet2.get_all_values())
+        if not df2.empty:
+            df2.columns = df2.iloc[0] # 첫 줄을 헤더로
+            df2 = df2[1:]
+            
+        return df1, df2
+    except Exception as e:
+        st.error(f"시트 데이터를 불러오지 못했습니다: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+        
 def clean_realtor_name(name):
     pattern = r'공인중개사사무소|공인중개사|중개사무소|부동산|중개사|공인|중개|사무소'
     cleaned = re.sub(pattern, '', str(name)).strip()
@@ -519,10 +547,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
             *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
             """)
 
-    # --- 탭 구성 및 디자인 ---
+    # 기존 코드 수정
     selected_menu = st.radio(
         "메뉴 선택",
-        ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약"],
+        ["📋 요약 리포트", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약", "🚀 자동 갱신 기록"], # <-- 추가됨
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -684,6 +712,27 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
                 hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
                 fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
                 c_b.plotly_chart(fig3, use_container_width=True)
+
+    elif selected_menu == "🚀 자동 갱신 기록":
+        st.info("💡 **자동화 갱신 로그:** 자동화 엔진이 성공적으로 광고를 갱신한 이력과 대상 매물을 확인합니다.")
+        df1, df2 = load_renewal_logs()
+        
+        if not df1.empty and not df2.empty:
+            # df1의 I열 이름과 df2의 B열 이름이 무엇인지 정확히 적어주세요.
+            # 예시: 1번 탭 헤더가 '매물번호', 2번 탭 헤더가 '고유번호'라면 아래처럼 연결
+            # (만약 헤더 이름이 다르다면 이 부분을 실제 엑셀 1행 이름으로 수정해야 합니다)
+            merge_col_1 = df1.columns[8] # I열 (0부터 시작하므로 8)
+            merge_col_2 = df2.columns[1] # B열 (0부터 시작하므로 1)
+            
+            # 병합 (Left Join)
+            merged_df = pd.merge(df2, df1, left_on=merge_col_2, right_on=merge_col_1, how='left')
+            
+            # 보기 좋게 가공
+            merged_df['상태'] = merged_df.iloc[:, 2] # 2번 탭의 C열(상태)
+            
+            st.dataframe(merged_df.tail(20), use_container_width=True) # 최신 20개만 보기
+        else:
+            st.warning("아직 수집된 갱신 로그가 없습니다.")
 
     # 모든 렌더링이 끝난 후 초기화 완료 플래그 설정
     st.session_state['is_initialized'] = True
