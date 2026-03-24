@@ -108,7 +108,15 @@ def mask_text(text, is_agent=False):
     return re.sub(r'\d', '*', str(text))
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
-st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
+# [변경 전] st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
+
+# [변경 후]
+st.set_page_config(
+    page_title="TOP RANK 솔루션 | 프리미엄 부동산 자동화", 
+    page_icon="👑", # 왕관이나 건물 이모지 등 간지나는 걸로 변경
+    layout="wide",
+    initial_sidebar_state="expanded" # 사이드바 처음부터 열어두기
+)
 
 st.markdown("""
 <style>
