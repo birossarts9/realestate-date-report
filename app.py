@@ -300,13 +300,11 @@ def process_data(df):
         df['고유번호'] = '기록없음'
     df['고유번호'] = df['고유번호'].fillna('기록없음')
     
+    # 🚨 [수정됨] 묶음 매물키를 고유번호(articleNo)가 아닌 '물리적 매물 정보'로 다시 고정합니다.
+    # 이렇게 해야 '단지별 노출 현황'에서 묶음 매물 전체의 롤링 순위를 정상적으로 추적할 수 있습니다.
     def make_bundle_key(row):
-        art_no = str(row['고유번호']).strip()
-        if art_no != '기록없음' and art_no != '번호없음' and art_no != '':
-            return art_no
-        else:
-            return f"{row['동/호수']} | {row['층/타입']} | {row['거래방식']} | {row['가격']}"
-            
+        return f"{row['동/호수']} | {row['층/타입']} | {row['거래방식']} | {row['가격']}"
+        
     df['매물묶음키'] = df.apply(make_bundle_key, axis=1)
     
     return df
@@ -543,34 +541,28 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
             *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
             """)
 
-    # 기존 코드의 라디오 버튼 교체 (새로운 탭 '⚔️ 내 매물 맞춤 전략' 추가)
+    # 기존 코드 수정 (방치된 매물 탭 삭제)
     selected_menu = st.radio(
         "메뉴 선택",
-        ["📋 요약 리포트", "⚔️ 내 매물 맞춤 전략", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "🎯 방치된 매물", "📉 단지 별 노출 현황", "📊 경쟁사 요약", "🚀 자동 갱신 기록"], 
+        ["📋 요약 리포트", "⚔️ 내 매물 맞춤 전략", "🏆 점유율(M/S)", "🚨 내 매물 순위 현황", "📉 단지 별 노출 현황", "📊 경쟁사 요약", "🚀 자동 갱신 기록"], 
         horizontal=True,
         label_visibility="collapsed"
     )
 
-    # ==========================================================
-    # 🛑 [수정 3] 중복 및 최초 화면 로그 발송 방지
-    # ==========================================================
     if 'last_logged_menu' not in st.session_state:
-        # 첫 접속 시: 현재 메뉴를 저장만 하고 로그는 쏘지 않음 ('입장'으로 퉁침)
         st.session_state['last_logged_menu'] = selected_menu
     else:
-        # 이후 접속 시: 메뉴가 달라졌을 때만 로그 전송
         if st.session_state['last_logged_menu'] != selected_menu:
             log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 🚀 [신규 탭] 개별 매물 맞춤 전략 (핀포인트 분석)
+    # 🚀 [신규 탭] 개별 매물 맞춤 전략 (동/호수 + 층/타입 병합 적용)
     # ==========================================================
     if selected_menu == "⚔️ 내 매물 맞춤 전략":
         st.info("💡 **AI 맞춤 전략 가이드:** 대표님이 보유하신 매물 각각에 참전한 경쟁사 패턴을 분석하여, **1등 자리를 가장 오래 유지할 수 있는 최적의 갱신 시간**을 추천해 드립니다.")
 
-        with st.spinner("매물별 경쟁사 활동 패턴을 딥러닝(?) 중입니다..."):
-            # 1. VIP 매물이 포함된 묶음키 추출
+        with st.spinner("매물별 경쟁사 활동 패턴을 분석 중입니다..."):
             vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             vip_bundles = vip_current['매물묶음키'].dropna().unique()
 
@@ -583,14 +575,15 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 
                 danji = b_history['단지명'].iloc[0]
                 dongho = b_history['동/호수'].iloc[0]
-                price = b_history['가격'].iloc[0]
+                floor_type = b_history['층/타입'].iloc[0]
+                
+                # [핵심] H열(동/호수)과 K열(층/타입)을 조합하여 하나의 문자열로 생성
+                full_dongho_str = f"{dongho} ({floor_type})"
 
-                # 2. 최신 기준 해당 묶음에 있는 부동산들 파악
                 latest_time = b_history['수집일시'].max()
                 latest_b = b_history[b_history['수집일시'] == latest_time]
                 comp_count = len(latest_b['부동산명'].unique())
 
-                # 3. 격전지 지수 (경쟁사들의 평균 갱신일 차이 계산)
                 latest_dates = latest_b.dropna(subset=['확인일자_Date'])
                 if not latest_dates.empty:
                     avg_diff_days = (now_date - latest_dates['확인일자_Date']).dt.days.mean()
@@ -600,11 +593,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
                 else:
                     fire_index = "알수없음"
 
-                # 4. 추천 갱신 시간 (경쟁사 집중 갱신 시간대 회피 기동)
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                 if not b_boosted.empty:
                     peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                    # 핵심 전략: 경쟁사들이 몰려와서 갱신하는 시간대의 딱 '1시간 뒤'를 타격하여 덮어버림
                     rec_hour = (peak_hour + 1) % 24  
                     rec_time = f"{rec_hour:02d}:00"
                     rec_reason = f"경쟁사 갱신 피크({peak_hour}시) 직후 탈환"
@@ -614,27 +605,25 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 
                 battle_data.append({
                     "단지명": mask_text(danji),
-                    "동/호수": mask_text(dongho),
+                    "동/호수 및 스펙": mask_text(full_dongho_str),
                     "경쟁사 수": f"{comp_count}곳",
                     "격전지 지수": fire_index,
                     "⭐ 추천 갱신시간": f"⏰ {rec_time}",
                     "전략 사유": rec_reason,
-                    "원래키": b_key # 데이터 참조용 (화면엔 안보임)
+                    "원래키": b_key 
                 })
 
             if battle_data:
                 battle_df = pd.DataFrame(battle_data)
 
-                # UI 압축: 요약표 먼저 보여주기
                 st.markdown("### 🎯 내 매물 요약 작전판")
-                show_cols = ["단지명", "동/호수", "경쟁사 수", "격전지 지수", "⭐ 추천 갱신시간", "전략 사유"]
+                show_cols = ["단지명", "동/호수 및 스펙", "경쟁사 수", "격전지 지수", "⭐ 추천 갱신시간", "전략 사유"]
                 st.dataframe(battle_df[show_cols], use_container_width=True)
 
                 st.markdown("---")
                 
-                # 점진적 공개 (Progressive Disclosure): 궁금한 매물만 펼쳐보기
                 st.markdown("### 🔍 개별 매물 딥다이브 (상세 보기)")
-                detail_options = battle_df['단지명'] + " " + battle_df['동/호수']
+                detail_options = battle_df['단지명'] + " " + battle_df['동/호수 및 스펙']
                 detail_choice = st.selectbox("정밀 분석할 매물을 선택하세요:", detail_options.tolist())
 
                 if detail_choice:
@@ -646,7 +635,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
 
                     st.markdown(f"<span style='color:#3182f6; font-weight:bold; font-size:18px;'>현재 [ {detail_choice} ] 에 참전 중인 실시간 경쟁사 명단</span>", unsafe_allow_html=True)
                     
-                    # 상세 표 데이터 가공
                     comp_list = latest_target[['부동산명', '확인일자', '묶음내순위_숫자']].sort_values('묶음내순위_숫자')
                     comp_list['부동산명'] = comp_list['부동산명'].apply(lambda x: mask_text(x, True))
                     comp_list.columns = ['부동산명(마스킹)', '최근 확인일자', '현재 순위']
