@@ -374,11 +374,11 @@ try:
     
     s_d = st.sidebar.date_input("시작일", default_start_date, key="sd_input")
     e_d = st.sidebar.date_input("종료일", max_time.date(), key="ed_input")
-    
-    # 선택한 날짜의 00:00:00 부터 23:59:59 까지 자동으로 전체 범위 지정
-    start_dt = datetime.combine(s_d, datetime.min.time())
-    end_dt = datetime.combine(e_d, datetime.max.time())
-    
+
+    # [안전장치] Pandas를 활용한 가장 확실한 시간 범위 설정 (00:00:00 ~ 23:59:59)
+    start_dt = pd.to_datetime(s_d)
+    end_dt = pd.to_datetime(e_d) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+
     mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
     t_df = df[mask].copy()
 
@@ -386,7 +386,9 @@ try:
         t_df = t_df[t_df['단지명'].isin(target_complexes)].copy()
 
     if t_df.empty:
-        st.error("설정한 기간에 데이터가 없습니다.")
+        st.error(f"🚨 설정한 기간에 데이터가 없습니다.")
+        st.warning(f"🔍 [시스템 디버그]\n- 대표님이 선택한 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}\n- 서버가 읽은 데이터 기간: {min_time.strftime('%m/%d %H:%M')} ~ {max_time.strftime('%m/%d %H:%M')}")
+        st.info("💡 깃허브에 방금 파일이 올라갔다면 Streamlit 서버가 파일을 내려받는 데 1~3분 정도 지연될 수 있습니다. 잠시 후 새로고침(F5) 해주세요!")
         st.stop()
 
     global_times = t_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
