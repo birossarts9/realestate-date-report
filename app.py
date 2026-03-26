@@ -371,13 +371,15 @@ try:
     st.sidebar.subheader("⏰ 분석 기간 설정")
     col_sd, col_st = st.sidebar.columns(2)
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
-    s_d = col_sd.date_input("시작일", default_start_date)
-    s_t = col_st.time_input("시작시간", min_time.time())
+    
+    # 🚨 [수정] UI 튕김 방지를 위해 고유 key 추가
+    s_d = col_sd.date_input("시작일", default_start_date, key="sd_input")
+    s_t = col_st.time_input("시작시간", min_time.time(), key="st_input")
     start_dt = datetime.combine(s_d, s_t)
 
     col_ed, col_et = st.sidebar.columns(2)
-    e_d = col_ed.date_input("종료일", max_time.date())
-    e_t = col_et.time_input("종료시간", max_time.time())
+    e_d = col_ed.date_input("종료일", max_time.date(), key="ed_input")
+    e_t = col_et.time_input("종료시간", max_time.time(), key="et_input")
     end_dt = datetime.combine(e_d, e_t)
     
     mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
@@ -422,6 +424,7 @@ try:
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
     # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
+    # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -429,12 +432,17 @@ try:
         danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
     else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
 
-    bh = t_df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
+    # 🚨 [수정] 과거 이력이 잘리는 것을 방지하기 위해 전체 데이터(df) 기준으로 먼저 '빈집'을 추적합니다.
+    bh = df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
     bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
     bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
     bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
-    lb = bh.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
     bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
+    
+    # 계산이 끝난 후 사용자가 선택한 시간(start_dt, end_dt)으로 필터링
+    bh_filtered = bh[(bh['수집일시'] >= start_dt) & (bh['수집일시'] <= end_dt)]
+    lb = bh_filtered.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
+    
     mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
     mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
     tb = mb[mb['방치시간(시간)'] >= 6]
@@ -445,11 +453,16 @@ try:
         empty_houses['현재1위부동산'] = empty_houses['현재1위부동산'].fillna('알수없음')
     else: empty_houses['현재1위부동산'] = pd.Series(dtype='str')
 
-    trk = t_df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
+    # 🚨 [수정] 경쟁사 패턴도 전체 데이터(df)로 먼저 추적하여 이전 갱신 기록을 살려냅니다.
+    trk = df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
     boosted_raw = trk[c1]
+    
+    # 시간 필터 적용
+    boosted_raw = boosted_raw[(boosted_raw['수집일시'] >= start_dt) & (boosted_raw['수집일시'] <= end_dt)]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
+    
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
     if not boosted_df.empty:
         stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
@@ -461,43 +474,30 @@ try:
             avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
             peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
 
-    # --- [신규] 브리핑 문자열 조합 ---
-    KST = timezone(timedelta(hours=9))
-    today_date = datetime.now(KST).strftime('%Y-%m-%d')
+    # --- [수정] 작전 브리핑 문자열 조합 (선택한 날짜 연동) ---
+    briefing_date = end_dt.strftime('%Y-%m-%d')
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 순위 없음"
 
-    briefing_text = f"""[📅 {today_date} 오전 시장 상황 보고]
+    briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] 오전 시장 현황 파악
 
 안녕하세요, {display_realtor} 대표님.
-오늘 아침 분석된 시장 랭킹 및 경쟁사 동향 보고입니다.
+데이터 분석에 기반한 지정 기간({start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}) 네이버 부동산 시장 브리핑입니다.
 
-1. 🛡️ 현재 우리 부동산 노출 현황
-- 종합 랭킹: [{rank_summary}]
-- 1위 이탈 매물: {len(danger_ls)}건 발견
-(현재 경쟁사에 밀려 상단 노출이 중단된 상태입니다. 재광고가 필요합니다.)
+🏆 1. 단지별 점유율(M/S) 현황
+- 현재 대표님의 단지별 랭킹: [{rank_summary}]
 
-2. 🎯 오늘 오전 '빈집' 공략 포인트
-- 방치 매물: {len(empty_houses)}건 탐지
-- 상세: 타 부동산이 6시간 이상 광고를 갱신하지 않은 구역입니다.
-(지금 즉시 갱신 시, 최소 비용으로 최상단 노출을 뺏어올 수 있는 황금 구간입니다.)
+🎯 2. '빈집' 매물 식별 (기회 요소)
+- 6시간 이상 갱신이 방치된 매물: 총 {len(empty_houses)}건
+- 타 업체의 활동이 멈춘 상태입니다. 이 타이밍에 맞춰 갱신하시면 최소의 비용으로 가장 오랫동안 최상단을 점유할 수 있습니다.
 
-3. 📡 주요 경쟁사 동향
+📊 3. 주요 경쟁사 광고 패턴
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
-- {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
+- 패턴 분석: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
+(경쟁사의 갱신이 끝난 직후를 노려 자동 갱신을 세팅하시길 권장합니다.)
 
-----------------------------------------
-
-🤖 [광고 자동화 솔루션 안내]
-대표님은 중개만 하세요. 랭킹 관리는 저희가 자동으로 처리합니다.
-
-- 실시간 빈집 감지 및 1위 탈환
-- 24시간 자동 상단 노출 고정
-- 골든타임 최적화 광고 배치
-
-👇 상세 데이터 및 자동화 설정 확인
-https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}
-(PC 열람 권장)""".replace("`", "'")
+👉 상세 시장 현황 및 빈집 위치 확인하기
+https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
     # --- [UI 출력] 은밀한 링크 버튼이 결합된 메인 타이틀 ---
     components.html(f"""
