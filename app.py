@@ -802,30 +802,29 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         
         if not df1.empty and not df2.empty:
             try:
-                # 2번 탭(로그): A~D열(0~3) -> 시간, 번호, 상태, 비고
+                # 2번 탭(로그)
                 df2_clean = df2.iloc[:, 0:4].copy()
                 df2_clean.columns = ['갱신시간', '매물번호', '상태', '비고']
                 
-                # 1번 탭(VIP): I열(8)=번호, B열(1)=단지명, F열(5)=동 
-                # (에러 메시지 순서를 기반으로 위치 매칭)
+                # 1번 탭(VIP)
                 df1_clean = df1.iloc[:, [8, 1, 5]].copy()
                 df1_clean.columns = ['매물번호', '단지명', '동/호수']
                 df1_clean = df1_clean.drop_duplicates(subset=['매물번호'], keep='last')
                 
-                # '매물번호'를 기준으로 두 데이터 합치기 (Left Join)
                 merged_df = pd.merge(df2_clean, df1_clean, on='매물번호', how='left')
                 
-                # 최신순 정렬
-                merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
+                # 🚨 [수정] 지정한 시간(start_dt ~ end_dt) 필터링 적용
+                merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
+                mask_log = (merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)
+                merged_df = merged_df[mask_log]
                 
-                # 보기 좋게 열 순서 재배치
+                merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                 final_df = merged_df[['갱신시간', '단지명', '동/호수', '상태', '비고']]
                 
                 st.dataframe(final_df.head(20), use_container_width=True)
                 
             except Exception as e:
                 st.error(f"데이터 표시 중 오류: {e}")
-                # 에러 나더라도 원본 로그는 보여주기 위한 안전장치
                 st.dataframe(df2, use_container_width=True) 
         else:
             st.warning("아직 수집된 갱신 로그가 없습니다.")
