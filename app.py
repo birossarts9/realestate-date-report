@@ -368,19 +368,16 @@ st.sidebar.title("📅 리포트 상세 설정")
 try:
     df = process_data(raw_df)
     min_time, max_time = df['수집일시'].min(), df['수집일시'].max()
-    st.sidebar.subheader("⏰ 분석 기간 설정")
-    col_sd, col_st = st.sidebar.columns(2)
+    st.sidebar.subheader("📅 분석 기간 설정")
+    
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
     
-    # 🚨 [수정] UI 튕김 방지를 위해 고유 key 추가
-    s_d = col_sd.date_input("시작일", default_start_date, key="sd_input")
-    s_t = col_st.time_input("시작시간", min_time.time(), key="st_input")
-    start_dt = datetime.combine(s_d, s_t)
-
-    col_ed, col_et = st.sidebar.columns(2)
-    e_d = col_ed.date_input("종료일", max_time.date(), key="ed_input")
-    e_t = col_et.time_input("종료시간", max_time.time(), key="et_input")
-    end_dt = datetime.combine(e_d, e_t)
+    s_d = st.sidebar.date_input("시작일", default_start_date, key="sd_input")
+    e_d = st.sidebar.date_input("종료일", max_time.date(), key="ed_input")
+    
+    # 선택한 날짜의 00:00:00 부터 23:59:59 까지 자동으로 전체 범위 지정
+    start_dt = datetime.combine(s_d, datetime.min.time())
+    end_dt = datetime.combine(e_d, datetime.max.time())
     
     mask = (df['수집일시'] >= start_dt) & (df['수집일시'] <= end_dt)
     t_df = df[mask].copy()
