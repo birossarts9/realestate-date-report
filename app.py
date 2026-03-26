@@ -320,14 +320,14 @@ def load_server_data():
     target_files = []
     
     # 2. 이번 달 파일 이름 계산 (크롤러 저장 형식과 정확히 일치시킴)
-    current_file = f"네이버_시장_분석리포트_{now.strftime('%Y년_%m월')}.xlsx"
-    target_files.append(current_file)
+        current_file = f"naver_market_report_{now.strftime('%Y_%m')}.xlsx"
+        target_files.append(current_file)
 
-    # 3. 15일 유예(Rolling Window) 로직 적용 (10일 -> 15일로 수정)
-    if now.day <= 15:
-        last_month = now.replace(day=1) - timedelta(days=1)
-        last_month_file = f"네이버_시장_분석리포트_{last_month.strftime('%Y년_%m월')}.xlsx"
-        target_files.append(last_month_file)
+        # 3. 15일 유예(Rolling Window) 로직 적용
+        if now.day <= 15:
+            last_month = now.replace(day=1) - timedelta(days=1)
+            last_month_file = f"naver_market_report_{last_month.strftime('%Y_%m')}.xlsx"
+            target_files.append(last_month_file)
 
     # 만약 기존에 사용하던 'data.xlsx'가 있다면 추가 (호환성 유지)
     if os.path.exists(os.path.join(current_dir, "data.xlsx")):
