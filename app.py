@@ -320,42 +320,42 @@ def load_server_data():
     target_files = []
     
     # 2. 이번 달 파일 이름 계산 (크롤러 저장 형식과 정확히 일치시킴)
-        current_file = f"네이버_시장_분석리포트_{now.strftime('%Y년_%m월')}.xlsx"
-        target_files.append(current_file)
+    current_file = f"네이버_시장_분석리포트_{now.strftime('%Y년_%m월')}.xlsx"
+    target_files.append(current_file)
 
-        # 3. 15일 유예(Rolling Window) 로직 적용 (10일 -> 15일로 수정)
-        if now.day <= 15:
-            last_month = now.replace(day=1) - timedelta(days=1)
-            last_month_file = f"네이버_시장_분석리포트_{last_month.strftime('%Y년_%m월')}.xlsx"
-            target_files.append(last_month_file)
+    # 3. 15일 유예(Rolling Window) 로직 적용 (10일 -> 15일로 수정)
+    if now.day <= 15:
+        last_month = now.replace(day=1) - timedelta(days=1)
+        last_month_file = f"네이버_시장_분석리포트_{last_month.strftime('%Y년_%m월')}.xlsx"
+        target_files.append(last_month_file)
 
-        # 만약 기존에 사용하던 'data.xlsx'가 있다면 추가 (호환성 유지)
-        if os.path.exists(os.path.join(current_dir, "data.xlsx")):
-            target_files.append("data.xlsx")
+    # 만약 기존에 사용하던 'data.xlsx'가 있다면 추가 (호환성 유지)
+    if os.path.exists(os.path.join(current_dir, "data.xlsx")):
+        target_files.append("data.xlsx")
 
-        # 4. 타겟 리스트에 있는 파일 중 실제로 존재하는 파일만 읽어오기
-        df_list = []
-        for file_name in target_files:
-            file_path = os.path.join(current_dir, file_name)
-            if os.path.exists(file_path):
-                try:
-                    df = pd.read_excel(file_path)
-                    df_list.append(df)
-                except Exception:
-                    pass # 파일이 깨졌거나 읽을 수 없으면 무시
+    # 4. 타겟 리스트에 있는 파일 중 실제로 존재하는 파일만 읽어오기
+    df_list = []
+    for file_name in target_files:
+        file_path = os.path.join(current_dir, file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_excel(file_path)
+                df_list.append(df)
+            except Exception:
+                pass # 파일이 깨졌거나 읽을 수 없으면 무시
 
-        if not df_list:
-            return None
+    if not df_list:
+        return None
 
-        # 5. 읽어온 데이터프레임 병합
-        df = pd.concat(df_list, ignore_index=True).drop_duplicates()
+    # 5. 읽어온 데이터프레임 병합
+    df = pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-        # 6. [스마트 최적화] 정확히 오늘 기준 '직전 15일' 데이터만 남기고 과거 데이터 버리기 (메모리 초경량화)
-        cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=15)
-        df['수집일시'] = pd.to_datetime(df['수집일시'])
-        df = df[df['수집일시'] >= cutoff_date]
+    # 6. [스마트 최적화] 정확히 오늘 기준 '직전 15일' 데이터만 남기고 과거 데이터 버리기 (메모리 초경량화)
+    cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=15)
+    df['수집일시'] = pd.to_datetime(df['수집일시'])
+    df = df[df['수집일시'] >= cutoff_date]
 
-        return df
+    return df
 
 with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
     raw_df = load_server_data()
