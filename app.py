@@ -886,18 +886,41 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 st.dataframe(t_show, use_container_width=True)
                 
         with ana_tab3:
-            st.markdown("경쟁 업체들이 주로 광고비를 지출하여 매물을 갱신하는 집중 시간대를 파악합니다.")
+            st.markdown("경쟁 업체들이 주로 광고비를 지출하여 매물을 갱신하는 집중 시간대와 **평균 갱신 빈도(주기)**를 파악합니다.")
             if not boosted_df.empty:
                 boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
-                realtor_stats = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count'), 평균시간=('활동시간대', lambda x: int(round(x.mean())))).reset_index()
+                
+                # 🚀 [신규] 분석 기간(일수) 계산
+                analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+                
+                # 🚀 [신규] 갱신 주기 판별 함수
+                def calc_freq(dates):
+                    active_days = dates.dt.date.nunique() # 갱신을 실행한 실제 일수
+                    if active_days == 0: return "알수없음"
+                    freq = analysis_days / active_days
+                    
+                    if freq <= 1.3: return "🔥 매일 갱신"
+                    elif freq <= 2.5: return "⚡ 2일에 1번"
+                    elif freq <= 4.0: return "🚶 3~4일에 1번"
+                    elif freq <= 8.0: return "🐢 주 1~2회"
+                    else: return "💤 비정기적 (월 1~2회)"
+
+                realtor_stats = boosted_df.groupby('부동산명').agg(
+                    총횟수=('부동산명', 'count'),
+                    평균시간=('활동시간대', lambda x: int(round(x.mean()))),
+                    갱신빈도=('수집일시', calc_freq) # 🚀 주기를 계산하여 컬럼 추가
+                ).reset_index()
+                
                 stat_df_final = realtor_stats.sort_values('총횟수', ascending=False)
                 
-                c_a, c_b = st.columns(2)
+                c_a, c_b = st.columns([1.2, 1])
                 with c_a:
                     stat_show = stat_df_final.copy()
                     stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
                     stat_show['평균시간'] = stat_show['평균시간'].apply(lambda x: f"{x}시")
-                    st.dataframe(stat_show[['부동산명', '총횟수', '평균시간']], use_container_width=True)
+                    
+                    # 🚨 표 출력 시 '갱신빈도' 컬럼을 함께 보여줍니다.
+                    st.dataframe(stat_show[['부동산명', '총횟수', '평균시간', '갱신빈도']], use_container_width=True)
                 with c_b:
                     hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
                     fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대", markers=True, color_discrete_sequence=['#3182f6'])
