@@ -789,8 +789,22 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 평균시간=('활동시간대', lambda x: int(round(x.mean())))
             ).reset_index()
             
-            # 🚨 [수정 2] 5회 이하 가림막 필터 제거 (갱신 이력이 있는 모든 경쟁사 표시)
+            # 🚨 5회 이하 필터 제거됨 (모든 경쟁사 표시)
             stat_df_final = realtor_stats.sort_values('총횟수', ascending=False)
+            
+            # 🚨 실수로 날려먹었던 화면 출력(표, 차트) 코드 복구!
+            c_a, c_b = st.columns(2)
+            with c_a:
+                stat_show = stat_df_final.copy()
+                stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
+                stat_show['평균시간'] = stat_show['평균시간'].apply(lambda x: f"{x}시")
+                c_a.dataframe(stat_show[['부동산명', '총횟수', '평균시간']], use_container_width=True)
+            with c_b:
+                hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
+                fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
+                c_b.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.warning("선택한 기간 내에 경쟁사들의 광고 갱신 활동이 감지되지 않았습니다.")
 
     elif selected_menu == "🚀 자동 갱신 기록":
         st.info("💡 **자동화 갱신 로그:** 자동화 엔진이 성공적으로 광고를 갱신한 이력과 실행 전후의 순위 변동 성과를 추적합니다.")
