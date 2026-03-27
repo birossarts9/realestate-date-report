@@ -827,13 +827,56 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     first_place = grp[grp['묶음내순위_숫자'] == 1]
                     realtor = first_place['부동산명'].iloc[0] if not first_place.empty else grp.sort_values('묶음내순위_숫자')['부동산명'].iloc[0]
                     return pd.Series({'전체순위': grp['전체순위_숫자'].min(), '1위부동산': realtor})
+                
                 b_hist = bdf.groupby('수집일시').apply(get_bundle_state).reset_index()
                 t_hist = pd.merge(pd.DataFrame({'수집일시': global_times}), b_hist, on='수집일시', how='left')
                 t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
                 t_hist['노출수준'] = t_hist['전체순위'].apply(lambda x: "✅ 상위 노출" if pd.notna(x) and x <= 20 else ("하위권" if pd.notna(x) else "이탈"))
-                fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title=f"🌀 {mask_text(tr_comp)} 순위 히스토리", color_discrete_sequence=['#3182f6'])
+                
+                # ==========================================================
+                # 🚀 [신규 추가] AI 롤링 심각도 분석 로직
+                # ==========================================================
+                valid_ranks = t_hist['전체순위'].dropna()
+                if len(valid_ranks) > 1:
+                    rank_std = valid_ranks.std() # 표준편차 (흔들림 정도)
+                    rank_max = int(valid_ranks.max()) # 제일 밀려났을 때 순위
+                    rank_min = int(valid_ranks.min()) # 제일 높을 때 순위
+                    rank_diff = rank_max - rank_min # 격차
+                    
+                    if rank_std >= 3.0 or rank_diff >= 8:
+                        rolling_level = "🌋 매우 극심 (수동 관리 불가)"
+                        rolling_color = "#ef4444" # 빨간색
+                        rolling_desc = "순위 변동과 롤링이 매우 심한 격전지입니다. 자동화 봇을 통한 지속적인 방어가 필수적인 단지입니다."
+                    elif rank_std >= 1.5 or rank_diff >= 4:
+                        rolling_level = "🌊 변동 심함 (경쟁 치열)"
+                        rolling_color = "#f59e0b" # 주황색
+                        rolling_desc = "주기적으로 순위가 크게 흔들립니다. 시스템의 맞춤 추천 시간에 맞춰 갱신을 진행하시길 권장합니다."
+                    else:
+                        rolling_level = "💧 안정적 (변동 적음)"
+                        rolling_color = "#10b981" # 초록색
+                        rolling_desc = "순위가 비교적 안정적으로 유지되고 있습니다. 최소한의 갱신으로 효율을 극대화할 수 있습니다."
+                        
+                    st.markdown(f"""
+                    <div style="background-color: #f8fafc; border-left: 6px solid {rolling_color}; padding: 20px; border-radius: 8px; margin-top: 10px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+                        <h3 style="margin: 0 0 10px 0; color: #1e3a8a;">📊 AI 롤링 심각도 진단 : <span style="color: {rolling_color};">{rolling_level}</span></h3>
+                        <p style="margin: 0; color: #475569; font-size: 16px; line-height: 1.6;">
+                            • 분석 기간 내 <b>최고 {rank_min}위</b> ↔ <b>최저 {rank_max}위</b> (최대 <b>{rank_diff}계단</b> 격차 발생)<br>
+                            • 💡 <b>AI 영업 가이드:</b> {rolling_desc}
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info("데이터가 부족하여 롤링 심각도를 분석할 수 없습니다. (크롤러가 데이터를 더 수집하면 표시됩니다)")
+                # ==========================================================
+                
+                # 기존 차트 출력 로직
+                fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title=f"🌀 {mask_text(tr_comp)} 순위 롤링 히스토리 차트", color_discrete_sequence=['#3182f6'])
                 fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
                 st.plotly_chart(fig2, use_container_width=True)
+                
+                t_show = t_hist[['수집일시', '전체순위', '노출수준', '1위부동산']].copy()
+                t_show['1위부동산'] = t_show['1위부동산'].apply(lambda x: mask_text(x, True))
+                st.dataframe(t_show, use_container_width=True)
                 
         with ana_tab3:
             st.markdown("경쟁 업체들이 주로 광고비를 지출하여 매물을 갱신하는 집중 시간대를 파악합니다.")
