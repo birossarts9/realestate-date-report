@@ -248,20 +248,19 @@ div[data-testid="stRadio"] > div {
 
 # --- 3. 유틸리티 함수 ---
 
-# --- [신규] 구글 시트 1번 탭(VIP)과 2번 탭(로그) 연동 ---
+# --- [신규] 구글 시트 실행로그 연동 ---
 @st.cache_data(ttl=600, show_spinner=False)
 def load_renewal_logs():
     try:
         SHEET_ID = "1yEllJWWNwsd5FMvvgwSIvA46j10XU_8MxpRAWcs-ba8"
         doc = client.open_by_key(SHEET_ID)
         
-        # 첫 줄을 헤더로 만들지 않고 그대로 가져오기
-        df1 = pd.DataFrame(doc.get_worksheet(0).get_all_values())
-        df2 = pd.DataFrame(doc.get_worksheet(1).get_all_values())
-        return df1, df2
+        # 🚨 인덱스(0, 1) 절대 금지! 명확하게 "실행로그" 탭만 불러옵니다.
+        df_exec = pd.DataFrame(doc.worksheet("실행로그").get_all_values())
+        return df_exec
     except Exception as e:
         st.error(f"시트 데이터를 불러오지 못했습니다: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
         
 def clean_realtor_name(name):
     pattern = r'공인중개사사무소|공인중개사|중개사무소|부동산|중개사|공인|중개|사무소'
@@ -808,92 +807,80 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
     elif selected_menu == "🚀 자동 갱신 기록":
         st.info("💡 **자동화 갱신 로그:** 자동화 엔진이 성공적으로 광고를 갱신한 이력과 실행 전후의 순위 변동 성과를 추적합니다.")
-        df1, df2 = load_renewal_logs()
+        df_exec = load_renewal_logs()
         
-        if not df1.empty and not df2.empty:
+        if not df_exec.empty and len(df_exec) > 1:
             try:
-                # 2번 탭(로그)
-                df2_clean = df2.iloc[:, 0:4].copy()
-                df2_clean.columns = ['갱신시간', '매물번호', '상태', '비고']
+                # 첫 줄을 헤더로 지정
+                df_exec.columns = df_exec.iloc[0]
+                df_exec = df_exec[1:].copy()
                 
-                # 1번 탭(VIP)
-                df1_clean = df1.iloc[:, [8, 1, 5]].copy()
-                df1_clean.columns = ['매물번호', '단지명', '동/호수']
-                df1_clean = df1_clean.drop_duplicates(subset=['매물번호'], keep='last')
+                # 컬럼명 매칭 (실행날짜 | 매물번호 | 상태 | 비고)
+                df_exec.rename(columns={
+                    df_exec.columns[0]: '갱신시간',
+                    df_exec.columns[1]: '매물번호',
+                    df_exec.columns[2]: '상태',
+                    df_exec.columns[3]: '비고'
+                }, inplace=True)
                 
-                merged_df = pd.merge(df2_clean, df1_clean, on='매물번호', how='left')
+                # 🚨 크롤러 데이터(df)의 '고유번호'에서 단지명, 동/호수를 가져와 합치기
+                mapping_df = df[['고유번호', '단지명', '동/호수']].drop_duplicates(subset=['고유번호'], keep='last')
+                mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
                 
-                # 🚨 [수정] 지정한 시간(start_dt ~ end_dt) 필터링 적용
+                df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
+                mapping_df['매물번호'] = mapping_df['매물번호'].astype(str).str.strip()
+                
+                merged_df = pd.merge(df_exec, mapping_df, on='매물번호', how='left')
+                merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
+                merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
+                
+                # 지정한 시간(start_dt ~ end_dt) 필터링
                 merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
-                mask_log = (merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)
-                merged_df = merged_df[mask_log]
+                merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
                 
-                # ==========================================
-                # 🎯 [핵심] T-Zero 전후 비교 및 상위권 판별 로직
-                # ==========================================
+                # T-Zero 전후 비교 및 상위권 판별 로직
                 def get_tier(rank, total):
                     if pd.isna(rank): return "-"
                     rank = int(rank)
-                    if total >= 6:
-                        if rank <= 3: return "🟢상위권"
-                        elif rank <= 6: return "🟡중위권"
-                        else: return "🔴하위권"
-                    elif 4 <= total <= 5:
-                        if rank <= 2: return "🟢상위권"
-                        elif rank <= 5: return "🟡중위권"
-                        else: return "🔴하위권"
-                    else: # 3개 이하
-                        if rank == 1: return "🟢상위권"
-                        elif rank <= 3: return "🟡중위권"
-                        else: return "🔴하위권"
+                    if total >= 6: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 6 else "🔴하위권"
+                    elif 4 <= total <= 5: return "🟢상위권" if rank <= 2 else "🟡중위권" if rank <= 5 else "🔴하위권"
+                    else: return "🟢상위권" if rank == 1 else "🟡중위권" if rank <= 3 else "🔴하위권"
 
                 tracking_results = []
                 for idx, row in merged_df.iterrows():
                     t0 = row['갱신시간']
                     m_num = str(row['매물번호']).strip()
                     
-                    # 해당 매물의 전체 크롤링 기록 (시간순 정렬)
-                    m_history = df[df['매물번호'].astype(str) == m_num].sort_values('수집일시')
+                    m_history = df[df['고유번호'].astype(str) == m_num].sort_values('수집일시')
                     
                     if m_history.empty:
                         tracking_results.append(("기록 없음", "대기중", "추적 불가"))
                         continue
                         
-                    # 갱신시간(T-Zero) 기준 Before / After 데이터 분리
                     before_df = m_history[m_history['수집일시'] < t0]
                     after_df = m_history[m_history['수집일시'] >= t0]
                     
-                    # 묶음 내 총 경쟁사 개수 산출 (해당 매물의 가장 최근 기록 기준)
                     target_bundle = m_history.iloc[-1]['매물묶음키']
                     latest_time = m_history.iloc[-1]['수집일시']
                     total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique())
                     
-                    # T-Zero 직전과 직후의 순위 추출
                     before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
                     after_rank = int(after_df.iloc[0]['묶음내순위_숫자']) if not after_df.empty else pd.NA
                     
-                    # 대표님이 설계하신 룰(Rule)에 따른 등급 텍스트 변환
                     b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
                     a_tier = get_tier(after_rank, total_comp) if pd.notna(after_rank) else "수집 대기중"
                     
                     b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "기록 없음"
                     a_str = f"{after_rank}위 ({a_tier})" if pd.notna(after_rank) else "대기중"
                     
-                    # 성과 판독 문자열
                     if pd.notna(before_rank) and pd.notna(after_rank):
                         diff = before_rank - after_rank
-                        if diff > 0:
-                            res = f"🚀 {diff}계단 상승"
-                        elif diff == 0:
-                            res = "🛡️ 방어 성공"
-                        else:
-                            res = "🔻 하락"
+                        res = f"🚀 {diff}계단 상승" if diff > 0 else "🛡️ 방어 성공" if diff == 0 else "🔻 하락"
                     else:
                         res = "데이터 수집중"
                         
                     tracking_results.append((b_str, a_str, res))
                     
-                # 추적 결과를 데이터프레임에 결합
                 merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                 merged_df['갱신 후 순위'] = [x[1] for x in tracking_results]
                 merged_df['성과 요약'] = [x[2] for x in tracking_results]
@@ -901,9 +888,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                 final_df = merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']]
                 
-                # ==========================================
-                # 🌙 [오후 성과 브리핑] 텍스트 생성 및 UI 표출
-                # ==========================================
                 success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
                 up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
                 
@@ -920,12 +904,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 - 갱신 직후 상위권 방어 및 탈환 성공: 총 {up_defense_count}건 
 - 경쟁사에게 밀려났던 매물들을 최적의 타이밍에 맞춰 성공적으로 복구하였습니다.
 
-무의미한 갱신 경쟁은 저희에게 맡기시고, 대표님의 시간은 '중개'에만 쓰십시오.
-
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-                # 🚨 [수정 3] 오후 브리핑 스크롤바(overflow-y) 추가 및 버튼 위치 고정
                 st.markdown(f"### 🌙 오늘의 자동 갱신 성과 브리핑")
                 components.html(f"""
                 <div style="position: relative; border: 1px solid #e2e8f0; border-radius: 15px; background-color: #f8fafc;">
@@ -955,7 +936,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 
             except Exception as e:
                 st.error(f"데이터 표시 중 오류: {e}")
-                st.dataframe(df2, use_container_width=True) 
         else:
             st.warning("아직 수집된 갱신 로그가 없습니다.")
 
