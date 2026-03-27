@@ -798,6 +798,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         ana_tab1, ana_tab2, ana_tab3 = st.tabs(["🏆 단지별 점유율(M/S)", "📉 단지별 노출 롤링 차트", "📊 경쟁사 활동 패턴"])
         
         with ana_tab1:
+            # --- [기존 점유율 로직 유지] ---
             filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
             ms_df = ms_counts.copy()
             if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
@@ -815,7 +816,22 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 st.plotly_chart(fig, use_container_width=True)
                 
         with ana_tab2:
-            st.markdown("네이버 부동산의 '이용자별 롤링 알고리즘'에 따른 실제 평균 노출 위치를 추적합니다.")
+            st.markdown("#### 🌀 단지별 노출 롤링 및 갱신 성과 분석")
+            
+            # [시장 전체 롤링 지수 계산]
+            all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
+            if not all_valid_ranks.empty:
+                market_volatility = all_valid_ranks.groupby('단지명')['전체순위_숫자'].std().mean()
+                if market_volatility >= 4: m_status, m_col = "🌋 매우 극심", "#ef4444"
+                elif market_volatility >= 2: m_status, m_col = "🌊 변동 주의", "#f59e0b"
+                else: m_status, m_col = "💧 비교적 안정", "#10b981"
+                
+                st.markdown(f"""
+                <div style="background-color: {m_col}; padding: 10px 20px; border-radius: 10px; color: white; font-weight: bold; margin-bottom: 20px;">
+                    📡 현재 시장 전체 롤링 지수: {m_status} (평균 변동폭: {market_volatility:.1f}계단)
+                </div>
+                """, unsafe_allow_html=True)
+
             c1, c2 = st.columns(2)
             tr_comp = c1.selectbox("단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="tr_comp")
             bundle_list = sorted(t_df[t_df['단지명'] == tr_comp]['매물묶음키'].dropna().unique().tolist())
@@ -823,58 +839,49 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
             if tr_comp and tr_bundle:
                 bdf = t_df[(t_df['단지명'] == tr_comp) & (t_df['매물묶음키'] == tr_bundle)]
+                
                 def get_bundle_state(grp):
                     first_place = grp[grp['묶음내순위_숫자'] == 1]
                     realtor = first_place['부동산명'].iloc[0] if not first_place.empty else grp.sort_values('묶음내순위_숫자')['부동산명'].iloc[0]
                     return pd.Series({'전체순위': grp['전체순위_숫자'].min(), '1위부동산': realtor})
                 
-                b_hist = bdf.groupby('수집일시').apply(get_bundle_state).reset_index()
+                b_hist = bdf.groupby('수집일시').apply(get_bundle_state, include_groups=False).reset_index()
                 t_hist = pd.merge(pd.DataFrame({'수집일시': global_times}), b_hist, on='수집일시', how='left')
                 t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
-                t_hist['노출수준'] = t_hist['전체순위'].apply(lambda x: "✅ 상위 노출" if pd.notna(x) and x <= 20 else ("하위권" if pd.notna(x) else "이탈"))
+
+                # 🚀 [추가] 봇 갱신 기록 매칭 (이 매물의 갱신 시점 가져오기)
+                df_exec = load_renewal_logs()
+                renew_times = []
+                if not df_exec.empty and len(df_exec) > 1:
+                    df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
+                    # 이 매물 고유번호 찾기
+                    m_id = str(bdf['고유번호'].iloc[0]).strip()
+                    m_renews = df_exec[df_exec.iloc[:, 1].astype(str).str.strip() == m_id]
+                    renew_times = pd.to_datetime(m_renews.iloc[:, 0]).tolist()
+
+                # 차트 생성
+                fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title=f"🌀 {mask_text(tr_comp)} 순위 추적 (🚀표시는 AI 갱신 시점)", color_discrete_sequence=['#3182f6'])
                 
-                # ==========================================================
-                # 🚀 [신규 추가] AI 롤링 심각도 분석 로직
-                # ==========================================================
-                valid_ranks = t_hist['전체순위'].dropna()
-                if len(valid_ranks) > 1:
-                    rank_std = valid_ranks.std() # 표준편차 (흔들림 정도)
-                    rank_max = int(valid_ranks.max()) # 제일 밀려났을 때 순위
-                    rank_min = int(valid_ranks.min()) # 제일 높을 때 순위
-                    rank_diff = rank_max - rank_min # 격차
-                    
-                    if rank_std >= 3.0 or rank_diff >= 8:
-                        rolling_level = "🌋 매우 극심 (수동 관리 불가)"
-                        rolling_color = "#ef4444" # 빨간색
-                        rolling_desc = "순위 변동과 롤링이 매우 심한 격전지입니다. 자동화 봇을 통한 지속적인 방어가 필수적인 단지입니다."
-                    elif rank_std >= 1.5 or rank_diff >= 4:
-                        rolling_level = "🌊 변동 심함 (경쟁 치열)"
-                        rolling_color = "#f59e0b" # 주황색
-                        rolling_desc = "주기적으로 순위가 크게 흔들립니다. 시스템의 맞춤 추천 시간에 맞춰 갱신을 진행하시길 권장합니다."
-                    else:
-                        rolling_level = "💧 안정적 (변동 적음)"
-                        rolling_color = "#10b981" # 초록색
-                        rolling_desc = "순위가 비교적 안정적으로 유지되고 있습니다. 최소한의 갱신으로 효율을 극대화할 수 있습니다."
-                        
-                    st.markdown(f"""
-                    <div style="background-color: #f8fafc; border-left: 6px solid {rolling_color}; padding: 20px; border-radius: 8px; margin-top: 10px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-                        <h3 style="margin: 0 0 10px 0; color: #1e3a8a;">📊 AI 롤링 심각도 진단 : <span style="color: {rolling_color};">{rolling_level}</span></h3>
-                        <p style="margin: 0; color: #475569; font-size: 16px; line-height: 1.6;">
-                            • 분석 기간 내 <b>최고 {rank_min}위</b> ↔ <b>최저 {rank_max}위</b> (최대 <b>{rank_diff}계단</b> 격차 발생)<br>
-                            • 💡 <b>AI 영업 가이드:</b> {rolling_desc}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.info("데이터가 부족하여 롤링 심각도를 분석할 수 없습니다. (크롤러가 데이터를 더 수집하면 표시됩니다)")
-                # ==========================================================
+                # 🚀 [차트 위에 갱신 마커 찍기]
+                for rt in renew_times:
+                    if start_dt <= rt <= end_dt:
+                        fig2.add_vline(x=rt, line_dash="dash", line_color="#ef4444", annotation_text="🚀AI갱신")
                 
-                # 기존 차트 출력 로직
-                fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title=f"🌀 {mask_text(tr_comp)} 순위 롤링 히스토리 차트", color_discrete_sequence=['#3182f6'])
                 fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
                 st.plotly_chart(fig2, use_container_width=True)
+
+                # [단지별 롤링 심각도 진단 박스]
+                valid_ranks = t_hist['전체순위'].dropna()
+                if not valid_ranks.empty:
+                    rank_std = valid_ranks.std()
+                    rank_diff = int(valid_ranks.max() - valid_ranks.min())
+                    if rank_std >= 3.0 or rank_diff >= 8: r_lvl, r_col = "🌋 매우 극심", "#ef4444"
+                    elif rank_std >= 1.5 or rank_diff >= 4: r_lvl, r_col = "🌊 변동 심함", "#f59e0b"
+                    else: r_lvl, r_col = "💧 안정적", "#10b981"
+                    
+                    st.success(f"📊 **AI 단지 진단:** 이 매물은 현재 **{r_lvl}** 상태입니다. (최대 변동폭: {rank_diff}계단)")
                 
-                t_show = t_hist[['수집일시', '전체순위', '노출수준', '1위부동산']].copy()
+                t_show = t_hist[['수집일시', '전체순위', '1위부동산']].dropna(subset=['전체순위']).copy()
                 t_show['1위부동산'] = t_show['1위부동산'].apply(lambda x: mask_text(x, True))
                 st.dataframe(t_show, use_container_width=True)
                 
