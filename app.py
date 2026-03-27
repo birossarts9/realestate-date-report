@@ -590,11 +590,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 comp_count = len(latest_b['부동산명'].unique())
 
                 latest_dates = latest_b.dropna(subset=['확인일자_Date'])
+                # 🚨 [수정 1] 평균(mean)을 버리고, 가장 최근 갱신일(max)을 기준으로 로직 전면 수정
                 if not latest_dates.empty:
-                    avg_diff_days = (now_date - latest_dates['확인일자_Date']).dt.days.mean()
-                    if avg_diff_days <= 3: fire_index = f"🔥 불장 (평균 {avg_diff_days:.1f}일)"
-                    elif avg_diff_days <= 10: fire_index = f"⚠️ 보통 (평균 {avg_diff_days:.1f}일)"
-                    else: fire_index = f"🧊 빈집 (평균 {avg_diff_days:.1f}일)"
+                    max_date = latest_dates['확인일자_Date'].max()
+                    diff_hours = (now_date - max_date).total_seconds() / 3600
+                    
+                    if diff_hours <= 24: 
+                        fire_index = f"🔥 불장 (최근 {int(diff_hours)}시간 전)"
+                    elif diff_hours <= 72: 
+                        fire_index = f"⚠️ 보통 (최근 {int(diff_hours/24)}일 전)"
+                    else: 
+                        fire_index = f"🧊 빈집 (최근 {int(diff_hours/24)}일 전)"
                 else:
                     fire_index = "알수없음"
 
@@ -780,20 +786,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             boosted_df['활동시간대'] = boosted_df['수집일시'].dt.hour
             realtor_stats = boosted_df.groupby('부동산명').agg(
                 총횟수=('부동산명', 'count'),
-                평균시간=('활동시간대', lambda x: int(round(x.mean()))),
-                늦은시간갱신=('활동시간대', lambda x: (x >= 19).any())
+                평균시간=('활동시간대', lambda x: int(round(x.mean())))
             ).reset_index()
-            stat_df_final = realtor_stats[~((realtor_stats['늦은시간갱신'] == True) & (realtor_stats['총횟수'] <= 5))].sort_values('총횟수', ascending=False)
-            c_a, c_b = st.columns(2)
-            with c_a:
-                stat_show = stat_df_final.copy()
-                stat_show['부동산명'] = stat_show['부동산명'].apply(lambda x: mask_text(x, True))
-                stat_show['평균시간'] = stat_show['평균시간'].apply(lambda x: f"{x}시")
-                c_a.dataframe(stat_show[['부동산명', '총횟수', '평균시간']], use_container_width=True)
-            with c_b:
-                hc = stat_df_final.groupby('평균시간').size().reset_index(name='부동산수')
-                fig3 = px.line(hc, x='평균시간', y='부동산수', title="시장 전체 광고 갱신 주력 시간대 (평균 기준)", markers=True, color_discrete_sequence=['#3182f6'])
-                c_b.plotly_chart(fig3, use_container_width=True)
+            
+            # 🚨 [수정 2] 5회 이하 가림막 필터 제거 (갱신 이력이 있는 모든 경쟁사 표시)
+            stat_df_final = realtor_stats.sort_values('총횟수', ascending=False)
 
     elif selected_menu == "🚀 자동 갱신 기록":
         st.info("💡 **자동화 갱신 로그:** 자동화 엔진이 성공적으로 광고를 갱신한 이력과 실행 전후의 순위 변동 성과를 추적합니다.")
@@ -914,14 +911,16 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-                # 오후 브리핑 복사 UI 디자인 영역
+                # 🚨 [수정 3] 오후 브리핑 스크롤바(overflow-y) 추가 및 버튼 위치 고정
                 st.markdown(f"### 🌙 오늘의 자동 갱신 성과 브리핑")
                 components.html(f"""
-                <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; border: 1px solid #e2e8f0; position: relative;">
-                    <pre style="font-family: sans-serif; font-size: 15px; color: #334155; white-space: pre-wrap; margin:0;">{pm_briefing_text}</pre>
-                    <button id="copyBtnPm" style="position: absolute; top: 15px; right: 15px; background-color: #3182f6; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s;">
+                <div style="position: relative; border: 1px solid #e2e8f0; border-radius: 15px; background-color: #f8fafc;">
+                    <button id="copyBtnPm" style="position: absolute; top: 15px; right: 15px; background-color: #3182f6; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: all 0.2s; z-index: 10;">
                         복사하기
                     </button>
+                    <div style="max-height: 250px; overflow-y: auto; padding: 20px;">
+                        <pre style="font-family: sans-serif; font-size: 15px; color: #334155; white-space: pre-wrap; margin:0; padding-right: 90px;">{pm_briefing_text}</pre>
+                    </div>
                 </div>
                 <script>
                 document.getElementById('copyBtnPm').onclick = function() {{
@@ -935,7 +934,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     }});
                 }};
                 </script>
-                """, height=350)
+                """, height=310)
 
                 st.markdown("### 🔍 개별 매물 갱신 추적 로그")
                 st.dataframe(final_df, use_container_width=True)
