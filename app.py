@@ -580,6 +580,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
+    # ==========================================================
     # 탭 1. 📊 오늘의 AI 성과 (핵심 요약)
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
@@ -617,79 +618,104 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         </div>
         """, unsafe_allow_html=True)
 
+        # 1-2. 중간: 자동 갱신 추적 로그 (핵심 성과 증명)
         st.markdown("<br><h3 style='color:#1e3a8a;'>🚀 AI 자동 갱신 성과 추적기</h3>", unsafe_allow_html=True)
         st.info("💡 **자동화 엔진 성과:** 대표님이 현장을 뛰시는 동안, 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
         st.caption("🔍 **[도출 원리]** 묶여있는 경쟁사 규모에 따라 상위권 커트라인을 유동적으로 계산합니다. (3곳 이하: 1~3위 전부 상위권 / 6곳 이상: 3위 이내 상위권, 8위 이내 중위권)")
         
-        df_exec = load_renewal_logs()
-        
-        if not df_exec.empty and len(df_exec) > 1:
-            try:
-                df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
-                df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
-                
-                mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수']].drop_duplicates(subset=['고유번호'], keep='last')
-                mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
-                
-                df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
-                mapping_df['매물번호'] = mapping_df['매물번호'].astype(str).str.strip()
-                
-                merged_df = pd.merge(df_exec, mapping_df, on='매물번호', how='left')
-                merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
-                merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
-                
-                merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
-                merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
-                
-                def get_tier(rank, total):
-                    if pd.isna(rank): return "-"
-                    rank = int(rank)
-                    if total <= 3: return "🟢상위권"
-                    elif 4 <= total <= 5: return "🟢상위권" if rank <= 2 else "🟡중위권"
-                    else: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 8 else "🔴하위권"
+        # 🚀 [추가] 데모 모드일 경우: 매력적인 가짜 성공 데이터 세팅
+        if IS_DEMO_MODE:
+            now_kst = datetime.now(timezone(timedelta(hours=9)))
+            dummy_logs = [
+                {"갱신시간": (now_kst - timedelta(minutes=34)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "동/호수": "101동 (84A)", "상태": "✅ 성공", "갱신 전 순위": "12위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 11계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=2, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "동/호수": "1103동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 6계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=4, minutes=50)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "동/호수": "5209동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 4계단 상승"},
+                {"갱신시간": (now_kst - timedelta(days=1, hours=1, minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "동/호수": "1002동 (74A)", "상태": "✅ 성공", "갱신 전 순위": "18위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 17계단 상승"},
+                {"갱신시간": (now_kst - timedelta(days=1, hours=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들골든뷰", "동/호수": "3104동 (84m²)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 5계단 상승"},
+            ]
+            merged_df = pd.DataFrame(dummy_logs)
+            st.dataframe(merged_df, use_container_width=True)
+            success_count = 14
+            up_defense_count = 14
+            
+        # 기존 VIP 유저일 경우: 찐 데이터 처리
+        else:
+            df_exec = load_renewal_logs()
+            
+            if not df_exec.empty and len(df_exec) > 1:
+                try:
+                    df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
+                    df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
+                    
+                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수']].drop_duplicates(subset=['고유번호'], keep='last')
+                    mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
+                    
+                    df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
+                    mapping_df['매물번호'] = mapping_df['매물번호'].astype(str).str.strip()
+                    
+                    merged_df = pd.merge(df_exec, mapping_df, on='매물번호', how='left')
+                    merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
+                    merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
+                    
+                    merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
+                    merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
+                    
+                    def get_tier(rank, total):
+                        if pd.isna(rank): return "-"
+                        rank = int(rank)
+                        if total <= 3: return "🟢상위권"
+                        elif 4 <= total <= 5: return "🟢상위권" if rank <= 2 else "🟡중위권"
+                        else: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 8 else "🔴하위권"
 
-                tracking_results = []
-                for idx, row in merged_df.iterrows():
-                    t0 = row['갱신시간']
-                    m_num = str(row['매물번호']).strip()
-                    m_history = df[df['고유번호'].astype(str) == m_num].sort_values('수집일시')
-                    
-                    if m_history.empty:
-                        tracking_results.append(("기록 없음", "대기중", "추적 불가"))
-                        continue
+                    tracking_results = []
+                    for idx, row in merged_df.iterrows():
+                        t0 = row['갱신시간']
+                        m_num = str(row['매물번호']).strip()
+                        m_history = df[df['고유번호'].astype(str) == m_num].sort_values('수집일시')
                         
-                    before_df = m_history[m_history['수집일시'] < t0]
-                    after_df = m_history[m_history['수집일시'] >= t0]
+                        if m_history.empty:
+                            tracking_results.append(("기록 없음", "대기중", "추적 불가"))
+                            continue
+                            
+                        before_df = m_history[m_history['수집일시'] < t0]
+                        after_df = m_history[m_history['수집일시'] >= t0]
+                        
+                        target_bundle = m_history.iloc[-1]['매물묶음키']
+                        latest_time = m_history.iloc[-1]['수집일시']
+                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique())
+                        
+                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
+                        after_rank = int(after_df.iloc[0]['묶음내순위_숫자']) if not after_df.empty else pd.NA
+                        
+                        b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
+                        a_tier = get_tier(after_rank, total_comp) if pd.notna(after_rank) else "수집 대기중"
+                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "기록 없음"
+                        a_str = f"{after_rank}위 ({a_tier})" if pd.notna(after_rank) else "대기중"
+                        
+                        if pd.notna(before_rank) and pd.notna(after_rank):
+                            diff = before_rank - after_rank
+                            res = f"🚀 {diff}계단 상승" if diff > 0 else "🛡️ 방어 성공" if diff == 0 else "🔻 하락"
+                        else: res = "데이터 수집중"
+                        tracking_results.append((b_str, a_str, res))
+                        
+                    merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
+                    merged_df['갱신 후 순위'] = [x[1] for x in tracking_results]
+                    merged_df['성과 요약'] = [x[2] for x in tracking_results]
                     
-                    target_bundle = m_history.iloc[-1]['매물묶음키']
-                    latest_time = m_history.iloc[-1]['수집일시']
-                    total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique())
+                    merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
+                    st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
                     
-                    before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
-                    after_rank = int(after_df.iloc[0]['묶음내순위_숫자']) if not after_df.empty else pd.NA
-                    
-                    b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
-                    a_tier = get_tier(after_rank, total_comp) if pd.notna(after_rank) else "수집 대기중"
-                    b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "기록 없음"
-                    a_str = f"{after_rank}위 ({a_tier})" if pd.notna(after_rank) else "대기중"
-                    
-                    if pd.notna(before_rank) and pd.notna(after_rank):
-                        diff = before_rank - after_rank
-                        res = f"🚀 {diff}계단 상승" if diff > 0 else "🛡️ 방어 성공" if diff == 0 else "🔻 하락"
-                    else: res = "데이터 수집중"
-                    tracking_results.append((b_str, a_str, res))
-                    
-                merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
-                merged_df['갱신 후 순위'] = [x[1] for x in tracking_results]
-                merged_df['성과 요약'] = [x[2] for x in tracking_results]
+                    success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
+                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
+                except Exception as e:
+                    st.error(f"데이터 표시 중 오류: {e}")
+                    success_count, up_defense_count = 0, 0
+            else:
+                st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
+                success_count, up_defense_count = 0, 0
                 
-                merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
-                st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
-                
-                success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
-                up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
-                
-                pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
+        # --- 문자 발송용 오후 텍스트 ---
+        pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
 오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
 대표님이 현장에 계신 동안 시스템이 자동으로 방어한 광고 갱신 성과입니다.
@@ -704,43 +730,46 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-                with st.expander("📲 고객 발송용 카카오톡 문구 (오후 보고용)", expanded=False):
-                    components.html(f"""
-                    <div style="position: relative; background-color: #f8fafc; padding: 15px; border-radius: 10px;">
-                        <button id="copyBtnPm" style="position: absolute; top: 10px; right: 10px; background-color: #3182f6; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">복사하기</button>
-                        <pre style="font-family: sans-serif; font-size: 14px; color: #334155; margin:0; padding-right: 70px;">{pm_briefing_text}</pre>
-                    </div>
-                    <script>
-                    document.getElementById('copyBtnPm').onclick = function() {{
-                        navigator.clipboard.writeText(`{pm_briefing_text}`).then(() => {{
-                            this.innerText = '✅ 복사완료';
-                            this.style.backgroundColor = '#10b981';
-                            setTimeout(() => {{ this.innerText = '복사하기'; this.style.backgroundColor = '#3182f6'; }}, 2000);
-                        }});
-                    }};
-                    </script>
-                    """, height=280)
-            except Exception as e:
-                st.error(f"데이터 표시 중 오류: {e}")
-        else:
-            st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
+        with st.expander("📲 고객 발송용 카카오톡 문구 (오후 보고용)", expanded=False):
+            components.html(f"""
+            <div style="position: relative; background-color: #f8fafc; padding: 15px; border-radius: 10px;">
+                <button id="copyBtnPm" style="position: absolute; top: 10px; right: 10px; background-color: #3182f6; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">복사하기</button>
+                <pre style="font-family: sans-serif; font-size: 14px; color: #334155; margin:0; padding-right: 70px;">{pm_briefing_text}</pre>
+            </div>
+            <script>
+            document.getElementById('copyBtnPm').onclick = function() {{
+                navigator.clipboard.writeText(`{pm_briefing_text}`).then(() => {{
+                    this.innerText = '✅ 복사완료';
+                    this.style.backgroundColor = '#10b981';
+                    setTimeout(() => {{ this.innerText = '복사하기'; this.style.backgroundColor = '#3182f6'; }}, 2000);
+                }});
+            }};
+            </script>
+            """, height=280)
 
-        st.markdown("<br><hr><h3 style='text-align:center; margin-bottom:20px; color:#1e3a8a;'>💳 프리미엄 서비스 안내</h3>", unsafe_allow_html=True)
-        col_p1, col_p2, col_p3 = st.columns([1, 1.2, 1])
-        card_content = """
-        <div class="pricing-card {extra_class}">
-        <div style="position: absolute; top: -12px; right: 10px; background-color: #ef4444; color: white; padding: 4px 10px; border-radius: 8px; font-weight: 800; font-size: 12px;">20% OFF</div>
-        <div style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: #4b5563;">{title}</div>
-        <div style="color: #9ca3af; text-decoration: line-through; font-size: 14px; margin-bottom: 3px;">{old_price}</div>
-        <div style="font-size: 28px; font-weight: 900; color: #3182f6; margin-bottom: 15px;">{new_price}</div>
-        <div style="font-size: 13px; color: #6b7280; line-height: 1.4;">{desc}</div>
+        # 1-3. 하단: 서비스 결제 안내 (🚀 단일 9만원 배너로 변경)
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        pricing_card = """
+        <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
+            <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
+            <h2 style="color: #1e3a8a; margin-bottom: 15px; font-weight: 800; font-size: 28px;">TOP RANK 광고 자동화 솔루션</h2>
+            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">
+                월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로<br>상위 노출 스트레스에서 완벽하게 해방되세요!
+            </p>
+            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 24시간 무인 순위 방어</span>
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ AI 시장 분석 리포트</span>
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 불량 매물 누수 진단</span>
+            </div>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0;">
+                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">
+                    🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>
+                    📞 <b>가입 문의:</b> 010-8416-2806
+                </p>
+            </div>
         </div>
         """
-        with col_p1: st.markdown(card_content.format(extra_class="", title="시장 분석 리포트", old_price="100,000 KRW", new_price="80,000 KRW", desc="단지별 점유율 및<br>경쟁사 분석 리포트"), unsafe_allow_html=True)
-        with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
-        with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
-        st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) &nbsp;|&nbsp; 📞 **문의:** 010-8416-2806")
-
+        st.markdown(pricing_card, unsafe_allow_html=True)
     # ==========================================================
     # 탭 2. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
