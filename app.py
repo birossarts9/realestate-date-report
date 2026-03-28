@@ -308,7 +308,7 @@ def process_data(df):
     
     return df
 
-@st.cache_data(ttl=43200, show_spinner=False)
+@st.cache_data(ttl=7200, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
