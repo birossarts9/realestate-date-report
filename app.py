@@ -489,14 +489,14 @@ try:
     master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br>"
     
     if danger_count > 0:
-        master_conclusion += f"네이버 노출 롤링으로 인해 상위권에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
+        master_conclusion += f"상위권에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
     else:
         master_conclusion += f"현재 상위권에서 이탈한 매물 없이 완벽하게 방어 중이며, "
         
     master_conclusion += f"타 부동산이 집중적으로 갱신하지 않는 매물이 <b style='color:#10b981;'>{empty_count}개</b> 포착되었습니다.<br>"
 
     if not boosted_df.empty:
-        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 자동 타격을 진행하여 상위권 점유율을 굳히겠습니다.<br><br>"
+        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 광고를 진행하면 상위권 노출에 유리합니다..<br><br>"
     else:
         master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다.<br><br>"
 
@@ -620,7 +620,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
         # 1-2. 중간: 자동 갱신 추적 로그 (핵심 성과 증명)
         st.markdown("<br><h3 style='color:#1e3a8a;'>🚀 AI 자동 갱신 성과 추적기</h3>", unsafe_allow_html=True)
-        st.info("💡 **자동화 엔진 성과:** 대표님이 현장을 뛰시는 동안, 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
         st.caption("🔍 **[도출 원리]** 묶여있는 경쟁사 규모에 따라 상위권 커트라인을 유동적으로 계산합니다. (3곳 이하: 1~3위 전부 상위권 / 6곳 이상: 3위 이내 상위권, 8위 이내 중위권)")
         
         # 🚀 [추가] 데모 모드일 경우: 매력적인 가짜 성공 데이터 세팅
@@ -791,14 +791,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
         with act_tab2:
             st.markdown("#### 🧊 방치된 빈집 vs 🔥 피 튀기는 격전지")
-            st.caption("🔍 **[도출 원리]** 롤링에 의한 일시적 누락 착시를 필터링하고, 경쟁사들이 실제로 포인트를 지불한 '확인일자' 변동 내역만을 추적하여 진짜 방치된 매물과 과열된 매물을 구분합니다.")
+            st.caption("🔍 **[도출 원리]** 롤링에 의한 누락 현상을 필터링하고, 경쟁사들이 실제로 재광고한 내역만을 추적하여 진짜 방치된 매물과 과열된 매물을 구분합니다.")
 
             c_empty, c_red = st.columns(2)
             with c_empty:
                 st.markdown("""
                 <div style="background-color: #f0fdf4; padding: 15px; border-radius: 10px; border-top: 4px solid #10b981; margin-bottom: 15px;">
                     <h5 style="color:#047857; margin:0;">🧊 방치된 빈집 (블루오션)</h5>
-                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">D+1일 이상 타사가 집중적으로 갱신하지 않는 매물입니다. 지금 타격하면 최소 비용으로 장시간 노출이 가능합니다.</p>
+                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">하루 이상 경쟁사가 갱신하지 않는 매물입니다. 지금 광고하면 최소 비용으로 장시간 노출이 가능합니다.</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -829,7 +829,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
         with act_tab3:
             st.markdown("#### 매물별 AI 최적 갱신 시간 추천")
-            st.caption("🔍 **[도출 원리]** 해당 매물에 참전한 경쟁사들의 과거 갱신 기록을 분석하여 '가장 많이 갱신한 시간대(최빈값)'를 구한 뒤, 그 타격 집중 기간이 끝나는 직후 시간을 추천합니다.")
+            st.caption("🔍 **[도출 원리]** 해당 매물에 등록한 경쟁사들의 과거 갱신 기록을 분석하여 '가장 많이 갱신한 시간대(최빈값)'를 구한 뒤, 그 광고 집중 기간이 끝나는 직후 시간을 추천합니다.")
             
             vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             vip_bundles = vip_current['매물묶음키'].dropna().unique()
@@ -902,7 +902,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 st.plotly_chart(fig, use_container_width=True)
                 
         with ana_tab2:
-            st.markdown("#### 🌀 단지별 노출 롤링 및 갱신 성과 분석")
+            st.markdown("#### 단지별 노출 롤링 및 갱신 성과 분석")
             st.caption("🔍 **[도출 원리]** 선택된 분석 기간 동안 해당 매물의 전체 노출 순위 변동폭을 바탕으로 표준편차(흔들림 정도)를 계산하여 롤링 심각도를 진단합니다.")
             
             all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
@@ -956,9 +956,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     
                     # 💡 신호등 전략을 적용한 명확한 액션 플랜
                     def get_action_plan(sr):
-                        if sr >= 80: return "🟢 집중 타격 (예산 집중)"
-                        elif sr >= 40: return "🟡 가성비 방어 (틈새 공략)"
-                        else: return "🔴 광고 중단 (인증 재등록)"
+                        if sr >= 80: return "🟢 인기가 많은 매물"
+                        elif sr >= 40: return "🟡 인기가 중간인 매물"
+                        else: return "🔴 인기가 적은 매물"
                         
                     def get_reason(sr):
                         if sr >= 80: return "네이버 우대 매물 (갱신 시 1위 고정 확정적)"
@@ -992,9 +992,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                         color='AI 추천 액션', 
                         hover_data=['매물 스펙 (동/호수/가격)'],
                         color_discrete_map={
-                            "🟢 집중 타격 (예산 집중)": "#10b981", 
-                            "🟡 가성비 방어 (틈새 공략)": "#f59e0b", 
-                            "🔴 광고 중단 (인증 재등록)": "#ef4444"
+                            "🟢 인기가 많은 매물": "#10b981", 
+                            "🟡 인기가 중간인 매물": "#f59e0b", 
+                            "🔴 인기가 적은 매물": "#ef4444"
                         }
                     )
                     # Y축 순위는 숫자가 작을수록 좋으므로 뒤집기
