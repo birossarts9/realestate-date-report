@@ -421,8 +421,11 @@ try:
         if alive_diff > timedelta(hours=2.5):
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
-    # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
-    # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
+    # ==========================================================
+    # 🧠 [데이터 통합 계산] AI 마스터 결론 및 브리핑을 위한 전역 데이터
+    # ==========================================================
+    now_date = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
+    
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 1].copy()
     if not danger_ls.empty:
@@ -430,71 +433,96 @@ try:
         danger_ls['현재1위부동산'] = danger_ls['현재1위부동산'].fillna('알수없음')
     else: danger_ls['현재1위부동산'] = pd.Series(dtype='str')
 
-    # 🚨 [수정] 과거 이력이 잘리는 것을 방지하기 위해 전체 데이터(df) 기준으로 먼저 '빈집'을 추적합니다.
-    bh = df.groupby(bundle_keys + ['수집일시']).agg(최대_확인일자=('확인일자_Date', 'max')).reset_index().sort_values(bundle_keys + ['수집일시'])
-    bh['이전_최대_확인일자'] = bh.groupby(bundle_keys)['최대_확인일자'].shift(1)
-    bh['상태변경'] = bh['이전_최대_확인일자'].notna() & (bh['최대_확인일자'] != bh['이전_최대_확인일자'])
-    bh['블록'] = bh.groupby(bundle_keys)['상태변경'].cumsum()
-    bs = bh.groupby(bundle_keys + ['블록'])['수집일시'].min().reset_index().rename(columns={'수집일시': '블록시작일시'})
+    # [1. 롤링 지수 (시장 변동성)]
+    all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
+    market_volatility = all_valid_ranks.groupby('단지명')['전체순위_숫자'].std().mean() if not all_valid_ranks.empty else 0
+        
+    # [2. 진짜 빈집 및 격전지 판별 (롤링 보정됨)]
+    bundle_info = t_df[['매물묶음키', '단지명', '동/호수', '층/타입']].drop_duplicates('매물묶음키')
+    my_bundles = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]['매물묶음키'].unique()
     
-    # 계산이 끝난 후 사용자가 선택한 시간(start_dt, end_dt)으로 필터링
-    bh_filtered = bh[(bh['수집일시'] >= start_dt) & (bh['수집일시'] <= end_dt)]
-    lb = bh_filtered.groupby(bundle_keys).tail(1).rename(columns={'수집일시': '최종수집일시'})
+    bundle_latest_update = t_df.dropna(subset=['확인일자_Date']).groupby('매물묶음키')['확인일자_Date'].max().reset_index()
+    bundle_latest_update['방치시간'] = (now_date - bundle_latest_update['확인일자_Date']).dt.total_seconds() / 3600
     
-    mb = pd.merge(lb, bs, on=bundle_keys + ['블록'])
-    mb['방치시간(시간)'] = (mb['최종수집일시'] - mb['블록시작일시']).dt.total_seconds() / 3600
-    tb = mb[mb['방치시간(시간)'] >= 6]
-    empty_houses = pd.merge(tb, my_ls[bundle_keys + ['묶음내순위_숫자']], on=bundle_keys)
-    empty_houses = empty_houses[empty_houses['묶음내순위_숫자'] > 1].copy()
-    if not empty_houses.empty:
-        empty_houses = pd.merge(empty_houses, first_place_df, on=bundle_keys, how='left')
-        empty_houses['현재1위부동산'] = empty_houses['현재1위부동산'].fillna('알수없음')
-    else: empty_houses['현재1위부동산'] = pd.Series(dtype='str')
-
-    # 🚨 [수정] 경쟁사 패턴도 전체 데이터(df)로 먼저 추적하여 이전 갱신 기록을 살려냅니다.
+    real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 24].copy()
+    my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
+    
+    # [3. 경쟁사 패턴 및 격전지 판별]
     trk = df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
     boosted_raw = trk[c1]
-    
-    # 시간 필터 적용
     boosted_raw = boosted_raw[(boosted_raw['수집일시'] >= start_dt) & (boosted_raw['수집일시'] <= end_dt)]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
     
+    if not boosted_df.empty:
+        battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='경쟁사_갱신횟수')
+        real_red_oceans = battle_grounds[battle_grounds['경쟁사_갱신횟수'] >= 3].sort_values('경쟁사_갱신횟수', ascending=False)
+        my_red = real_red_oceans[real_red_oceans['매물묶음키'].isin(my_bundles)]
+    else:
+        my_red = pd.DataFrame(columns=['매물묶음키', '경쟁사_갱신횟수'])
+
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
+    global_peak_hour = 12 # 기본값
     if not boosted_df.empty:
         stat_df = boosted_df.groupby('부동산명').agg(총횟수=('부동산명', 'count')).reset_index().sort_values('총횟수', ascending=False)
         top_spender_raw_name = stat_df.iloc[0]['부동산명']
         masked_ts_name = mask_text(clean_realtor_name(top_spender_raw_name), True)
         top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
-        top_realtor_data = boosted_df[boosted_df['부동산명'] == top_spender_raw_name]
-        if not top_realtor_data.empty:
-            avg_h = int(round(top_realtor_data['수집일시'].dt.hour.mean()))
-            peak_hour_str = f"평균적으로 {avg_h}시 부근에 갱신이 집중됩니다."
+        
+        global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
+        peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
-    # --- [수정] 작전 브리핑 문자열 조합 (선택한 날짜 연동) ---
+    # ==========================================================
+    # 🎯 [핵심] AI 마스터 결론 (So What?) 문자열 조합
+    # ==========================================================
+    master_conclusion = ""
+    if market_volatility >= 4:
+        master_conclusion += "현재 시장의 순위 롤링(변동)이 매우 극심하여 수동 관리로는 상위권 방어가 사실상 불가능합니다. "
+    elif market_volatility >= 2:
+        master_conclusion += "현재 시장에 주기적인 순위 롤링이 발생하고 있어 지속적인 모니터링이 필요합니다. "
+    else:
+        master_conclusion += "현재 시장은 비교적 안정적인 노출 흐름을 보이고 있습니다. "
+
+    if not my_empty.empty:
+        best_empty = my_empty.sort_values('방치시간', ascending=False).iloc[0]
+        empty_b_info = bundle_info[bundle_info['매물묶음키'] == best_empty['매물묶음키']].iloc[0]
+        master_conclusion += f"주목할 점은, 대표님 매물 중 <b style='color:#10b981;'>[{mask_text(empty_b_info['단지명'])} {mask_text(empty_b_info['동/호수'])}]</b>이(가) 타사 견제 없이 <b style='color:#10b981;'>{int(best_empty['방치시간'])}시간째 방치된 '초특급 빈집'</b>이라는 것입니다. "
+    elif not my_red.empty:
+        best_red = my_red.sort_values('경쟁사_갱신횟수', ascending=False).iloc[0]
+        red_b_info = bundle_info[bundle_info['매물묶음키'] == best_red['매물묶음키']].iloc[0]
+        master_conclusion += f"가장 치열한 곳은 <b style='color:#ef4444;'>[{mask_text(red_b_info['단지명'])} {mask_text(red_b_info['동/호수'])}]</b>입니다. 경쟁사가 단기간에 {best_red['경쟁사_갱신횟수']}회나 갱신하며 치고받는 초경쟁 상태입니다. "
+
+    if not boosted_df.empty:
+        master_conclusion += f"경쟁사들의 갱신 폭격이 <b>{global_peak_hour}시</b>에 집중되고 있습니다. 트래픽이 빠지는 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span>에 빈집 매물을 우선적으로 자동 갱신</b>하시면 최소 비용으로 상위권을 독식할 수 있습니다."
+    else:
+        master_conclusion += "경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터 누적 중입니다."
+
+    # --- [수정] 고도화된 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 순위 없음"
 
-    briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] 오전 시장 현황 파악
+    briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 
 안녕하세요, {display_realtor} 대표님.
-데이터 분석에 기반한 지정 기간({start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}) 네이버 부동산 시장 브리핑입니다.
+TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
+
+🧠 [오늘의 AI 마스터 결론]
+{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("</b>", "").replace("</span>", "")}
 
 🏆 1. 단지별 점유율(M/S) 현황
 - 현재 대표님의 단지별 랭킹: [{rank_summary}]
 
-🎯 2. '빈집' 매물 식별 (기회 요소)
-- 6시간 이상 갱신이 방치된 매물: 총 {len(empty_houses)}건
-- 타 업체의 활동이 멈춘 상태입니다. 이 타이밍에 맞춰 갱신하시면 최소의 비용으로 가장 오랫동안 최상단을 점유할 수 있습니다.
+🎯 2. '진짜 빈집' 매물 식별 (기회 요소)
+- 24시간 이상 경쟁사 활동이 멈춘 빈집: 총 {len(my_empty)}건
+- 타 업체의 예산이 소진되었거나 관리가 멈춘 상태입니다.
 
 📊 3. 주요 경쟁사 광고 패턴
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
-- 패턴 분석: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
-(경쟁사의 갱신이 끝난 직후를 노려 자동 갱신을 세팅하시길 권장합니다.)
+- 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
 
-👉 상세 시장 현황 및 빈집 위치 확인하기
+👉 AI 마스터 전략 및 상세 현황 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
     # --- [UI 출력] 은밀한 링크 버튼이 결합된 메인 타이틀 ---
@@ -535,17 +563,13 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             st.markdown("""
             **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
             
-            1. **📋 요약 리포트:** 단지별 내 순위와 다양한 정보를 요약하여 한눈에 브리핑해 드립니다.
-            2. **🏆 점유율(M/S):** 경쟁사 대비 나의 점유율을 '점수'로 수치화하여 보여줍니다.
-            3. **🚨 내 매물 순위 현황:** 현재 내 매물이 '몇 위'인지, 그 매물의 1위 부동산은 어디인지를 보여줍니다.
-            4. **📉 단지 별 노출 현황:** 네이버 부동산에서 찾고자 하는 '단지의 순위'를 확인할 수 있습니다. 
-            5. **🎯 방치된 매물:** 다른 부동산이 6시간 이상 관리하지 않은 '빈집'을 공략 포인트로 짚어줍니다.
-            6. **📊 경쟁사 요약:** 경쟁 부동산이 주로 움직이는 '황금 시간대'를 분석해 드립니다.
+            1. **📊 오늘의 AI 성과:** 자동 갱신 엔진이 방어해 낸 성과와 AI 마스터 전략을 확인하세요.
+            2. **🎯 내 매물 방어 현황:** 순위가 밀린 매물, 경쟁사가 포기한 빈집, AI 추천 타격 시간을 점검하세요.
+            3. **📡 시장 & 경쟁사 동향:** 단지별 롤링 심각도와 라이벌 부동산의 갱신 주기(예산) 패턴을 딥하게 분석합니다.
             
             *체험판 모드에서는 타 부동산 실명이 '경쟁사'로 마스킹 처리되어 있습니다.*
             """)
 
-    # 기존 코드 수정 (방치된 매물 탭 삭제)
     # ==========================================================
     # 🚀 [대시보드 심플화] 고객 시선 맞춤 3-Tab 레이아웃
     # ==========================================================
@@ -568,7 +592,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
-        # 1-1. 최상단: 브리핑 요약 카드 (가시성 극대화)
+        # 🚀 [신규] 가장 상단에 띄우는 AI 마스터 결론 박스
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3182f6 100%); padding: 25px; border-radius: 15px; color: white; margin-bottom: 25px; box-shadow: 0 10px 25px rgba(49, 130, 246, 0.2);">
+            <h3 style="margin: 0 0 15px 0; color: #ffffff; font-weight: 800;">🧠 오늘의 AI 마스터 결론</h3>
+            <p style="margin: 0; font-size: 18px; line-height: 1.7; color: #e0f2fe;">
+                {master_conclusion}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 1-1. 요약 카드
         st.markdown(f"""
         <div class="strategy-grid" style="margin-top: 5px;">
             <div class="briefing-strategy-card">
@@ -581,15 +615,13 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 탈환 필요</span>
                 <div class="briefing-content">
-                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.<br>
-                    재광고를 통해 상위권 탈환을 권장합니다.
+                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.
                 </div>
             </div>
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
                 <div class="briefing-content">
-                    타 부동산이 6시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(empty_houses)}건</span> 입니다.<br>
-                    최소 비용으로 상위권을 점령할 기회입니다.
+                    타 부동산이 24시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(my_empty)}건</span> 입니다.
                 </div>
             </div>
         </div>
@@ -607,7 +639,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 df_exec = df_exec[1:].copy()
                 df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
                 
-                # 🚨 [버그 수정] '기록없음' 데이터가 머지(Merge)되면서 표가 터지는 현상 완벽 차단
                 mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수']].drop_duplicates(subset=['고유번호'], keep='last')
                 mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
                 
@@ -721,6 +752,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         with col_p2: st.markdown(card_content.format(extra_class="focus-card", title="프리미엄 통합팩", old_price="160,000 KRW", new_price="130,000 KRW", desc="리포트 + 광고 자동화<br>최고의 가성비 패키지"), unsafe_allow_html=True)
         with col_p3: st.markdown(card_content.format(extra_class="", title="광고 자동화 솔루션", old_price="100,000 KRW", new_price="80,000 KRW", desc="24시간 원하는 시간에<br>시스템 자동 재광고"), unsafe_allow_html=True)
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) &nbsp;|&nbsp; 📞 **문의:** 010-8416-2806")
+
+    # ==========================================================
+    # 탭 2. 🎯 내 매물 방어 현황 (이전 코드는 그대로 유지. 불필요한 중복 연산 삭제됨)
+    # ==========================================================
 
     # ==========================================================
     # 탭 2. 🎯 내 매물 방어 현황 (서브 탭 적용)
