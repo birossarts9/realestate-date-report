@@ -650,12 +650,22 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
                 merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
                 
+                # [수정된 로직] 경쟁사 규모에 따른 유연한 상위권 판별
                 def get_tier(rank, total):
                     if pd.isna(rank): return "-"
                     rank = int(rank)
-                    if total >= 6: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 6 else "🔴하위권"
-                    elif 4 <= total <= 5: return "🟢상위권" if rank <= 2 else "🟡중위권" if rank <= 5 else "🔴하위권"
-                    else: return "🟢상위권" if rank == 1 else "🟡중위권" if rank <= 3 else "🔴하위권"
+                    
+                    # 1. 묶음 매물이 3곳 이하 (한 화면에 다 보임 -> 3위도 상위권)
+                    if total <= 3:
+                        return "🟢상위권"
+                    
+                    # 2. 묶음 매물이 4~5곳 (1~2위만 확정 노출)
+                    elif 4 <= total <= 5:
+                        return "🟢상위권" if rank <= 2 else "🟡중위권"
+                    
+                    # 3. 묶음 매물이 6곳 이상 (3위 밖은 스크롤 필수)
+                    else:
+                        return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 8 else "🔴하위권"
 
                 tracking_results = []
                 for idx, row in merged_df.iterrows():
