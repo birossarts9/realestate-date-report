@@ -961,9 +961,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                         else: return "🔴 인기가 적은 매물"
                         
                     def get_reason(sr):
-                        if sr >= 80: return "네이버 우대 매물 (갱신 시 1위 고정 확정적)"
-                        elif sr >= 40: return "일반 매물 (롤링 치열, 지속적 봇 관리 필요)"
-                        else: return "페널티 매물 (갱신해도 알고리즘에 의해 강제 누락됨)"
+                        if sr >= 80: return "랭킹 상위 매물"
+                        elif sr >= 40: return "랭킹 중위 매물"
+                        else: return "랭킹 하위 매물"
 
                     bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
                     bp_df['진단 사유'] = bp_df['생존율_num'].apply(get_reason)
