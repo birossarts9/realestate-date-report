@@ -810,10 +810,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
         with act_tab3:
             st.markdown("#### 매물별 AI 최적 갱신 시간 추천")
+            st.markdown("*(※ 대시보드는 누적된 데이터를 바탕으로 경쟁사의 **장기적인 활동 패턴(주력 시간대)**을 분석하여, 방어 성공 확률이 가장 높은 시간대를 추천합니다.)*")
+            
             vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             vip_bundles = vip_current['매물묶음키'].dropna().unique()
             battle_data = []
-            now_date = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
 
             for b_key in vip_bundles:
                 b_history = t_df[t_df['매물묶음키'] == b_key]
@@ -821,29 +822,43 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
                 danji, dongho, floor_type = b_history['단지명'].iloc[0], b_history['동/호수'].iloc[0], b_history['층/타입'].iloc[0]
                 full_dongho_str = f"{dongho} ({floor_type})"
+                
                 latest_b = b_history[b_history['수집일시'] == b_history['수집일시'].max()]
                 comp_count = len(latest_b['부동산명'].unique())
-                latest_dates = latest_b.dropna(subset=['확인일자_Date'])
                 
-                if not latest_dates.empty:
-                    diff_hours = (now_date - latest_dates['확인일자_Date'].max()).total_seconds() / 3600
-                    if diff_hours <= 24: fire_index = f"🔥 불장 (최근 {int(diff_hours)}시간 전)"
-                    elif diff_hours <= 72: fire_index = f"⚠️ 보통 (최근 {int(diff_hours/24)}일 전)"
-                    else: fire_index = f"🧊 빈집 (최근 {int(diff_hours/24)}일 전)"
-                else: fire_index = "알수없음"
-
+                # 해당 매물의 경쟁사 갱신(확인일자 변경) 이력만 추출
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                if not b_boosted.empty:
-                    peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                    rec_time, rec_reason = f"⏰ {(peak_hour + 1) % 24:02d}:00", f"경쟁사 갱신 피크({peak_hour}시) 직후 탈환"
+                
+                # [수정] 갱신 이력이 3건 미만이면 무리하게 평균이나 추천을 내지 않음
+                if len(b_boosted) < 3:
+                    market_status = "⏳ 분석 중"
+                    rec_time = "-"
+                    rec_reason = "패턴 도출을 위한 데이터 부족 (최소 3~5일치 누적 필요)"
                 else:
-                    rec_time, rec_reason = "12:00", "최근 변동 없음 (점심시간 틈새 공략)"
+                    # 패턴 기반 상태 분석
+                    freq = len(b_boosted)
+                    if freq >= 10: market_status = "🔥 과열 (빈번한 갱신)"
+                    elif freq >= 5: market_status = "⚠️ 보통 (주기적 갱신)"
+                    else: market_status = "💧 안정 (갱신 적음)"
+                    
+                    # 패턴 기반 추천: 경쟁사들이 가장 많이 갱신하는 시간(최빈값)의 직후 시간대
+                    peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
+                    rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
+                    rec_reason = f"경쟁사 주력 타격시간({peak_hour}시) 패턴 감지. 이후 시간대 선점 권장"
 
-                battle_data.append({"단지명": mask_text(danji), "동/호수 및 스펙": mask_text(full_dongho_str), "경쟁사 수": f"{comp_count}곳", "격전지 지수": fire_index, "⭐ 추천 갱신시간": rec_time, "전략 사유": rec_reason, "원래키": b_key })
+                battle_data.append({
+                    "단지명": mask_text(danji), 
+                    "동/호수 및 스펙": mask_text(full_dongho_str), 
+                    "경쟁사 수": f"{comp_count}곳", 
+                    "시장 상태": market_status, 
+                    "⭐ 추천 갱신시간": rec_time, 
+                    "전략 사유": rec_reason, 
+                    "원래키": b_key 
+                })
 
             if battle_data:
                 battle_df = pd.DataFrame(battle_data)
-                st.dataframe(battle_df[["단지명", "동/호수 및 스펙", "경쟁사 수", "격전지 지수", "⭐ 추천 갱신시간", "전략 사유"]], use_container_width=True)
+                st.dataframe(battle_df[["단지명", "동/호수 및 스펙", "경쟁사 수", "시장 상태", "⭐ 추천 갱신시간", "전략 사유"]], use_container_width=True)
 
     # ==========================================================
     # 탭 3. 📡 시장 & 경쟁사 동향 (서브 탭 적용)
