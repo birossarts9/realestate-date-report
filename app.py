@@ -742,15 +742,71 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             else: st.success("현재 모든 매물이 안전권에 있습니다!")
             
         with act_tab2:
-            st.markdown("#### 타 부동산이 6시간 이상 방치한 빈집 (최우선 공략 대상)")
-            if not empty_houses.empty:
-                empty_show = empty_houses[['단지명', '동/호수', '층/타입', '거래방식', '묶음내순위_숫자', '현재1위부동산', '방치시간(시간)']].copy()
-                empty_show['방치시간(시간)'] = empty_show['방치시간(시간)'].round().astype(int)
-                empty_show['동/호수'] = empty_show['동/호수'].apply(mask_text)
-                empty_show['단지명'] = empty_show['단지명'].apply(mask_text)
-                empty_show['현재1위부동산'] = empty_show['현재1위부동산'].apply(lambda x: mask_text(x, True))
-                st.dataframe(empty_show, use_container_width=True)
-            else: st.info("현재 6시간 이상 방치된 빈집 매물이 없습니다.")
+            st.markdown("#### 🧊 방치된 빈집 vs 🔥 피 튀기는 격전지")
+            st.markdown("*(※ 네이버 롤링에 의한 단순 노출 누락 착시를 완벽하게 필터링하고, 경쟁사들의 **실제 '확인일자' 갱신 영수증**만을 기준으로 분석합니다.)*")
+
+            now_date = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
+            bundle_info = t_df[['매물묶음키', '단지명', '동/호수', '층/타입']].drop_duplicates('매물묶음키')
+            my_bundles = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]['매물묶음키'].unique()
+
+            # ==========================================================
+            # 1. 🧊 진짜 빈집 계산 (롤링 보정됨: 오직 '확인일자' 기준 24시간 이상 정체)
+            # ==========================================================
+            bundle_latest_update = t_df.dropna(subset=['확인일자_Date']).groupby('매물묶음키')['확인일자_Date'].max().reset_index()
+            bundle_latest_update['방치시간'] = (now_date - bundle_latest_update['확인일자_Date']).dt.total_seconds() / 3600
+            
+            # 24시간 이상 누구도 갱신하지 않은 매물 (진짜 이탈)
+            real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 24].copy()
+            my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
+            
+            # ==========================================================
+            # 2. 🔥 격전지 계산 (boosted_df: '확인일자'가 실제로 바뀐 내역)
+            # ==========================================================
+            if not boosted_df.empty:
+                battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='경쟁사_갱신횟수')
+                # 선택된 기간 내에 3번 이상 갱신이 일어난 과열 매물
+                real_red_oceans = battle_grounds[battle_grounds['경쟁사_갱신횟수'] >= 3].sort_values('경쟁사_갱신횟수', ascending=False)
+                my_red = real_red_oceans[real_red_oceans['매물묶음키'].isin(my_bundles)]
+            else:
+                my_red = pd.DataFrame(columns=['매물묶음키', '경쟁사_갱신횟수'])
+
+            # ==========================================================
+            # 화면 출력 (좌우 분할)
+            # ==========================================================
+            c_empty, c_red = st.columns(2)
+            
+            with c_empty:
+                st.markdown("""
+                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 10px; border-top: 4px solid #10b981; margin-bottom: 15px;">
+                    <h5 style="color:#047857; margin:0;">🧊 방치된 빈집 (블루오션)</h5>
+                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">24시간 이상 아무도 광고를 갱신하지 않은 매물입니다. 지금 타격하면 최소 비용으로 장시간 독점이 가능합니다.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if not my_empty.empty:
+                    df_empty_show = pd.merge(my_empty, bundle_info, on='매물묶음키', how='left')
+                    df_empty_show['방치시간'] = df_empty_show['방치시간'].round(1).astype(str) + "시간째"
+                    df_empty_show['단지명'] = df_empty_show['단지명'].apply(mask_text)
+                    df_empty_show['동/호수'] = df_empty_show['동/호수'].apply(mask_text)
+                    st.dataframe(df_empty_show[['단지명', '동/호수', '층/타입', '방치시간']], use_container_width=True)
+                else:
+                    st.info("현재 분석된 24시간 이상 빈집이 없습니다.")
+
+            with c_red:
+                st.markdown("""
+                <div style="background-color: #fef2f2; padding: 15px; border-radius: 10px; border-top: 4px solid #ef4444; margin-bottom: 15px;">
+                    <h5 style="color:#b91c1c; margin:0;">🔥 초경쟁 격전지 (레드오션)</h5>
+                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">경쟁사들이 쉴 새 없이 광고를 갱신하며 치고받는 매물입니다. 자동화 봇을 통한 집중 방어가 필수적입니다.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if not my_red.empty:
+                    df_red_show = pd.merge(my_red, bundle_info, on='매물묶음키', how='left')
+                    df_red_show['단지명'] = df_red_show['단지명'].apply(mask_text)
+                    df_red_show['동/호수'] = df_red_show['동/호수'].apply(mask_text)
+                    st.dataframe(df_red_show[['단지명', '동/호수', '층/타입', '경쟁사_갱신횟수']], use_container_width=True)
+                else:
+                    st.info("현재 과열된 경쟁 격전지가 없습니다.")
             
         with act_tab3:
             st.markdown("#### 매물별 AI 최적 갱신 시간 추천")
