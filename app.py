@@ -896,45 +896,82 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 comp_df = t_df[t_df['단지명'] == tr_comp]
                 
                 # ==========================================================
-                # 🚀 [신규] 매물 자체의 네이버 알고리즘 파워 분석
+                # 🚀 [신규] 매물 자체의 네이버 알고리즘 파워 (광고 타산성) 분석
                 # ==========================================================
-                st.markdown(f"##### 🔍 [{mask_text(tr_comp)}] 매물 자체 노출 알고리즘 파워 분석")
-                st.caption("💡 **[진정성 점수 분석]** 네이버 알고리즘(집주인 인증 등)에 따른 매물 자체의 노출 파워입니다. 상위 20위 내 '생존율'이 낮은 매물은 단순 갱신만으로는 한계가 있어 재등록이나 인증 방식 변경이 필요합니다.")
+                st.markdown(f"##### 🔍 [{mask_text(tr_comp)}] 매물별 광고 타산성(ROI) 진단")
+                st.caption("💡 **[도출 원리]** 매물이 20위 밖으로 밀려나지 않고 버티는 '생존율'을 바탕으로 네이버의 매물 진정성 점수를 역추산합니다. 이를 통해 무의미한 광고비 낭비를 막고, 타격 효율이 높은 매물에 예산을 집중할 수 있도록 컨설팅합니다.")
                 
                 total_sessions = comp_df['수집일시'].nunique()
                 bundle_power = []
                 
                 for b_key, b_grp in comp_df.groupby('매물묶음키'):
-                    # 각 수집 시간마다 이 매물이 20위 안에 있었는지 확인
                     b_ranks = b_grp.groupby('수집일시')['전체순위_숫자'].min()
                     appearances = len(b_ranks)
                     survival_rate = (appearances / total_sessions) * 100 if total_sessions > 0 else 0
                     avg_rank = b_ranks.mean()
                     
-                    # 내 부동산이 참여한 매물인지 체크
                     is_mine = "✅" if filter_realtor_name in b_grp['부동산명'].values else ""
                     
                     bundle_power.append({
                         '내 매물': is_mine,
                         '매물 스펙 (동/호수/가격)': mask_text(b_key),
-                        '평균 전체순위': round(avg_rank, 1) if appearances > 0 else 999,
-                        '20위내 생존율': f"{round(survival_rate, 1)}%",
+                        '평균 순위': round(avg_rank, 1) if appearances > 0 else 999,
+                        '생존율': f"{round(survival_rate, 1)}%",
                         '생존율_num': survival_rate,
                         '원래키': b_key
                     })
                     
                 bp_df = pd.DataFrame(bundle_power)
                 if not bp_df.empty:
-                    bp_df = bp_df.sort_values(by=['생존율_num', '평균 전체순위'], ascending=[False, True])
+                    bp_df = bp_df.sort_values(by=['생존율_num', '평균 순위'], ascending=[False, True])
                     
-                    def get_power_tier(sr):
-                        if sr >= 85: return "🔥 최상 (네이버 우대 매물)"
-                        elif sr >= 40: return "🌊 보통 (롤링 경쟁 치열)"
-                        else: return "🧊 최하 (인증/재등록 필요)"
+                    # 💡 신호등 전략을 적용한 명확한 액션 플랜
+                    def get_action_plan(sr):
+                        if sr >= 80: return "🟢 집중 타격 (예산 집중)"
+                        elif sr >= 40: return "🟡 가성비 방어 (틈새 공략)"
+                        else: return "🔴 광고 중단 (인증 재등록)"
                         
-                    bp_df['알고리즘 평가'] = bp_df['생존율_num'].apply(get_power_tier)
+                    def get_reason(sr):
+                        if sr >= 80: return "네이버 우대 매물 (갱신 시 1위 고정 확정적)"
+                        elif sr >= 40: return "일반 매물 (롤링 치열, 지속적 봇 관리 필요)"
+                        else: return "페널티 매물 (갱신해도 알고리즘에 의해 강제 누락됨)"
+
+                    bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
+                    bp_df['진단 사유'] = bp_df['생존율_num'].apply(get_reason)
                     
-                    st.dataframe(bp_df[['내 매물', '매물 스펙 (동/호수/가격)', '평균 전체순위', '20위내 생존율', '알고리즘 평가']], use_container_width=True)
+                    # 내 매물 필터링해서 요약 보기
+                    my_bp = bp_df[bp_df['내 매물'] == "✅"]
+                    if not my_bp.empty:
+                        waste_count = len(my_bp[my_bp['생존율_num'] < 40])
+                        focus_count = len(my_bp[my_bp['생존율_num'] >= 80])
+                        
+                        st.markdown(f"""
+                        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                            <strong style="color:#1e3a8a; font-size: 16px;">💡 AI 대표님 매물 예산 컨설팅 요약</strong><br>
+                            <span style="color:#ef4444; font-weight:bold;">🚨 광고비 누수 경고:</span> 현재 대표님 매물 중 <b>{waste_count}개</b>는 알고리즘 점수가 낮아 봇을 돌려도 20위 밖으로 튕겨나갑니다. 즉시 갱신을 멈추고 집주인 인증을 다시 받으세요.<br>
+                            <span style="color:#10b981; font-weight:bold;">🎯 집중 타격 추천:</span> 반면 <b>{focus_count}개</b>는 상위권 안착률이 매우 높은 S급 매물입니다. 이 매물들에 자동 갱신(봇)을 집중하시면 1위를 독식할 수 있습니다.
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # 직관적인 컬럼 순서로 표 출력
+                    st.dataframe(bp_df[['내 매물', '매물 스펙 (동/호수/가격)', '생존율', '평균 순위', 'AI 추천 액션', '진단 사유']], use_container_width=True)
+                    
+                    # 💡 시각화: 광고 타산성 사분면 차트 (Scatter Plot)
+                    st.markdown("**📊 매물 분포도 (오른쪽 위에 있을수록 S급 매물입니다)**")
+                    fig_scatter = px.scatter(
+                        bp_df, x='생존율_num', y='평균 순위', 
+                        color='AI 추천 액션', 
+                        hover_data=['매물 스펙 (동/호수/가격)'],
+                        color_discrete_map={
+                            "🟢 집중 타격 (예산 집중)": "#10b981", 
+                            "🟡 가성비 방어 (틈새 공략)": "#f59e0b", 
+                            "🔴 광고 중단 (인증 재등록)": "#ef4444"
+                        }
+                    )
+                    # Y축 순위는 숫자가 작을수록 좋으므로 뒤집기
+                    fig_scatter.update_yaxes(autorange="reversed")
+                    fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위")
+                    st.plotly_chart(fig_scatter, use_container_width=True)
                 
                 st.markdown("---")
                 
