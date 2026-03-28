@@ -349,8 +349,8 @@ def load_server_data():
     # 5. 읽어온 데이터프레임 병합
     df = pd.concat(df_list, ignore_index=True).drop_duplicates()
 
-    # 6. [스마트 최적화] 정확히 오늘 기준 '직전 15일' 데이터만 남기고 과거 데이터 버리기 (메모리 초경량화)
-    cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=15)
+    # 6. [스마트 최적화] 정확히 오늘 기준 '직전 30일' 데이터만 남기고 과거 데이터 버리기
+    cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=30)
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df[df['수집일시'] >= cutoff_date]
 
@@ -474,31 +474,29 @@ try:
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
     # ==========================================================
-    # 🎯 [핵심] AI 마스터 결론 (So What?) 문자열 조합
+    # 🎯 [핵심] AI 마스터 결론 - 포트폴리오 거시 요약 문자열 조합
     # ==========================================================
-    master_conclusion = ""
-    if market_volatility >= 4:
-        master_conclusion += "현재 시장의 순위 롤링(변동)이 매우 극심하여 수동 관리로는 상위권 방어가 사실상 불가능합니다. "
-    elif market_volatility >= 2:
-        master_conclusion += "현재 시장에 주기적인 순위 롤링이 발생하고 있어 지속적인 모니터링이 필요합니다. "
-    else:
-        master_conclusion += "현재 시장은 비교적 안정적인 노출 흐름을 보이고 있습니다. "
+    total_my_bundles = len(my_ls)
+    safe_my_bundles = len(my_ls[my_ls['묶음내순위_숫자'] <= 3])
+    safe_ratio = int((safe_my_bundles / total_my_bundles) * 100) if total_my_bundles > 0 else 0
+    danger_count = len(danger_ls)
+    empty_count = len(my_empty)
 
-    if not my_empty.empty:
-        best_empty = my_empty.sort_values('방치시간', ascending=False).iloc[0]
-        empty_b_info = bundle_info[bundle_info['매물묶음키'] == best_empty['매물묶음키']].iloc[0]
-        master_conclusion += f"주목할 점은, 대표님 매물 중 <b style='color:#10b981;'>[{mask_text(empty_b_info['단지명'])} {mask_text(empty_b_info['동/호수'])}]</b>이(가) 타사 견제 없이 <b style='color:#10b981;'>{int(best_empty['방치시간'])}시간째 방치된 '초특급 빈집'</b>이라는 것입니다. "
-    elif not my_red.empty:
-        best_red = my_red.sort_values('경쟁사_갱신횟수', ascending=False).iloc[0]
-        red_b_info = bundle_info[bundle_info['매물묶음키'] == best_red['매물묶음키']].iloc[0]
-        master_conclusion += f"가장 치열한 곳은 <b style='color:#ef4444;'>[{mask_text(red_b_info['단지명'])} {mask_text(red_b_info['동/호수'])}]</b>입니다. 경쟁사가 단기간에 {best_red['경쟁사_갱신횟수']}회나 갱신하며 치고받는 초경쟁 상태입니다. "
+    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 방어 중인 안전 매물은 <b>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br>"
+    
+    if danger_count > 0:
+        master_conclusion += f"네이버 노출 롤링으로 인해 1위에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
+    else:
+        master_conclusion += f"현재 1위에서 이탈한 위험 매물 없이 완벽하게 방어 중이며, "
+        
+    master_conclusion += f"타 부동산이 포기하여 선점하기 좋은 빈집 매물이 <b style='color:#10b981;'>{empty_count}개</b> 포착되었습니다.<br>"
 
     if not boosted_df.empty:
-        master_conclusion += f"경쟁사들의 갱신 폭격이 <b>{global_peak_hour}시</b>에 집중되고 있습니다. 트래픽이 빠지는 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span>에 빈집 매물을 우선적으로 자동 갱신</b>하시면 최소 비용으로 상위권을 독식할 수 있습니다."
+        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 자동 타격을 진행하여 점유율을 굳히겠습니다."
     else:
-        master_conclusion += "경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터 누적 중입니다."
+        master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다."
 
-    # --- [수정] 고도화된 작전 브리핑(문자 발송용) 텍스트 ---
+    # --- 고도화된 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 순위 없음"
@@ -509,13 +507,13 @@ try:
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 🧠 [오늘의 AI 마스터 결론]
-{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("</b>", "").replace("</span>", "")}
+{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n")}
 
 🏆 1. 단지별 점유율(M/S) 현황
 - 현재 대표님의 단지별 랭킹: [{rank_summary}]
 
 🎯 2. '진짜 빈집' 매물 식별 (기회 요소)
-- 24시간 이상 경쟁사 활동이 멈춘 빈집: 총 {len(my_empty)}건
+- D+1일 이상 경쟁사 갱신이 멈춘 빈집: 총 {empty_count}건
 - 타 업체의 예산이 소진되었거나 관리가 멈춘 상태입니다.
 
 📊 3. 주요 경쟁사 광고 패턴
@@ -592,7 +590,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
-        # 🚀 [신규] 가장 상단에 띄우는 AI 마스터 결론 박스
+        # 🚀 가장 상단에 띄우는 AI 마스터 결론 박스
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3182f6 100%); padding: 25px; border-radius: 15px; color: white; margin-bottom: 25px; box-shadow: 0 10px 25px rgba(49, 130, 246, 0.2);">
             <h3 style="margin: 0 0 15px 0; color: #ffffff; font-weight: 800;">🧠 오늘의 AI 마스터 결론</h3>
@@ -615,13 +613,13 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 탈환 필요</span>
                 <div class="briefing-content">
-                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{len(danger_ls)}건</span> 발견되었습니다.
+                    상위 노출에서 밀려난 매물이 <span style="color:#ef4444;">{danger_count}건</span> 발견되었습니다.
                 </div>
             </div>
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
                 <div class="briefing-content">
-                    타 부동산이 24시간 이상 방치한 빈집 매물은 <span style="color:#10b981;">{len(my_empty)}건</span> 입니다.
+                    D+1일 이상 방치된 타사 빈집이 <span style="color:#10b981;">{empty_count}건</span> 입니다.
                 </div>
             </div>
         </div>
@@ -754,10 +752,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         st.info("🏦 **결제 계좌:** 기업은행 174-117603-01-012 (예금주: 신성우) &nbsp;|&nbsp; 📞 **문의:** 010-8416-2806")
 
     # ==========================================================
-    # 탭 2. 🎯 내 매물 방어 현황 (이전 코드는 그대로 유지. 불필요한 중복 연산 삭제됨)
-    # ==========================================================
-
-    # ==========================================================
     # 탭 2. 🎯 내 매물 방어 현황 (서브 탭 적용)
     # ==========================================================
     elif selected_menu == "🎯 내 매물 방어 현황 (액션)":
@@ -780,52 +774,25 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             st.markdown("#### 🧊 방치된 빈집 vs 🔥 피 튀기는 격전지")
             st.markdown("*(※ 네이버 롤링에 의한 단순 노출 누락 착시를 완벽하게 필터링하고, 경쟁사들의 **실제 '확인일자' 갱신 영수증**만을 기준으로 분석합니다.)*")
 
-            now_date = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
-            bundle_info = t_df[['매물묶음키', '단지명', '동/호수', '층/타입']].drop_duplicates('매물묶음키')
-            my_bundles = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]['매물묶음키'].unique()
-
-            # ==========================================================
-            # 1. 🧊 진짜 빈집 계산 (롤링 보정됨: 오직 '확인일자' 기준 24시간 이상 정체)
-            # ==========================================================
-            bundle_latest_update = t_df.dropna(subset=['확인일자_Date']).groupby('매물묶음키')['확인일자_Date'].max().reset_index()
-            bundle_latest_update['방치시간'] = (now_date - bundle_latest_update['확인일자_Date']).dt.total_seconds() / 3600
-            
-            # 24시간 이상 누구도 갱신하지 않은 매물 (진짜 이탈)
-            real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 24].copy()
-            my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
-            
-            # ==========================================================
-            # 2. 🔥 격전지 계산 (boosted_df: '확인일자'가 실제로 바뀐 내역)
-            # ==========================================================
-            if not boosted_df.empty:
-                battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='경쟁사_갱신횟수')
-                # 선택된 기간 내에 3번 이상 갱신이 일어난 과열 매물
-                real_red_oceans = battle_grounds[battle_grounds['경쟁사_갱신횟수'] >= 3].sort_values('경쟁사_갱신횟수', ascending=False)
-                my_red = real_red_oceans[real_red_oceans['매물묶음키'].isin(my_bundles)]
-            else:
-                my_red = pd.DataFrame(columns=['매물묶음키', '경쟁사_갱신횟수'])
-
-            # ==========================================================
-            # 화면 출력 (좌우 분할)
-            # ==========================================================
             c_empty, c_red = st.columns(2)
             
             with c_empty:
                 st.markdown("""
                 <div style="background-color: #f0fdf4; padding: 15px; border-radius: 10px; border-top: 4px solid #10b981; margin-bottom: 15px;">
                     <h5 style="color:#047857; margin:0;">🧊 방치된 빈집 (블루오션)</h5>
-                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">24시간 이상 아무도 광고를 갱신하지 않은 매물입니다. 지금 타격하면 최소 비용으로 장시간 독점이 가능합니다.</p>
+                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">D+1일 이상 아무도 광고를 갱신하지 않은 매물입니다. 지금 타격하면 최소 비용으로 장시간 독점이 가능합니다.</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
                 if not my_empty.empty:
                     df_empty_show = pd.merge(my_empty, bundle_info, on='매물묶음키', how='left')
-                    df_empty_show['방치시간'] = df_empty_show['방치시간'].round(1).astype(str) + "시간째"
+                    # 🚀 [수정] 59.3시간 같은 소수점 대신 "D+2일" 직관적 포맷으로 변경
+                    df_empty_show['방치일수'] = df_empty_show['방치시간'].apply(lambda x: f"D+{int(x // 24)}일")
                     df_empty_show['단지명'] = df_empty_show['단지명'].apply(mask_text)
                     df_empty_show['동/호수'] = df_empty_show['동/호수'].apply(mask_text)
-                    st.dataframe(df_empty_show[['단지명', '동/호수', '층/타입', '방치시간']], use_container_width=True)
+                    st.dataframe(df_empty_show[['단지명', '동/호수', '층/타입', '방치일수']], use_container_width=True)
                 else:
-                    st.info("현재 분석된 24시간 이상 빈집이 없습니다.")
+                    st.info("현재 분석된 D+1일 이상 빈집이 없습니다.")
 
             with c_red:
                 st.markdown("""
