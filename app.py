@@ -527,6 +527,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             """)
 
     # 메뉴 순서 변경: 요약 -> 통합검색 -> 내 매물 현황 -> 시장 동향
+    # 메뉴 순서 변경: 요약 -> 통합검색 -> 내 매물 현황 -> 시장 동향
     selected_menu = st.radio(
         "메뉴 선택",
         ["📊 오늘의 AI 성과 (핵심 요약)", "🔍 통합 매물 검색 (심층 분석)", "🎯 내 매물 방어 현황 (액션)", "📡 시장 & 경쟁사 동향 (분석)"], 
@@ -546,7 +547,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
-        # 💡 아이콘 변경 및 은은한 파스텔 톤 블루 그라데이션 적용
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; padding: 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(49, 130, 246, 0.05);">
             <h3 style="margin: 0 0 15px 0; color: #1e3a8a; font-weight: 800;">💡 오늘의 AI 마스터 결론</h3>
@@ -580,10 +580,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("<br><h3 style='color:#1e3a8a;'>🚀 AI 자동 갱신 성과 추적기</h3>", unsafe_allow_html=True)
-        st.info("💡 **자동화 엔진 성과:** 대표님이 현장을 뛰시는 동안, 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
-        st.caption("🔍 **[도출 원리]** 묶여있는 경쟁사 규모에 따라 상위권 커트라인을 유동적으로 계산합니다.")
-        
+        # --- 1. 로그 데이터 처리 ---
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
@@ -594,12 +591,12 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 {"갱신시간": (now_kst - timedelta(days=1, hours=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들골든뷰", "동/호수": "3104동 (84m²)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 5계단 상승"},
             ]
             merged_df = pd.DataFrame(dummy_logs)
-            st.dataframe(merged_df, use_container_width=True)
             success_count = 14
             up_defense_count = 14
             
         else:
             df_exec = load_renewal_logs()
+            merged_df = pd.DataFrame()
             
             if not df_exec.empty and len(df_exec) > 1:
                 try:
@@ -642,26 +639,26 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                         before_df = m_history[m_history['수집일시'] < t0]
                         after_df = m_history[m_history['수집일시'] >= t0]
                         
-                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
+                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
                         
                         if not after_df.empty:
                             after_rank = int(after_df.iloc[0]['묶음내순위_숫자'])
                             target_bundle = after_df.iloc[0]['매물묶음키']
                             latest_time = after_df.iloc[0]['수집일시']
                         else:
-                            after_rank = pd.NA
+                            after_rank = None
                             target_bundle = before_df.iloc[-1]['매물묶음키'] if not before_df.empty else ""
                             latest_time = before_df.iloc[-1]['수집일시'] if not before_df.empty else t0
 
                         total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique()) if target_bundle else 0
                         
-                        b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
-                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "20위 밖 (권외)"
+                        b_tier = get_tier(before_rank, total_comp) if before_rank is not None else "-"
+                        b_str = f"{before_rank}위 ({b_tier})" if before_rank is not None else "20위 밖 (권외)"
                         
-                        if pd.notna(after_rank):
+                        if after_rank is not None:
                             a_tier = get_tier(after_rank, total_comp)
                             a_str = f"{after_rank}위 ({a_tier})"
-                            diff = (before_rank if pd.notna(before_rank) else 21) - after_rank
+                            diff = (before_rank if before_rank is not None else 21) - after_rank
                             
                             if diff > 0:
                                 res = f"🚀 {diff}계단 상승"
@@ -687,7 +684,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
-                    st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
                     
                     success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
                     up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
@@ -695,9 +691,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
             else:
-                st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
                 success_count, up_defense_count = 0, 0
                 
+        # --- 2. 오후 보고용 텍스트 생성 ---
         pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
 오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
@@ -713,22 +709,35 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-        with st.expander("📲 고객 발송용 카카오톡 문구 (오후 보고용)", expanded=False):
-            components.html(f"""
-            <div style="position: relative; background-color: #f8fafc; padding: 15px; border-radius: 10px;">
-                <button id="copyBtnPm" style="position: absolute; top: 10px; right: 10px; background-color: #3182f6; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">복사하기</button>
-                <pre style="font-family: sans-serif; font-size: 14px; color: #334155; margin:0; padding-right: 70px;">{pm_briefing_text}</pre>
-            </div>
-            <script>
-            document.getElementById('copyBtnPm').onclick = function() {{
-                navigator.clipboard.writeText(`{pm_briefing_text}`).then(() => {{
-                    this.innerText = '✅ 복사완료';
-                    this.style.backgroundColor = '#10b981';
-                    setTimeout(() => {{ this.innerText = '복사하기'; this.style.backgroundColor = '#3182f6'; }}, 2000);
-                }});
-            }};
-            </script>
-            """, height=280)
+        # --- 3. 헤더 UI 및 복사 버튼 렌더링 ---
+        components.html(f"""
+        <div style="display: flex; align-items: center; margin-top: 30px; margin-bottom: 10px; font-family: sans-serif;">
+            <h3 style='color:#1e3a8a; margin: 0; font-size: 22px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
+            <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; outline: none;" title="오후 브리핑 복사">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+                <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+            </button>
+        </div>
+        <script>
+        document.getElementById('copyBtnPm').onclick = function() {{
+            navigator.clipboard.writeText(`{pm_briefing_text}`).then(function() {{
+                const msg = document.getElementById('copyMsgPm');
+                msg.innerText = '✅ 복사완료';
+                msg.style.opacity = '1';
+                setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
+            }});
+        }};
+        </script>
+        """, height=50)
+
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
+        st.caption("🔍 **[도출 원리]** 묶여있는 경쟁사 규모에 따라 상위권 커트라인을 유동적으로 계산합니다. (3곳 이하: 1~3위 전부 상위권 / 6곳 이상: 3위 이내 상위권, 8위 이내 중위권)")
+        st.caption("📌 **[데이터 수집 범위 안내]** 본 시스템은 실질적인 고객 유입이 발생하는 **상위 20위 이내의 매물만을 집중 스캔**합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '권외'로 표기됩니다.")
+
+        if not merged_df.empty:
+            st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
+        else:
+            st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
         st.markdown("<br><hr>", unsafe_allow_html=True)
         pricing_card = """
@@ -754,7 +763,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         st.markdown(pricing_card, unsafe_allow_html=True)
 
     # ==========================================================
-    # 탭 2. 🔍 통합 매물 검색 (심층 분석) -> 생존율 높은 매물부터 우선 정렬 적용
+    # 탭 2. 🔍 통합 매물 검색 (심층 분석)
     # ==========================================================
     elif selected_menu == "🔍 통합 매물 검색 (심층 분석)":
         st.info("💡 **개별 매물 심층 차트:** 단지와 매물을 선택하면 현재 내 순위, 갱신 빈도, 최적 타격 시간, 그리고 랭킹 차트(ROI)를 종합 진단합니다.")
@@ -763,20 +772,24 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 💡 생존율(ROI)을 계산하여 높은 매물부터 우선 정렬
+            # 리스트는 가나다(동/호수) 순으로 정렬
+            bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
+            
+            # 생존율(ROI) 계산하여 기본값으로 쓸 가장 점수 높은 매물 찾기
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
             bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
-            bundle_list = bundle_survival.sort_values(ascending=False).index.tolist()
             
-            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, key="search_bundle")
+            best_bundle = bundle_survival.idxmax() if not bundle_survival.empty else bundle_list[0]
+            default_idx = bundle_list.index(best_bundle) if best_bundle in bundle_list else 0
+            
+            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle")
             
             if search_bundle:
                 st.markdown("---")
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
                 
-                # [지표 1] 현재 내 순위 및 최상단 부동산
                 latest_data = bdf[bdf['수집일시'] == bdf['수집일시'].max()]
                 my_latest = latest_data[latest_data['부동산명'].str.contains(filter_realtor_name, na=False)]
                 my_rank = int(my_latest['묶음내순위_숫자'].min()) if not my_latest.empty else "권외"
@@ -785,7 +798,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 top_realtor = top_realtor_row['부동산명'] if top_realtor_row is not None else "정보 없음"
                 top_realtor_masked = mask_text(top_realtor, True)
                 
-                # [지표 2] 갱신 빈도
                 analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
                 total_renews = len(b_boosted)
                 daily_renews = total_renews / analysis_days
@@ -795,7 +807,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 elif daily_renews >= 1: renew_status, renew_col = f"⚠️ 일평균 {daily_renews:.1f}회 (보통)", "#f59e0b"
                 else: renew_status, renew_col = f"💧 주기적 갱신 (일 {daily_renews:.1f}회)", "#3b82f6"
 
-                # [지표 3] 추천 갱신 시간대
                 rec_time = "-"
                 rec_desc = "데이터 누적 중"
                 if total_renews >= 3:
@@ -803,7 +814,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
                     rec_desc = f"타사 주력 갱신({peak_hour}시) 포착. 직후 선점 권장"
                 
-                # [지표 4] 알고리즘 생존율
                 b_ranks = bdf.groupby('수집일시')['전체순위_숫자'].min()
                 survival_rate = (len(b_ranks) / total_sessions) * 100 if total_sessions > 0 else 0
                 
