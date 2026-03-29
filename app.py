@@ -496,11 +496,15 @@ try:
     master_conclusion += f"타 부동산이 집중적으로 갱신하지 않는 매물이 <b style='color:#10b981;'>{empty_count}개</b> 포착되었습니다.<br>"
 
     if not boosted_df.empty:
-        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 광고를 진행하면 상위권 노출에 유리합니다..<br><br>"
+        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 광고를 진행하면 상위권 노출에 유리합니다.<br>"
     else:
-        master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다.<br><br>"
+        master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다.<br>"
 
-    master_conclusion += "<span style='font-size:14px; color:#9ca3af;'><i>* <b>롤링(Rolling)이란?</b> 네이버 부동산에서 광고 효율을 분산하기 위해 특정 시간이나 접속자마다 매물 노출 순위를 무작위로 뒤섞는 알고리즘 현상을 뜻합니다.</i></span>"
+    # 💡 롤링 및 수집 범위 안내 문구 통합 및 시인성 강화
+    master_conclusion += "<div style='font-size:14.5px; color:#475569; margin-top: 15px; line-height: 1.6; background-color: #f8fafc; padding: 10px; border-radius: 8px;'>"
+    master_conclusion += "<i>* <b>롤링(Rolling)이란?</b> 네이버 부동산에서 광고 효율을 분산하기 위해 특정 시간이나 접속자마다 매물 노출 순위를 무작위로 뒤섞는 알고리즘 현상을 뜻합니다.</i><br>"
+    master_conclusion += "<i>* <b>[데이터 수집 한계 안내]</b> 본 시스템은 실질적인 고객 유입이 발생하는 <b>상위 20위 이내의 매물만을 집중 스캔</b>합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '순위 확인 불가(권외)'로 표기됩니다.</i>"
+    master_conclusion += "</div>"
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
@@ -513,7 +517,7 @@ try:
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 🧠 [오늘의 AI 마스터 결론]
-{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n").replace("<i>", "").replace("</i>", "")}
+{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n").replace("<i>", "").replace("</i>", "").replace("<div style='font-size:14.5px; color:#475569; margin-top: 15px; line-height: 1.6; background-color: #f8fafc; padding: 10px; border-radius: 8px;'>", "").replace("</div>", "")}
 
 🏆 1. 단지별 점유율(M/S) 현황
 - 현재 대표님의 단지별 랭킹: [{rank_summary}]
@@ -528,45 +532,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 👉 AI 마스터 전략 및 상세 현황 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-    # --- UI 렌더링 시작 ---
-    components.html(f"""
-    <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
-        <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
-        <button id="copyBtn" style="
-            background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; transition: all 0.2s; outline: none;
-        " title="오늘의 브리핑 문구 복사">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
-            <span id="copyMsg" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
-        </button>
-    </div>
-    <script>
-    document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
-    document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
-    document.getElementById('copyBtn').onclick = function() {{
-        navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
-            const btn = document.getElementById('copyBtn');
-            const msg = document.getElementById('copyMsg');
-            btn.style.color = '#10b981';
-            msg.innerText = '✅ 복사완료';
-            msg.style.opacity = '1';
-            setTimeout(() => {{ btn.style.color = '#b0bec5'; msg.style.opacity = '0'; }}, 2000);
-        }});
-    }};
-    </script>
-    """, height=80)
-
-    if IS_DEMO_MODE:
-        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
-            st.markdown("""
-            **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
-            
-            1. **📊 오늘의 AI 성과:** 자동 갱신 엔진이 방어해 낸 성과와 AI 마스터 전략을 확인하세요.
-            2. **🎯 내 매물 방어 현황:** 상위권에서 밀린 매물, 경쟁사가 집중하지 않는 빈집, AI 추천 타격 시간을 점검하세요.
-            3. **📡 시장 & 경쟁사 동향:** 단지별 롤링 심각도와 라이벌 부동산의 갱신 주기(예산) 패턴을 딥하게 분석합니다.
-            """)
-
-    # 메뉴 순서 변경: 요약 -> 통합검색 -> 내 매물 현황 -> 시장 동향
-    # 메뉴 순서 변경: 요약 -> 통합검색 -> 내 매물 현황 -> 시장 동향
+    # --- 메뉴 순서 설정 ---
     selected_menu = st.radio(
         "메뉴 선택",
         ["📊 오늘의 AI 성과 (핵심 요약)", "🔍 통합 매물 검색 (심층 분석)", "🎯 내 매물 방어 현황 (액션)", "📡 시장 & 경쟁사 동향 (분석)"], 
@@ -626,8 +592,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 {"갱신시간": (now_kst - timedelta(minutes=34)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "동/호수": "101동 (84A)", "상태": "✅ 성공", "갱신 전 순위": "12위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 11계단 상승"},
                 {"갱신시간": (now_kst - timedelta(hours=2, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "동/호수": "1103동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 6계단 상승"},
                 {"갱신시간": (now_kst - timedelta(hours=4, minutes=50)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "동/호수": "5209동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 4계단 상승"},
-                {"갱신시간": (now_kst - timedelta(days=1, hours=1, minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "동/호수": "1002동 (74A)", "상태": "✅ 성공", "갱신 전 순위": "18위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 17계단 상승"},
-                {"갱신시간": (now_kst - timedelta(days=1, hours=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들골든뷰", "동/호수": "3104동 (84m²)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 5계단 상승"},
             ]
             merged_df = pd.DataFrame(dummy_logs)
             success_count = 14
@@ -675,8 +639,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
                             continue
                             
-                        before_df = m_history[m_history['수집일시'] < t0]
-                        after_df = m_history[m_history['수집일시'] >= t0]
+                        # 💡 순위 고정 오류 해결: 갱신 후 10초 이후의 팩트 데이터만 확인
+                        before_df = m_history[m_history['수집일시'] <= t0]
+                        after_df = m_history[m_history['수집일시'] > t0 + pd.Timedelta(seconds=10)]
                         
                         before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
                         
@@ -699,19 +664,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                             a_str = f"{after_rank}위 ({a_tier})"
                             diff = (before_rank if before_rank is not None else 21) - after_rank
                             
+                            # 💡 순위 고정 문구 아예 삭제, 무조건 상승/방어/하락으로 표기
                             if diff > 0:
                                 res = f"🚀 {diff}계단 상승"
                             elif diff == 0:
-                                if after_rank > 3:
-                                    res = "⚠️ 순위 고정 (알고리즘 방어 막힘)"
-                                else:
-                                    res = "🛡️ 최상위 방어 성공"
+                                res = "🛡️ 방어 성공"
                             else:
                                 res = "🔻 하락 (롤링 밀림)"
                         else:
                             if global_latest_time > t0 + timedelta(minutes=15):
-                                a_str = "🌀 20위 밖 (권외)"
-                                res = "롤링으로 인한 순위 확인 지연 (수집 대기 중)"
+                                a_str = "🌀 순위 확인 불가"
+                                res = "롤링으로 인한 순위 확인 지연"
                             else:
                                 a_str = "⏳ 크롤링 대기 중"
                                 res = "데이터 수집 중"
@@ -748,11 +711,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-        # --- 3. 헤더 UI 및 복사 버튼 렌더링 ---
+        # --- 3. 헤더 UI 및 복사 버튼 수정 (높이 넉넉하게, 깔끔한 위치로 이동) ---
         components.html(f"""
-        <div style="display: flex; align-items: center; margin-top: 30px; margin-bottom: 10px; font-family: sans-serif;">
-            <h3 style='color:#1e3a8a; margin: 0; font-size: 22px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
-            <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; outline: none;" title="오후 브리핑 복사">
+        <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 5px;">
+            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
+            <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
                 <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
             </button>
@@ -767,12 +730,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             }});
         }};
         </script>
-        """, height=50)
+        """, height=60)
 
-        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
-        st.caption("🔍 **[도출 원리]** 묶여있는 경쟁사 규모에 따라 상위권 커트라인을 유동적으로 계산합니다. (3곳 이하: 1~3위 전부 상위권 / 6곳 이상: 3위 이내 상위권, 8위 이내 중위권)")
-        st.caption("📌 **[데이터 수집 범위 안내]** 본 시스템은 실질적인 고객 유입이 발생하는 **상위 20위 이내의 매물만을 집중 스캔**합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '권외'로 표기됩니다.")
-
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다. (우측 상단 복사 버튼을 눌러 고객에게 성과를 전송하세요)")
+        
         if not merged_df.empty:
             st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
         else:
@@ -811,10 +772,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 리스트는 가나다(동/호수) 순으로 정렬
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
             
-            # 생존율(ROI) 계산하여 기본값으로 쓸 가장 점수 높은 매물 찾기
+            # 💡 생존율(ROI)을 기준으로 '초기 선택값'만 바꿔주고 리스트 정렬 자체는 가나다 순으로 유지!
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
             bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
@@ -917,7 +877,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     st.dataframe(t_show, use_container_width=True)
 
     # ==========================================================
-    # 탭 3. 🎯 내 매물 방어 현황 (액션) -> 단지별 롤링 차트 이동됨
+    # 탭 3. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
     elif selected_menu == "🎯 내 매물 방어 현황 (액션)":
         st.info("💡 **내 매물 집중 관리:** 현재 상위권에서 밀려난 매물, 공략하기 좋은 빈집, AI 추천 시간, 그리고 매물별 알고리즘 진단표를 확인하세요.")
