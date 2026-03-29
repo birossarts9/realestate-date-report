@@ -748,19 +748,51 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 💡 리스트 정렬 자체는 가나다 순으로 유지
-            bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
-            
-            # 💡 탭 진입 시 초기 선택값만 가장 생존율 높은 놈으로 세팅
+            # 1. 단지 내 전체 매물의 ROI(생존율) 데이터 미리 계산 (분포도 및 정렬용)
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
-            bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
+            bundle_power = []
             
-            best_bundle = bundle_survival.idxmax() if not bundle_survival.empty else bundle_list[0]
-            default_idx = bundle_list.index(best_bundle) if best_bundle in bundle_list else 0
+            for b_key, b_grp in comp_df.groupby('매물묶음키'):
+                b_ranks = b_grp.groupby('수집일시')['전체순위_숫자'].min()
+                appearances = len(b_ranks)
+                survival_rate = (appearances / total_sessions) * 100 if total_sessions > 0 else 0
+                avg_rank = b_ranks.mean()
+                bundle_power.append({
+                    '매물묶음키': b_key,
+                    '매물 스펙 (동/호수/가격)': mask_text(b_key),
+                    '평균 순위': round(avg_rank, 1) if appearances > 0 else 999,
+                    '생존율_num': survival_rate
+                })
+                
+            bp_df = pd.DataFrame(bundle_power)
             
-            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle")
+            def get_action_plan(sr):
+                if sr >= 80: return "🟢 S급 (집중 타격)"
+                elif sr >= 40: return "🟡 A급 (가성비 방어)"
+                else: return "🔴 불량 (광고 중단)"
+                
+            if not bp_df.empty:
+                bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
+                # 생존율 높은 순으로 정렬 (기본 선택값을 S급으로 맞추기 위함)
+                bp_df = bp_df.sort_values(by=['생존율_num', '평균 순위'], ascending=[False, True])
             
+            # 2. 드롭다운 및 차트 클릭 연동 로직
+            bundle_list = bp_df['매물묶음키'].tolist()
+            display_bundle_list = bp_df['매물 스펙 (동/호수/가격)'].tolist()
+            
+            # 분포도에서 점을 클릭했을 때 session_state에 저장된 키를 불러와서 드롭다운 기본값으로 세팅
+            if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
+                default_idx = bundle_list.index(st.session_state['clicked_bundle'])
+            else:
+                default_idx = 0
+                
+            search_bundle_display = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", display_bundle_list, index=default_idx, key="search_bundle_select")
+            search_bundle = bundle_list[display_bundle_list.index(search_bundle_display)]
+            
+            # 콤보박스 변경 시 session_state 동기화 (클릭과 양방향 연동을 위함)
+            st.session_state['clicked_bundle'] = search_bundle
+
             if search_bundle:
                 st.markdown("---")
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
@@ -853,6 +885,40 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 with st.expander("상세 순위 데이터 표 보기"):
                     st.dataframe(t_show, use_container_width=True)
 
+                # ==========================================================
+                # 3. 하단 매물 분포도 (점 클릭 시 위의 상세 데이터 연동)
+                # ==========================================================
+                st.markdown("<br><hr>", unsafe_allow_html=True)
+                st.markdown("#### **📊 단지 내 매물 분포도 (클릭하여 돋보기 분석)**")
+                st.caption("오른쪽 위에 있을수록 네이버 알고리즘 점수가 높은 S급 매물입니다. **차트 안의 점을 클릭하면 해당 매물의 상세 분석이 위쪽 패널에 즉시 나타납니다.**")
+                
+                if not bp_df.empty:
+                    fig_scatter = px.scatter(
+                        bp_df, x='생존율_num', y='평균 순위', 
+                        color='AI 추천 액션', 
+                        custom_data=['매물묶음키'], # 클릭 시 추출할 원본 키
+                        hover_data={'매물 스펙 (동/호수/가격)': True, '생존율_num': False, '매물묶음키': False},
+                        color_discrete_map={
+                            "🟢 S급 (집중 타격)": "#10b981", 
+                            "🟡 A급 (가성비 방어)": "#f59e0b", 
+                            "🔴 불량 (광고 중단)": "#ef4444"
+                        }
+                    )
+                    fig_scatter.update_yaxes(autorange="reversed")
+                    fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위", clickmode='event+select')
+                    
+                    try:
+                        scatter_event = st.plotly_chart(fig_scatter, use_container_width=True, on_select="rerun", selection_mode="points", key="scatter_plot")
+                        
+                        # 클릭된 점이 있으면 session_state 업데이트 후 새로고침
+                        if scatter_event and 'selection' in scatter_event and scatter_event['selection']['points']:
+                            clicked_key = scatter_event['selection']['points'][0]['customdata'][0]
+                            if st.session_state.get('clicked_bundle') != clicked_key:
+                                st.session_state['clicked_bundle'] = clicked_key
+                                st.rerun() 
+                    except TypeError:
+                        # Streamlit 구버전 호환성을 위한 예외 처리
+                        st.plotly_chart(fig_scatter, use_container_width=True)
     # ==========================================================
     # 탭 3. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
