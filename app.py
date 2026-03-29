@@ -567,7 +567,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
     selected_menu = st.radio(
         "메뉴 선택",
-        ["📊 오늘의 AI 성과 (핵심 요약)", "🎯 내 매물 방어 현황 (액션)", "📡 시장 & 경쟁사 동향 (분석)"], 
+        ["📊 오늘의 AI 성과 (핵심 요약)", "🎯 내 매물 방어 현황 (액션)", "📡 시장 & 경쟁사 동향 (분석)", "🔍 통합 매물 검색 (심층 분석)"], 
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -668,43 +668,73 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                         else: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 8 else "🔴하위권"
 
                     tracking_results = []
+                    global_latest_time = df['수집일시'].max() # 추가: 현재 크롤러의 가장 최신 수집 시간
+
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
+                        if pd.isna(t0): continue
                         m_num = str(row['매물번호']).strip()
                         m_history = df[df['고유번호'].astype(str) == m_num].sort_values('수집일시')
-                        
+
                         if m_history.empty:
-                            tracking_results.append(("기록 없음", "대기중", "추적 불가"))
+                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
                             continue
-                            
+
                         before_df = m_history[m_history['수집일시'] < t0]
                         after_df = m_history[m_history['수집일시'] >= t0]
-                        
-                        target_bundle = m_history.iloc[-1]['매물묶음키']
-                        latest_time = m_history.iloc[-1]['수집일시']
-                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique())
-                        
+
+                        # 1. 갱신 직전 랭킹
                         before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
-                        after_rank = int(after_df.iloc[0]['묶음내순위_숫자']) if not after_df.empty else pd.NA
-                        
+
+                        # 2. 갱신 직후 랭킹 파악
+                        if not after_df.empty:
+                            after_rank = int(after_df.iloc[0]['묶음내순위_숫자'])
+                            target_bundle = after_df.iloc[0]['매물묶음키']
+                            latest_time = after_df.iloc[0]['수집일시']
+                        else:
+                            after_rank = pd.NA
+                            target_bundle = before_df.iloc[-1]['매물묶음키'] if not before_df.empty else ""
+                            latest_time = before_df.iloc[-1]['수집일시'] if not before_df.empty else t0
+
+                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique()) if target_bundle else 0
+
                         b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
-                        a_tier = get_tier(after_rank, total_comp) if pd.notna(after_rank) else "수집 대기중"
-                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "기록 없음"
-                        a_str = f"{after_rank}위 ({a_tier})" if pd.notna(after_rank) else "대기중"
-                        
-                        if pd.notna(before_rank) and pd.notna(after_rank):
-                            diff = before_rank - after_rank
-                            res = f"🚀 {diff}계단 상승" if diff > 0 else "🛡️ 방어 성공" if diff == 0 else "🔻 하락"
-                        else: res = "데이터 수집중"
+                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "20위 밖 (권외)"
+
+                        # 3. 갱신 성과 판별 로직
+                        # 3. 갱신 성과 판별 로직
+                        if pd.notna(after_rank):
+                            a_tier = get_tier(after_rank, total_comp)
+                            a_str = f"{after_rank}위 ({a_tier})"
+                            diff = (before_rank if pd.notna(before_rank) else 21) - after_rank
+
+                            if diff > 0:
+                                res = f"🚀 {diff}계단 상승"
+                            elif diff == 0:
+                                if after_rank > 3:
+                                    res = "⚠️ 순위 고정 (알고리즘 방어 막힘)"
+                                else:
+                                    res = "🛡️ 최상위 방어 성공"
+                            else:
+                                res = "🔻 하락 (롤링 밀림)"
+                        else:
+                            # 🚨 핵심 로직: 권외 이탈 시 부드러운 안내 문구로 변경
+                            if global_latest_time > t0 + timedelta(minutes=15):
+                                a_str = "🌀 20위 밖 (권외)"
+                                res = "롤링으로 인한 순위 확인 지연 (수집 대기 중)"
+                            else:
+                                a_str = "⏳ 크롤링 대기 중"
+                                res = "데이터 수집 중"
+
                         tracking_results.append((b_str, a_str, res))
-                        
+
                     merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                     merged_df['갱신 후 순위'] = [x[1] for x in tracking_results]
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
-                    
+
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
-                    
+
                     success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
                     up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
                 except Exception as e:
@@ -1091,6 +1121,133 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     st.plotly_chart(fig3, use_container_width=True)
             else:
                 st.warning("선택한 기간 내에 경쟁사들의 갱신 활동이 없습니다.")
+
+
+    # ==========================================================
+    # 탭 4. 🔍 통합 매물 검색 (심층 분석)
+    # ==========================================================
+    elif selected_menu == "🔍 통합 매물 검색 (심층 분석)":
+        st.info("💡 **개별 매물 심층 차트:** 단지와 매물을 선택하면 현재 내 순위, 갱신 빈도, 최적 타격 시간, 그리고 랭킹 차트(ROI)를 종합 진단합니다.")
+
+        c_search1, c_search2 = st.columns(2)
+        search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
+        
+        if search_comp:
+            bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
+            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, key="search_bundle")
+            
+            if search_bundle:
+                st.markdown("---")
+                # 선택된 매물 데이터 필터링
+                bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
+                b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
+                
+                # ----------------------------------------------------
+                # [지표 1] 현재 내 순위 및 최상단 부동산
+                # ----------------------------------------------------
+                latest_data = bdf[bdf['수집일시'] == bdf['수집일시'].max()]
+                my_latest = latest_data[latest_data['부동산명'].str.contains(filter_realtor_name, na=False)]
+                my_rank = int(my_latest['묶음내순위_숫자'].min()) if not my_latest.empty else "권외"
+                
+                top_realtor_row = latest_data.sort_values('묶음내순위_숫자').iloc[0] if not latest_data.empty else None
+                top_realtor = top_realtor_row['부동산명'] if top_realtor_row is not None else "정보 없음"
+                top_realtor_masked = mask_text(top_realtor, True)
+                
+                # ----------------------------------------------------
+                # [지표 2] 갱신 빈도 (빈집 vs 격전지)
+                # ----------------------------------------------------
+                analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+                total_renews = len(b_boosted)
+                daily_renews = total_renews / analysis_days
+                
+                if total_renews == 0: renew_status, renew_col = "🧊 갱신 없음 (빈집)", "#10b981"
+                elif daily_renews >= 3: renew_status, renew_col = f"🔥 일평균 {daily_renews:.1f}회 (초경쟁)", "#ef4444"
+                elif daily_renews >= 1: renew_status, renew_col = f"⚠️ 일평균 {daily_renews:.1f}회 (보통)", "#f59e0b"
+                else: renew_status, renew_col = f"💧 주기적 갱신 (일 {daily_renews:.1f}회)", "#3b82f6"
+
+                # ----------------------------------------------------
+                # [지표 3] 갱신 시간대 (AI 맞춤 전략)
+                # ----------------------------------------------------
+                rec_time = "-"
+                rec_desc = "데이터 누적 중"
+                if total_renews >= 3:
+                    peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
+                    rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
+                    rec_desc = f"타사 주력 갱신({peak_hour}시) 포착. 직후 선점 권장"
+                
+                # ----------------------------------------------------
+                # [지표 4] 알고리즘 생존율 (ROI)
+                # ----------------------------------------------------
+                total_sessions = t_df[t_df['단지명'] == search_comp]['수집일시'].nunique()
+                b_ranks = bdf.groupby('수집일시')['전체순위_숫자'].min()
+                survival_rate = (len(b_ranks) / total_sessions) * 100 if total_sessions > 0 else 0
+                
+                if survival_rate >= 80: roi_status, roi_col = "🟢 S급 (집중 타격)", "#10b981"
+                elif survival_rate >= 40: roi_status, roi_col = "🟡 A급 (가성비 방어)", "#f59e0b"
+                else: roi_status, roi_col = "🔴 불량 (광고 중단)", "#ef4444"
+
+                # --- 4개 지표를 대시보드 카드로 출력 ---
+                st.markdown(f"""
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                    <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-top: 4px solid #3182f6; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size: 13px; color: #64748b; font-weight: bold; margin-bottom: 5px;">🏆 현재 내 순위 및 1위 업체</div>
+                        <div style="font-size: 26px; font-weight: 800; color: #1e3a8a;">{my_rank}{'위' if isinstance(my_rank, int) else ''}</div>
+                        <div style="font-size: 13px; color: #475569; margin-top: 5px;">현재 1위: {top_realtor_masked}</div>
+                    </div>
+                    <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-top: 4px solid {renew_col}; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size: 13px; color: #64748b; font-weight: bold; margin-bottom: 5px;">🔥 타사 광고 갱신 빈도</div>
+                        <div style="font-size: 24px; font-weight: 800; color: {renew_col};">{renew_status}</div>
+                        <div style="font-size: 13px; color: #475569; margin-top: 5px;">분석 기간 내 총 {total_renews}회 갱신됨</div>
+                    </div>
+                    <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-top: 4px solid #8b5cf6; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size: 13px; color: #64748b; font-weight: bold; margin-bottom: 5px;">🎯 AI 추천 타격 시간대</div>
+                        <div style="font-size: 26px; font-weight: 800; color: #8b5cf6;">{rec_time}</div>
+                        <div style="font-size: 13px; color: #475569; margin-top: 5px;">{rec_desc}</div>
+                    </div>
+                    <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; border-top: 4px solid {roi_col}; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                        <div style="font-size: 13px; color: #64748b; font-weight: bold; margin-bottom: 5px;">📊 네이버 노출 생존율 (ROI)</div>
+                        <div style="font-size: 26px; font-weight: 800; color: {roi_col};">{survival_rate:.1f}%</div>
+                        <div style="font-size: 13px; color: #475569; margin-top: 5px;">알고리즘 평가: {roi_status}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # ----------------------------------------------------
+                # [차트] 노출 롤링 그래프 및 AI 갱신 추적
+                # ----------------------------------------------------
+                def get_bundle_state(grp):
+                    first_place = grp[grp['묶음내순위_숫자'] == 1]
+                    realtor = first_place['부동산명'].iloc[0] if not first_place.empty else grp.sort_values('묶음내순위_숫자')['부동산명'].iloc[0]
+                    return pd.Series({'전체순위': grp['전체순위_숫자'].min(), '최상단부동산': realtor})
+                
+                b_hist = bdf.groupby('수집일시').apply(get_bundle_state, include_groups=False).reset_index()
+                t_hist = pd.merge(pd.DataFrame({'수집일시': global_times}), b_hist, on='수집일시', how='left')
+                t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
+
+                df_exec = load_renewal_logs()
+                renew_times = []
+                if not df_exec.empty and len(df_exec) > 1:
+                    df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
+                    m_id = str(bdf['고유번호'].iloc[0]).strip()
+                    m_renews = df_exec[df_exec.iloc[:, 1].astype(str).str.strip() == m_id]
+                    renew_times = pd.to_datetime(m_renews.iloc[:, 0]).tolist()
+
+                fig2 = px.line(t_hist, x='수집일시', y='전체순위차트용', markers=True, title=f"📈 [{mask_text(search_bundle)}] 롤링 순위 추적 (🚀 AI 갱신 시점)", color_discrete_sequence=['#3182f6'])
+                
+                # 봇이 갱신한 시간대에 빨간색 세로선(로켓) 표시
+                for rt in renew_times:
+                    if start_dt <= rt <= end_dt:
+                        fig2.add_vline(x=rt, line_dash="dash", line_color="#ef4444", annotation_text="🚀갱신")
+                
+                # Y축은 숫자가 작을수록(1위) 위로 가도록 뒤집기
+                fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # 차트 하단에 상세 데이터 표 제공
+                t_show = t_hist[['수집일시', '전체순위', '최상단부동산']].dropna(subset=['전체순위']).copy()
+                t_show['최상단부동산'] = t_show['최상단부동산'].apply(lambda x: mask_text(x, True))
+                with st.expander("상세 순위 데이터 표 보기"):
+                    st.dataframe(t_show, use_container_width=True)
 
     st.session_state['is_initialized'] = True
 
