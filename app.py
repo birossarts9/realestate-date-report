@@ -7,12 +7,10 @@ import os
 import glob
 import json
 from datetime import datetime, timedelta, timezone
-# [추가] 웹훅 통신 및 속도 개선을 위한` 라이브러리
 import requests
 import threading
-# [추가] 구글 시트 연동을 위한 라이브러리
 from streamlit_gsheets import GSheetsConnection
-import streamlit.components.v1 as components  # [추가] 퇴장 로그 및 튜토리얼 기능을 위한 컴포넌트
+import streamlit.components.v1 as components
 from oauth2client.service_account import ServiceAccountCredentials
 
 # 1. 시트 접근 권한 설정
@@ -46,18 +44,12 @@ REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-# 기존 코드
 user_id = query_params.get("id", "demo")
-
-# 추가할 코드 (ref 파라미터 읽기)
 ref_id = query_params.get("ref", "unknown") 
-
-# 최종 트래킹 ID (ref 값도 묶어서 GAS로 전송)
 tracking_id = f"user:{user_id}_ref:{ref_id}"
 
 # --- [3] 구글 시트 유입 및 활동 로깅 로직 ---
 def log_visitor_to_gsheets(uid, action="접속"):
-    # 🛑 [핵심 방어막] ref가 unknown(봇 또는 관리자 단순 접속)이면 로그 발송 취소
     if "ref:unknown" in uid:
         return 
         
@@ -73,9 +65,6 @@ def log_visitor_to_gsheets(uid, action="접속"):
 
     threading.Thread(target=send_log, daemon=True).start()
 
-# ==========================================================
-# 🛑 [수정 1] 최초 접속 시 딱 한 번만 '입장' 로그 전송
-# ==========================================================
 if not st.session_state.get('entry_logged', False):
     log_visitor_to_gsheets(tracking_id, action="입장")
     st.session_state['entry_logged'] = True
@@ -84,7 +73,6 @@ if not st.session_state.get('entry_logged', False):
 IS_DEMO_MODE = (user_id == "demo")
 active_id = "a123" if IS_DEMO_MODE else user_id
 
-# [긴급 버그 수정] realtors.json이 딕셔너리({ }) 형태로 바뀌었을 때를 대비한 안전 장치
 raw_realtor = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
 if isinstance(raw_realtor, dict):
     filter_realtor_name = raw_realtor.get("name", "더자이디엘")
@@ -97,169 +85,51 @@ raw_demo = REALTOR_MAP.get("demo", "성우부동산(체험용)")
 demo_name = raw_demo.get("name", "성우부동산(체험용)") if isinstance(raw_demo, dict) else str(raw_demo)
 display_realtor = demo_name if IS_DEMO_MODE else filter_realtor_name
 
-# --- [수정] 마스킹 로직 고도화 (이름 매칭 및 고정형 번호 부여) ---
 def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
         if filter_realtor_name in str(text): return display_realtor
-        # 글자의 위치값(i+1)을 곱하고 1000으로 나누어 중복(해시 충돌) 확률을 극단적으로 낮춤
         stable_id = sum(ord(c) * (i + 1) for i, c in enumerate(str(text))) % 1000
         return f"경쟁사 {stable_id:03d}"
     return re.sub(r'\d', '*', str(text))
 
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
-# [변경 전] st.set_page_config(page_title="시장 통계 리포트", page_icon="📈", layout="wide")
-
-# [변경 후]
 st.set_page_config(
     page_title="TOP RANK 솔루션 | 프리미엄 부동산 자동화", 
-    page_icon="👑", # 왕관이나 건물 이모지 등 간지나는 걸로 변경
+    page_icon="👑",
     layout="wide",
-    initial_sidebar_state="expanded" # 사이드바 처음부터 열어두기
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
 <style>
-button[data-baseweb="tab"] {
-    transition: all 0.3s ease !important;
-}
-button[data-baseweb="tab"]:hover {
-    background-color: #f0f7ff !important;
-    transform: translateY(-2px);
-}
-button[data-baseweb="tab"] p {
-    font-size: 20px !important;
-    font-weight: bold !important;
-}
-.master-strategy-board {
-    background-color: #f0f7ff;
-    padding: 40px;
-    border-radius: 28px;
-    border: 1px solid #dbeafe;
-    margin-bottom: 40px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.02);
-}
-.strategy-grid {
-    display: flex;
-    gap: 20px;
-    margin-top: 30px;
-    margin-bottom: 25px;
-    flex-wrap: wrap;
-}
-.briefing-strategy-card {
-    background-color: white;
-    padding: 25px;
-    border-radius: 20px;
-    border: 1px solid #e2e8f0;
-    flex: 1;
-    min-width: 300px;
-    transition: all 0.3s ease;
-}
-.briefing-strategy-card:hover {
-    border-color: #3182f6;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(49, 130, 246, 0.08);
-}
-.strategy-tag {
-    display: inline-block;
-    padding: 5px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 800;
-    margin-bottom: 15px;
-    color: white;
-}
-.briefing-content {
-    font-size: 21px !important;
-    line-height: 1.8 !important;
-    font-weight: 600 !important;
-    color: #334155;
-}
-.pricing-card {
-    position: relative; padding: 25px 15px; border-radius: 20px; background-color: white;
-    border: 1px solid #e5e8eb; box-shadow: 0 10px 20px rgba(0,0,0,0.03); text-align: center;
-    height: 100%; transition: all 0.3s ease; cursor: default; margin-top: 15px;
-}
-.pricing-card:hover {
-    transform: translateY(-10px) scale(1.03);
-    border: 2px solid #3182f6 !important;
-    box-shadow: 0 20px 35px rgba(49, 130, 246, 0.12);
-}
-@keyframes shimmerBg {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-@keyframes borderPulse {
-    0% { border-color: rgba(49, 130, 246, 0.3); box-shadow: 0 0 15px rgba(49, 130, 246, 0.1); }
-    50% { border-color: rgba(49, 130, 246, 1); box-shadow: 0 0 25px rgba(49, 130, 246, 0.5); }
-    100% { border-color: rgba(49, 130, 246, 0.3); box-shadow: 0 0 15px rgba(49, 130, 246, 0.1); }
-}
-.focus-card {
-    transform: scale(1.05);
-    z-index: 5;
-    border: 2px solid #3182f6;
-    background: linear-gradient(120deg, #ffffff 30%, #eef2ff 50%, #ffffff 70%);
-    background-size: 200% 100%;
-    animation: shimmerBg 3s infinite linear, borderPulse 2s infinite ease-in-out;
-}
-.focus-card:hover { transform: translateY(-10px) scale(1.08) !important; }
-div[data-baseweb="select"] > div {
-    transition: all 0.3s ease !important;
-}
-div[data-baseweb="select"] > div:hover {
-    border-color: #3182f6 !important;
-    box-shadow: 0 0 8px rgba(49, 130, 246, 0.2) !important;
-}
-.stDateInput > div > div > input:hover, .stTimeInput > div > div > input:hover {
-    border-color: #3182f6 !important;
-    transition: all 0.3s ease !important;
-}
-[data-testid="stDataFrame"] {
-    transition: all 0.3s ease !important;
-    border-radius: 10px;
-}
-[data-testid="stDataFrame"]:hover {
-    box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important;
-}
-
-/* 체험판 튜토리얼 텍스트 크기 조정 및 라디오 버튼과의 간격 확보 */
-div[data-testid="stExpander"] summary p {
-    font-size: 18px !important;
-    font-weight: 700 !important;
-}
-div[data-testid="stExpander"] {
-    margin-bottom: 20px !important;
-}
-
-/* 라디오 버튼(메뉴 탭) 글자 크기 하향 (모바일 최적화) */
-div[data-testid="stRadio"] label p {
-    font-size: 18px !important; /* 26px에서 18px로 대폭 축소 */
-    font-weight: 800 !important;
-    color: #1e3a8a !important;
-}
-
-/* 탭 사이 간격 줄이기 */
-div[data-testid="stRadio"] > div {
-    gap: 15px !important; /* 모바일을 위해 간격 축소 */
-    flex-wrap: wrap !important;
-}
+button[data-baseweb="tab"] { transition: all 0.3s ease !important; }
+button[data-baseweb="tab"]:hover { background-color: #f0f7ff !important; transform: translateY(-2px); }
+button[data-baseweb="tab"] p { font-size: 20px !important; font-weight: bold !important; }
+.strategy-grid { display: flex; gap: 20px; margin-top: 30px; margin-bottom: 25px; flex-wrap: wrap; }
+.briefing-strategy-card { background-color: white; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; flex: 1; min-width: 300px; transition: all 0.3s ease; }
+.briefing-strategy-card:hover { border-color: #3182f6; transform: translateY(-5px); box-shadow: 0 10px 20px rgba(49, 130, 246, 0.08); }
+.strategy-tag { display: inline-block; padding: 5px 14px; border-radius: 10px; font-size: 14px; font-weight: 800; margin-bottom: 15px; color: white; }
+.briefing-content { font-size: 21px !important; line-height: 1.8 !important; font-weight: 600 !important; color: #334155; }
+div[data-baseweb="select"] > div { transition: all 0.3s ease !important; }
+div[data-baseweb="select"] > div:hover { border-color: #3182f6 !important; box-shadow: 0 0 8px rgba(49, 130, 246, 0.2) !important; }
+[data-testid="stDataFrame"] { transition: all 0.3s ease !important; border-radius: 10px; }
+[data-testid="stDataFrame"]:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.06) !important; }
+div[data-testid="stExpander"] summary p { font-size: 18px !important; font-weight: 700 !important; }
+div[data-testid="stExpander"] { margin-bottom: 20px !important; }
+div[data-testid="stRadio"] label p { font-size: 18px !important; font-weight: 800 !important; color: #1e3a8a !important; }
+div[data-testid="stRadio"] > div { gap: 15px !important; flex-wrap: wrap !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. 유틸리티 함수 ---
-
-# --- [신규] 구글 시트 실행로그 연동 ---
 @st.cache_data(ttl=600, show_spinner=False)
 def load_renewal_logs():
     try:
         SHEET_ID = "1yEllJWWNwsd5FMvvgwSIvA46j10XU_8MxpRAWcs-ba8"
         doc = client.open_by_key(SHEET_ID)
-        
-        # 🚨 인덱스(0, 1) 절대 금지! 명확하게 "실행로그" 탭만 불러옵니다.
         df_exec = pd.DataFrame(doc.worksheet("실행로그").get_all_values())
         return df_exec
     except Exception as e:
-        st.error(f"시트 데이터를 불러오지 못했습니다: {e}")
         return pd.DataFrame()
         
 def clean_realtor_name(name):
@@ -294,45 +164,34 @@ def process_data(df):
     df['확인일자'] = df['확인일자'].apply(lambda x: str(x).strip() if pd.notna(x) else pd.NA)
     df['확인일자_Date'] = pd.to_datetime(df['확인일자'], format='%y.%m.%d', errors='coerce')
 
-    # 🚨 [추가됨] 고유번호(articleNo) 하이브리드 매칭 로직
     if '고유번호' not in df.columns:
         df['고유번호'] = '기록없음'
     df['고유번호'] = df['고유번호'].fillna('기록없음')
     
-    # 🚨 [수정됨] 묶음 매물키를 고유번호(articleNo)가 아닌 '물리적 매물 정보'로 다시 고정합니다.
-    # 이렇게 해야 '단지별 노출 현황'에서 묶음 매물 전체의 롤링 순위를 정상적으로 추적할 수 있습니다.
     def make_bundle_key(row):
         return f"{row['동/호수']} | {row['층/타입']} | {row['거래방식']} | {row['가격']}"
         
     df['매물묶음키'] = df.apply(make_bundle_key, axis=1)
-    
     return df
 
-@st.cache_data(ttl=7200, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    # 1. 한국 시간 기준으로 현재 날짜 확인
     KST = timezone(timedelta(hours=9))
     now = datetime.now(KST)
     
     target_files = []
-    
-    # 2. 이번 달 파일 이름 계산 (크롤러 저장 형식과 정확히 일치시킴)
     current_file = f"naver_market_report_{now.strftime('%Y_%m')}.xlsx"
     target_files.append(current_file)
 
-    # 3. 15일 유예(Rolling Window) 로직 적용
     if now.day <= 15:
         last_month = now.replace(day=1) - timedelta(days=1)
         last_month_file = f"naver_market_report_{last_month.strftime('%Y_%m')}.xlsx"
         target_files.append(last_month_file)
 
-    # 만약 기존에 사용하던 'data.xlsx'가 있다면 추가 (호환성 유지)
     if os.path.exists(os.path.join(current_dir, "data.xlsx")):
         target_files.append("data.xlsx")
 
-    # 4. 타겟 리스트에 있는 파일 중 실제로 존재하는 파일만 읽어오기
     df_list = []
     for file_name in target_files:
         file_path = os.path.join(current_dir, file_name)
@@ -341,19 +200,13 @@ def load_server_data():
                 df = pd.read_excel(file_path)
                 df_list.append(df)
             except Exception:
-                pass # 파일이 깨졌거나 읽을 수 없으면 무시
+                pass 
 
-    if not df_list:
-        return None
-
-    # 5. 읽어온 데이터프레임 병합
+    if not df_list: return None
     df = pd.concat(df_list, ignore_index=True).drop_duplicates()
-
-    # 6. [스마트 최적화] 정확히 오늘 기준 '직전 30일' 데이터만 남기고 과거 데이터 버리기
     cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=30)
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df[df['수집일시'] >= cutoff_date]
-
     return df
 
 with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
@@ -370,11 +223,9 @@ try:
     st.sidebar.subheader("📅 분석 기간 설정")
     
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=7))
-    
     s_d = st.sidebar.date_input("시작일", default_start_date, key="sd_input")
     e_d = st.sidebar.date_input("종료일", max_time.date(), key="ed_input")
 
-    # [안전장치] Pandas를 활용한 가장 확실한 시간 범위 설정 (00:00:00 ~ 23:59:59)
     start_dt = pd.to_datetime(s_d)
     end_dt = pd.to_datetime(e_d) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
 
@@ -386,8 +237,6 @@ try:
 
     if t_df.empty:
         st.error(f"🚨 설정한 기간에 데이터가 없습니다.")
-        st.warning(f"🔍 [시스템 디버그]\n- 대표님이 선택한 기간: {start_dt.strftime('%m/%d %H:%M')} ~ {end_dt.strftime('%m/%d %H:%M')}\n- 서버가 읽은 데이터 기간: {min_time.strftime('%m/%d %H:%M')} ~ {max_time.strftime('%m/%d %H:%M')}")
-        st.info("💡 깃허브에 방금 파일이 올라갔다면 Streamlit 서버가 파일을 내려받는 데 1~3분 정도 지연될 수 있습니다. 잠시 후 새로고침(F5) 해주세요!")
         st.stop()
 
     global_times = t_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
@@ -395,10 +244,9 @@ try:
     group_keys = bundle_keys + ['부동산명']
     complex_list = sorted(t_df['단지명'].dropna().unique().tolist())
     complex_list_with_all = ["전체 단지"] + complex_list
-    # --- [데이터 계산] 제목 옆 버튼에 들어갈 텍스트를 위해 미리 계산 ---
+    
     latest_t = t_df.groupby(bundle_keys)['수집일시'].max().reset_index()
     first_place_df = pd.merge(t_df, latest_t, on=bundle_keys+['수집일시'])
-    # 🚨 '1위' 워딩 제거 -> '최상단부동산'으로 변경
     first_place_df = first_place_df[first_place_df['묶음내순위_숫자']==1][bundle_keys+['부동산명']].rename(columns={'부동산명':'최상단부동산'}).drop_duplicates(subset=bundle_keys)
     
     uniq = t_df.drop_duplicates(subset=['매물번호', '부동산명', '단지명']).copy()
@@ -424,34 +272,27 @@ try:
             st.error(f"🚨 **[관리자 알림] 크롤러 중단!** 최종수집: {last_update_dt.strftime('%m/%d %H:%M')}")
 
     # ==========================================================
-    # 🧠 [데이터 통합 계산] AI 마스터 결론 및 브리핑을 위한 전역 데이터
+    # 🧠 [데이터 통합 계산] 전역 변수 모음 (이게 날아가서 문제가 생겼던 겁니다!)
     # ==========================================================
     now_date = datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)
-    
     my_ls = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].sort_values('수집일시', ascending=False).drop_duplicates(subset=bundle_keys)
-    
-    # 🚨 상위권 이탈 기준을 1위가 아닌 3위 밖으로 명확화
     danger_ls = my_ls[my_ls['묶음내순위_숫자'] > 3].copy()
     if not danger_ls.empty:
         danger_ls = pd.merge(danger_ls, first_place_df, on=bundle_keys, how='left')
         danger_ls['최상단부동산'] = danger_ls['최상단부동산'].fillna('알수없음')
     else: danger_ls['최상단부동산'] = pd.Series(dtype='str')
 
-    # [1. 롤링 지수 (시장 변동성)]
     all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
     market_volatility = all_valid_ranks.groupby('단지명')['전체순위_숫자'].std().mean() if not all_valid_ranks.empty else 0
         
-    # [2. 진짜 빈집 및 격전지 판별 (롤링 보정됨)]
     bundle_info = t_df[['매물묶음키', '단지명', '동/호수', '층/타입']].drop_duplicates('매물묶음키')
     my_bundles = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]['매물묶음키'].unique()
     
     bundle_latest_update = t_df.dropna(subset=['확인일자_Date']).groupby('매물묶음키')['확인일자_Date'].max().reset_index()
     bundle_latest_update['방치시간'] = (now_date - bundle_latest_update['확인일자_Date']).dt.total_seconds() / 3600
-    
     real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 24].copy()
     my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
     
-    # [3. 경쟁사 패턴 및 격전지 판별]
     trk = df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
@@ -473,7 +314,6 @@ try:
         top_spender_raw_name = stat_df.iloc[0]['부동산명']
         masked_ts_name = mask_text(clean_realtor_name(top_spender_raw_name), True)
         top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
-        
         global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
@@ -500,10 +340,10 @@ try:
     else:
         master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다.<br>"
 
-    # 💡 롤링 및 수집 범위 안내 문구 통합 및 시인성 강화
-    master_conclusion += "<div style='font-size:14.5px; color:#475569; margin-top: 15px; line-height: 1.6; background-color: #f8fafc; padding: 10px; border-radius: 8px;'>"
+    # 💡 안내 문구 통합 및 시인성 강화 (글씨 색상 #334155로 진하게)
+    master_conclusion += "<div style='font-size:14.5px; color:#334155; margin-top: 15px; line-height: 1.6; background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 4px solid #94a3b8;'>"
     master_conclusion += "<i>* <b>롤링(Rolling)이란?</b> 네이버 부동산에서 광고 효율을 분산하기 위해 특정 시간이나 접속자마다 매물 노출 순위를 무작위로 뒤섞는 알고리즘 현상을 뜻합니다.</i><br>"
-    master_conclusion += "<i>* <b>[데이터 수집 한계 안내]</b> 본 시스템은 실질적인 고객 유입이 발생하는 <b>상위 20위 이내의 매물만을 집중 스캔</b>합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '순위 확인 불가(권외)'로 표기됩니다.</i>"
+    master_conclusion += "<i style='margin-top: 5px; display: block;'>* <b>[데이터 수집 한계 안내]</b> 본 시스템은 실질적인 고객 유입이 발생하는 <b>상위 20위 이내의 매물만을 집중 스캔</b>합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '순위 확인 불가(권외)'로 표기됩니다.</i>"
     master_conclusion += "</div>"
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
@@ -517,7 +357,7 @@ try:
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 🧠 [오늘의 AI 마스터 결론]
-{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n").replace("<i>", "").replace("</i>", "").replace("<div style='font-size:14.5px; color:#475569; margin-top: 15px; line-height: 1.6; background-color: #f8fafc; padding: 10px; border-radius: 8px;'>", "").replace("</div>", "")}
+{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n").replace("<i>", "").replace("</i>", "").replace("<div style='font-size:14.5px; color:#334155; margin-top: 15px; line-height: 1.6; background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 4px solid #94a3b8;'>", "").replace("</div>", "").replace("<i style='margin-top: 5px; display: block;'>", "")}
 
 🏆 1. 단지별 점유율(M/S) 현황
 - 현재 대표님의 단지별 랭킹: [{rank_summary}]
@@ -532,7 +372,43 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 👉 AI 마스터 전략 및 상세 현황 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-    # --- 메뉴 순서 설정 ---
+    components.html(f"""
+    <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
+        <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
+        <button id="copyBtn" style="
+            background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; transition: all 0.2s; outline: none;
+        " title="오늘의 브리핑 문구 복사">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+            <span id="copyMsg" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+        </button>
+    </div>
+    <script>
+    document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
+    document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
+    document.getElementById('copyBtn').onclick = function() {{
+        navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
+            const btn = document.getElementById('copyBtn');
+            const msg = document.getElementById('copyMsg');
+            btn.style.color = '#10b981';
+            msg.innerText = '✅ 복사완료';
+            msg.style.opacity = '1';
+            setTimeout(() => {{ btn.style.color = '#b0bec5'; msg.style.opacity = '0'; }}, 2000);
+        }});
+    }};
+    </script>
+    """, height=80)
+
+    if IS_DEMO_MODE:
+        with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
+            st.markdown("""
+            **안녕하세요! 본 대시보드는 네이버 부동산 광고 효율을 극대화하기 위한 '시장 작전판'입니다.**
+            
+            1. **📊 오늘의 AI 성과:** 자동 갱신 엔진이 방어해 낸 성과와 AI 마스터 전략을 확인하세요.
+            2. **🎯 내 매물 방어 현황:** 상위권에서 밀린 매물, 경쟁사가 집중하지 않는 빈집, AI 추천 타격 시간을 점검하세요.
+            3. **📡 시장 & 경쟁사 동향:** 단지별 롤링 심각도와 라이벌 부동산의 갱신 주기(예산) 패턴을 딥하게 분석합니다.
+            """)
+
+    # 메뉴 순서 변경: 요약 -> 통합검색 -> 내 매물 현황 -> 시장 동향
     selected_menu = st.radio(
         "메뉴 선택",
         ["📊 오늘의 AI 성과 (핵심 요약)", "🔍 통합 매물 검색 (심층 분석)", "🎯 내 매물 방어 현황 (액션)", "📡 시장 & 경쟁사 동향 (분석)"], 
@@ -552,10 +428,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
+        # 💡 한층 더 세련되고 은은한 프리미엄 화이트-블루 톤 박스
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border: 1px solid #bae6fd; padding: 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(49, 130, 246, 0.05);">
-            <h3 style="margin: 0 0 15px 0; color: #1e3a8a; font-weight: 800;">💡 오늘의 AI 마스터 결론</h3>
-            <p style="margin: 0; font-size: 18px; line-height: 1.7; color: #334155;">
+        <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-left: 6px solid #3182f6; border-right: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 10px 20px rgba(49, 130, 246, 0.08);">
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <span style="font-size: 26px; margin-right: 10px;">💡</span>
+                <h3 style="margin: 0; color: #1e3a8a; font-weight: 800;">오늘의 AI 마스터 결론</h3>
+            </div>
+            <p style="margin: 0; font-size: 17px; line-height: 1.8; color: #334155; font-weight: 500;">
                 {master_conclusion}
             </p>
         </div>
@@ -639,7 +519,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
                             continue
                             
-                        # 💡 순위 고정 오류 해결: 갱신 후 10초 이후의 팩트 데이터만 확인
+                        # 💡 순위 고정 오류 완벽 해결: 갱신 후 10초 이후의 진짜 새 데이터만 찾기
                         before_df = m_history[m_history['수집일시'] <= t0]
                         after_df = m_history[m_history['수집일시'] > t0 + pd.Timedelta(seconds=10)]
                         
@@ -664,7 +544,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                             a_str = f"{after_rank}위 ({a_tier})"
                             diff = (before_rank if before_rank is not None else 21) - after_rank
                             
-                            # 💡 순위 고정 문구 아예 삭제, 무조건 상승/방어/하락으로 표기
+                            # 💡 순위 고정 문구 아예 삭제, 무조건 상승/방어/하락으로 깔끔하게 표기
                             if diff > 0:
                                 res = f"🚀 {diff}계단 상승"
                             elif diff == 0:
@@ -711,9 +591,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-        # --- 3. 헤더 UI 및 복사 버튼 수정 (높이 넉넉하게, 깔끔한 위치로 이동) ---
+        # --- 3. 헤더 UI 및 복사 버튼 수정 (높이 넉넉하게, 짤림 방지) ---
         components.html(f"""
-        <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 5px;">
+        <div style="display: flex; align-items: center; font-family: sans-serif; padding: 10px 0;">
             <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
             <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
@@ -772,9 +652,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
+            # 💡 리스트 정렬 자체는 무조건 가나다 순(동/호수)으로 고정!
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
             
-            # 💡 생존율(ROI)을 기준으로 '초기 선택값'만 바꿔주고 리스트 정렬 자체는 가나다 순으로 유지!
+            # 💡 탭을 열었을 때 최초로 선택되는 기본값(Index)만 생존율 가장 높은 놈으로 지정
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
             bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
@@ -983,7 +864,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
         with act_tab4:
             st.markdown("#### 🌀 단지별 노출 롤링 및 갱신 성과 진단")
-            st.caption("🔍 **[도출 원리]** 선택된 분석 기간 동안 해당 매물의 전체 노출 순위 변동폭을 바탕으로 롤링 심각도를 진단하며, 네이버 매물 진정성 점수를 역추산하여 타격 효율(ROI)을 판별합니다.")
+            st.caption("🔍 **[도출 원리]** 선택된 분석 기간 동안 해당 매물의 전체 노출 순위 변동폭을 바탕으로 롤링 심각도를 진단하며, 네이버 매물 진정성 점 복사수)을 역추산하여 타격 효율(ROI)을 판별합니다.")
             
             all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
             if not all_valid_ranks.empty:
