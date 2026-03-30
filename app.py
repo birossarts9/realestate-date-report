@@ -552,7 +552,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     # 탭 1. 📊 오늘의 AI 성과 (핵심 요약)
     # ==========================================================
-    st.markdown(f"""
+    if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
+        
+        # 💡 [시인성 극대화] 배경은 눈이 편안한 연한 색, 글씨 크기는 22px로 시원하게 확대
+        st.markdown(f"""
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 30px; border-radius: 12px; margin-bottom: 25px;">
             <div style="display: flex; align-items: center; margin-bottom: 20px;">
                 <span style="font-size: 32px; margin-right: 15px;">💡</span>
