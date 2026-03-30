@@ -457,25 +457,24 @@ try:
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 순위 없음"
     
+    # 💡 텍스트 복사용 조건부 문구 깔끔하게 분리
+    plain_danger = f"상위권에서 이탈한 위험 매물이 {danger_count}개 발생했으며, " if danger_count > 0 else "현재 상위권에서 이탈한 매물 없이 방어 중이며, "
+    plain_empty = f"타 부동산이 집중적으로 갱신하지 않는 매물이 {empty_count}개 포착되었습니다."
+    
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
-🧠 [오늘의 AI 마스터 결론]
-{master_conclusion.replace("<b style='color:#10b981;'>", "").replace("<b style='color:#ef4444;'>", "").replace("<span style='color:#3182f6;'>", "").replace("<b>", "").replace("</b>", "").replace("</span>", "").replace("<br>", "\n").replace("<i>", "").replace("</i>", "").replace("<div style='font-size:15px; color:#1e293b; font-weight:600; margin-top: 15px; line-height: 1.6; background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 4px solid #94a3b8;'>", "").replace("</div>", "").replace("<i style='margin-top: 8px; display: block;'>", "")}
+💡 [오늘의 AI 마스터 결론]
+현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+{plain_danger}{plain_empty}
 
 🏆 1. 단지별 점유율(M/S) 현황
 - 현재 대표님의 단지별 랭킹: [{rank_summary}]
 
-🎯 2. '빈집' 매물 식별 (기회 요소)
-- D+1일 이상 타사 갱신이 멈춘 매물: 총 {empty_count}건
-
-📊 3. 주요 경쟁사 광고 패턴
+📊 2. 주요 경쟁사 광고 패턴
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
-- 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}
-
-👉 AI 마스터 전략 및 상세 현황 확인하기
-https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
+- 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
     # --- UI 렌더링 시작 ---
     components.html(f"""
@@ -724,7 +723,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
 오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
-대표님이 현장에 계신 동안 시스템이 자동으로 방어한 광고 갱신 성과입니다.
+시스템이 자동으로 갱신한 광고 현황 보고드립니다.
 
 🚀 1. 자동 갱신 처리 결과
 - 오늘 시스템이 자동으로 갱신 처리한 매물: 총 {success_count}건
@@ -734,9 +733,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 - 타사에 밀려났던 매물들을 최적의 타이밍에 복구하였습니다.
 
 👉 오늘 자동 갱신된 매물 목록 확인하기
-https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
+https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
 
-        # 💡 [순서 정상화] 1. 제목과 복사 버튼 출력
+        # 💡 [순서 정상화] 1. 제목과 복사 버튼 출력 (이 아래 코드는 그대로 유지)
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
             <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
