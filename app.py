@@ -586,7 +586,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
                     df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
                     
-                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수']].drop_duplicates(subset=['고유번호'], keep='last')
+                    # 💡 층/타입 데이터 추가 추출
+                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수', '층/타입']].drop_duplicates(subset=['고유번호'], keep='last')
                     mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
                     
                     df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
@@ -595,6 +596,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     merged_df = pd.merge(df_exec, mapping_df, on='매물번호', how='left')
                     merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
                     merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
+                    merged_df['층/타입'] = merged_df['층/타입'].fillna("-")
+                    
+                    # 💡 매물 상세(동/호수 + 층/타입) 컬럼 생성
+                    merged_df['매물상세'] = merged_df['동/호수'] + " (" + merged_df['층/타입'] + ")"
                     
                     merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
                     merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
@@ -619,42 +624,54 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
                             continue
                             
-                        # 💡 갱신 후 10초 이후의 진짜 새 데이터만 찾기
                         before_df = m_history[m_history['수집일시'] <= t0]
                         after_df = m_history[m_history['수집일시'] > t0 + pd.Timedelta(seconds=10)]
                         
-                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
+                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
                         
                         if not after_df.empty:
                             after_rank = int(after_df.iloc[0]['묶음내순위_숫자'])
                             target_bundle = after_df.iloc[0]['매물묶음키']
                             latest_time = after_df.iloc[0]['수집일시']
                         else:
-                            after_rank = None
+                            after_rank = pd.NA
                             target_bundle = before_df.iloc[-1]['매물묶음키'] if not before_df.empty else ""
                             latest_time = before_df.iloc[-1]['수집일시'] if not before_df.empty else t0
 
                         total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique()) if target_bundle else 0
                         
-                        b_tier = get_tier(before_rank, total_comp) if before_rank is not None else "-"
-                        b_str = f"{before_rank}위 ({b_tier})" if before_rank is not None else "20위 밖 (권외)"
+                        b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
+                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "20위 밖 (권외)"
                         
-                        if after_rank is not None:
+                        time_passed = global_latest_time - t0
+                        
+                        if pd.notna(after_rank):
                             a_tier = get_tier(after_rank, total_comp)
                             a_str = f"{after_rank}위 ({a_tier})"
-                            diff = (before_rank if before_rank is not None else 21) - after_rank
+                            diff = (before_rank if pd.notna(before_rank) else 21) - after_rank
                             
-                            # 💡 순위 고정 문구 영구 삭제, 무조건 상승/방어/하락으로 표기
-                            if diff > 0: res = f"🚀 {diff}계단 상승"
-                            elif diff == 0: res = "🛡️ 방어 성공"
-                            else: res = "🔻 하락 (롤링 밀림)"
+                            # 💡 3단계 정밀 판단 로직 적용
+                            if pd.notna(before_rank) and before_rank <= 3 and after_rank <= 3:
+                                res = "🛡️ 상위권 유지중"
+                            elif diff > 0: 
+                                res = f"🚀 {diff}계단 상승"
+                            else: 
+                                if time_passed <= timedelta(hours=3):
+                                    res = "⏳ 인덱싱 대기중"
+                                elif time_passed <= timedelta(hours=12):
+                                    res = "🌀 롤링 밀림 (확인 지연)"
+                                else:
+                                    res = "⚠️ 변동 없음 (확인 필요)"
                         else:
-                            if global_latest_time > t0 + timedelta(minutes=15):
-                                a_str = "🌀 순위 확인 불가"
-                                res = "롤링으로 인한 순위 확인 지연"
-                            else:
+                            if time_passed <= timedelta(hours=3):
                                 a_str = "⏳ 크롤링 대기 중"
-                                res = "데이터 수집 중"
+                                res = "⏳ 인덱싱 대기중"
+                            elif time_passed <= timedelta(hours=12):
+                                a_str = "🌀 20위 밖 (권외)"
+                                res = "🌀 롤링으로 인한 순위 확인 지연"
+                            else:
+                                a_str = "🔴 20위 밖 (권외)"
+                                res = "⚠️ 변동 없음 (확인 필요)"
                                 
                         tracking_results.append((b_str, a_str, res))
                         
@@ -664,8 +681,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     
+                    # 💡 동/호수 대신 층/타입이 결합된 '매물상세' 컬럼으로 출력
+                    st.dataframe(merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
+                    
                     success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
-                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|방어', na=False)])
+                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|유지', na=False)])
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
@@ -748,53 +768,32 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 1. 단지 내 전체 매물의 ROI(생존율) 데이터 미리 계산 (분포도 및 정렬용)
+            # 1. 💡 리스트 자체는 무조건 가나다(동/호수) 순으로 정렬
+            bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
+            
+            # 2. 💡 로딩 속도 최적화 (반복문 대신 판다스 연산으로 생존율 1위 0.1초 만에 찾기)
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
-            bundle_power = []
+            bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
+            best_bundle = bundle_survival.idxmax() if not bundle_survival.empty else bundle_list[0]
             
-            for b_key, b_grp in comp_df.groupby('매물묶음키'):
-                b_ranks = b_grp.groupby('수집일시')['전체순위_숫자'].min()
-                appearances = len(b_ranks)
-                survival_rate = (appearances / total_sessions) * 100 if total_sessions > 0 else 0
-                avg_rank = b_ranks.mean()
-                bundle_power.append({
-                    '매물묶음키': b_key,
-                    '매물 스펙 (동/호수/가격)': mask_text(b_key),
-                    '평균 순위': round(avg_rank, 1) if appearances > 0 else 999,
-                    '생존율_num': survival_rate
-                })
-                
-            bp_df = pd.DataFrame(bundle_power)
-            
-            def get_action_plan(sr):
-                if sr >= 80: return "🟢 S급 (집중 타격)"
-                elif sr >= 40: return "🟡 A급 (가성비 방어)"
-                else: return "🔴 불량 (광고 중단)"
-                
-            if not bp_df.empty:
-                bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
-                # 생존율 높은 순으로 정렬 (기본 선택값을 S급으로 맞추기 위함)
-                bp_df = bp_df.sort_values(by=['생존율_num', '평균 순위'], ascending=[False, True])
-            
-            # 2. 드롭다운 및 차트 클릭 연동 로직
-            bundle_list = bp_df['매물묶음키'].tolist()
-            display_bundle_list = bp_df['매물 스펙 (동/호수/가격)'].tolist()
-            
-            # 분포도에서 점을 클릭했을 때 session_state에 저장된 키를 불러와서 드롭다운 기본값으로 세팅
+            # 3. 💡 초기 접속 시에만 생존율 1위를 띄우고, 점 클릭 시 연동
             if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
-                default_idx = bundle_list.index(st.session_state['clicked_bundle'])
+                target_bundle = st.session_state['clicked_bundle']
             else:
-                default_idx = 0
+                target_bundle = best_bundle
                 
-            search_bundle_display = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", display_bundle_list, index=default_idx, key="search_bundle_select")
-            search_bundle = bundle_list[display_bundle_list.index(search_bundle_display)]
+            default_idx = bundle_list.index(target_bundle) if target_bundle in bundle_list else 0
             
-            # 콤보박스 변경 시 session_state 동기화 (클릭과 양방향 연동을 위함)
-            st.session_state['clicked_bundle'] = search_bundle
+            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle_select")
+            
+            # 콤보박스가 수동으로 변경되면 상태 업데이트 (무한 로딩 방지)
+            if search_bundle != st.session_state.get('clicked_bundle'):
+                st.session_state['clicked_bundle'] = search_bundle
 
             if search_bundle:
                 st.markdown("---")
+                # (이 아래 bdf = t_df[...] 부터는 기존 코드 그대로 유지하시면 됩니다.)
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
                 
