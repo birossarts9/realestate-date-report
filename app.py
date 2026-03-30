@@ -552,15 +552,13 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     # 탭 1. 📊 오늘의 AI 성과 (핵심 요약)
     # ==========================================================
-    if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
-        
-        st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border-left: 6px solid #3182f6; border-right: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 30px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 10px 20px rgba(49, 130, 246, 0.08);">
+    st.markdown(f"""
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 30px; border-radius: 12px; margin-bottom: 25px;">
             <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <span style="font-size: 28px; margin-right: 10px;">💡</span>
-                <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 24px;">오늘의 AI 마스터 결론</h3>
+                <span style="font-size: 32px; margin-right: 15px;">💡</span>
+                <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
             </div>
-            <div style="margin: 0; font-size: 20px; line-height: 1.8; color: #1e293b; font-weight: 600; word-break: keep-all;">
+            <div style="font-size: 22px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
                 {master_conclusion}
             </div>
         </div>
