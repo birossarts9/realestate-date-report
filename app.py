@@ -437,7 +437,7 @@ try:
     if danger_count > 0:
         master_conclusion += f"상위권에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
     else:
-        master_conclusion += f"현재 상위권에서 이탈한 매물 없이 완벽하게 방어 중이며, "
+        master_conclusion += f"현재 상위권에서 이탈한 매물 없이 방어 중이며, "
         
     master_conclusion += f"타 부동산이 집중적으로 갱신하지 않는 매물이 <b style='color:#10b981;'>{empty_count}개</b> 포착되었습니다.<br>"
     
