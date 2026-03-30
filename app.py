@@ -766,6 +766,30 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         else:
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
+    # 1-3. 하단: 서비스 결제 안내 (🚀 단일 9만원 배너로 변경)
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        pricing_card = """
+        <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
+            <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
+            <h2 style="color: #1e3a8a; margin-bottom: 15px; font-weight: 800; font-size: 28px;">TOP RANK 광고 자동화 솔루션</h2>
+            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">
+                월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로<br>상위 노출 스트레스에서 완벽하게 해방되세요!
+            </p>
+            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 24시간 무인 순위 방어</span>
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ AI 시장 분석 리포트</span>
+                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 불량 매물 누수 진단</span>
+            </div>
+            <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0;">
+                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">
+                    🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>
+                    📞 <b>가입 문의:</b> 010-8416-2806
+                </p>
+            </div>
+        </div>
+        """
+        st.markdown(pricing_card, unsafe_allow_html=True)
+
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
     # ==========================================================
