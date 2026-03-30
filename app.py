@@ -745,6 +745,29 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
     # ==========================================================
+    # 💡 [로딩 속도 최적화] 단지 연산 데이터를 메모리에 캐싱하여 0.1초 만에 불러옵니다.
+    @st.cache_data(show_spinner=False)
+    def get_cached_bp_df(_comp_df, _b_boosted_comp, total_sessions):
+        b_ranks = _comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
+        appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
+        avg_ranks = b_ranks.groupby('매물묶음키')['전체순위_숫자'].mean()
+        
+        bp = pd.DataFrame({
+            '매물묶음키': appearances.index,
+            '생존율_num': (appearances / total_sessions) * 100,
+            '평균 순위': avg_ranks
+        }).reset_index(drop=True)
+        
+        def get_action_plan(sr):
+            if sr >= 80: return "🟢 S급 (집중 타격)"
+            elif sr >= 40: return "🟡 A급 (가성비 방어)"
+            else: return "🔴 불량 (광고 중단)"
+        bp['AI 추천 액션'] = bp['생존율_num'].apply(get_action_plan)
+        
+        renew_counts = _b_boosted_comp.groupby('매물묶음키').size()
+        bp['갱신횟수'] = bp['매물묶음키'].map(renew_counts).fillna(0)
+        return bp
+
     elif selected_menu == "🔍 통합 매물 검색 (심층 분석)":
         st.info("💡 **개별 매물 심층 차트:** 단지와 매물을 선택하면 현재 내 순위, 갱신 빈도, 최적 타격 시간, 그리고 랭킹 차트(ROI)를 종합 진단합니다.")
 
@@ -752,43 +775,24 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 1. 원본 리스트 (내림차순 유지/가나다순)
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
-            
-            # 💡 [마스킹 추가] 드롭다운 표시용 가림 처리 리스트
             display_bundle_list = [mask_text(b) for b in bundle_list]
             
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
+            b_boosted_comp = boosted_df[boosted_df['단지명'] == search_comp]
             
-            b_ranks = comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
-            appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
-            avg_ranks = b_ranks.groupby('매물묶음키')['전체순위_숫자'].mean()
-            
-            bp_df = pd.DataFrame({
-                '매물묶음키': appearances.index,
-                '생존율_num': (appearances / total_sessions) * 100,
-                '평균 순위': avg_ranks
-            }).reset_index(drop=True)
+            # 💡 기존의 무거웠던 반복문을 지우고 캐시 함수 호출
+            bp_df = get_cached_bp_df(comp_df, b_boosted_comp, total_sessions)
             bp_df['매물 스펙 (동/호수/가격)'] = bp_df['매물묶음키'].apply(mask_text)
             
-            def get_action_plan(sr):
-                if sr >= 80: return "🟢 S급 (집중 타격)"
-                elif sr >= 40: return "🟡 A급 (가성비 방어)"
-                else: return "🔴 불량 (광고 중단)"
-            bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
-            
-            # 💡 [스마트 기본값 로직] 생존율 70% 이상 & 갱신횟수 3회 이상(타격시간대 존재)
-            renew_counts = boosted_df[boosted_df['단지명'] == search_comp].groupby('매물묶음키').size()
-            bp_df['갱신횟수'] = bp_df['매물묶음키'].map(renew_counts).fillna(0)
-            
+            # 💡 [스마트 기본값 로직] 생존율 70% 이상 & 갱신횟수 3회 이상
             valid_candidates = bp_df[(bp_df['생존율_num'] >= 70) & (bp_df['갱신횟수'] >= 3)]
             
             if not valid_candidates.empty:
                 valid_candidates = valid_candidates.sort_values(by=['생존율_num', '갱신횟수'], ascending=[False, False])
                 best_bundle = valid_candidates.iloc[0]['매물묶음키']
             else:
-                # 조건 만족하는 매물이 아예 없으면 그냥 생존율 1위로 세팅
                 best_bundle = bp_df.loc[bp_df['생존율_num'].idxmax()]['매물묶음키'] if not bp_df.empty else bundle_list[0]
             
             if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
@@ -798,7 +802,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 
             default_idx = bundle_list.index(target_bundle) if target_bundle in bundle_list else 0
             
-            # 💡 [마스킹 반영] 화면에는 가려진 텍스트로 보이고, 내부적으로는 원본 키를 연결
             search_bundle_display = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", display_bundle_list, index=default_idx, key="search_bundle_select")
             search_bundle = bundle_list[display_bundle_list.index(search_bundle_display)]
 
@@ -806,6 +809,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 st.session_state['clicked_bundle'] = search_bundle
 
             if search_bundle:
+                st.markdown("---")
                 st.markdown("---")
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
