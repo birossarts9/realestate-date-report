@@ -394,7 +394,8 @@ try:
     bundle_latest_update = t_df.dropna(subset=['확인일자_Date']).groupby('매물묶음키')['확인일자_Date'].max().reset_index()
     bundle_latest_update['방치시간'] = (now_date - bundle_latest_update['확인일자_Date']).dt.total_seconds() / 3600
     
-    real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 24].copy()
+    # 💡 [수정] 방치 기준을 48시간 이상으로 상향 조치
+    real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 48].copy()
     my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
     
     trk = df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
@@ -558,7 +559,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 </div>
             </div>
             <div class="briefing-strategy-card">
-                <span class="strategy-tag" style="background-color:#10b981;">🎯 빈집 공격 포인트</span>
+                <span class="strategy-tag" style="background-color:#10b981;">🎯 경쟁이 적은 매물</span>
                 <div class="briefing-content">
                     D+1일 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.
                 </div>
@@ -714,7 +715,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         # 💡 [순서 정상화] 1. 제목과 복사 버튼 출력
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
-            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
+            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
             <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
                 <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
@@ -733,7 +734,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         """, height=80)
 
         # 💡 [순서 정상화] 2. 안내 멘트 출력
-        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다. (우측 상단 복사 버튼을 눌러 고객에게 성과를 전송하세요)")
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
         
         # 💡 [순서 정상화] 3. 표 출력!
         if not merged_df.empty:
@@ -918,7 +919,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     elif selected_menu == "🎯 내 매물 방어 현황 (액션)":
         st.info("💡 **내 매물 집중 관리:** 현재 상위권에서 밀려난 매물, 공략하기 좋은 빈집, AI 추천 시간, 그리고 매물별 알고리즘 진단표를 확인하세요.")
         
-        act_tab1, act_tab2, act_tab3, act_tab4 = st.tabs(["🚨 상위권 탈환 필요 매물", "🎯 공략 추천 빈집", "⚔️ AI 맞춤 갱신 전략", "📉 단지별 노출 롤링 진단"])
+        act_tab1, act_tab2, act_tab3, act_tab4 = st.tabs(["🚨 상위권 탈환 필요 매물", "🎯 경쟁이 적은 매물", "⚔️ AI 맞춤 갱신 전략", "📉 단지별 노출 롤링 진단"])
         
         with act_tab1:
             st.markdown("#### 경쟁 부동산에 밀려 상위권에서 이탈한 매물")
@@ -940,7 +941,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 st.markdown("""
                 <div style="background-color: #f0fdf4; padding: 15px; border-radius: 10px; border-top: 4px solid #10b981; margin-bottom: 15px;">
                     <h5 style="color:#047857; margin:0;">🧊 방치된 빈집 (블루오션)</h5>
-                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">D+1일 이상 타사가 집중적으로 갱신하지 않는 매물입니다. 지금 타격하면 최소 비용으로 장시간 노출이 가능합니다.</p>
+                    <p style="font-size:13px; color:#475569; margin:5px 0 0 0;">48시간 이상 경쟁사가 갱신하지 않는 매물입니다. 최소 비용으로 장시간 노출이 가능합니다.</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -949,11 +950,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     df_empty_show['방치일수'] = df_empty_show['방치시간'].apply(lambda x: f"D+{int(x // 24)}일")
                     df_empty_show['단지명'] = df_empty_show['단지명'].apply(mask_text)
                     df_empty_show['동/호수'] = df_empty_show['동/호수'].apply(mask_text)
-                    # 💡 [추가] 층/타입 정보 완벽 마스킹
                     df_empty_show['층/타입'] = df_empty_show['층/타입'].apply(mask_text)
                     st.dataframe(df_empty_show[['단지명', '동/호수', '층/타입', '방치일수']], use_container_width=True)
                 else:
-                    st.info("현재 분석된 D+1일 이상 빈집이 없습니다.")
+                    st.info("현재 분석된 48시간 이상 빈집이 없습니다.")
 
             with c_red:
                 st.markdown("""
@@ -973,7 +973,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
         with act_tab3:
             st.markdown("#### 매물별 AI 최적 갱신 시간 추천")
-            st.caption("🔍 **[도출 원리]** 해당 매물에 참전한 경쟁사들의 과거 갱신 기록을 분석하여 '가장 많이 갱신한 시간대(최빈값)'를 구한 뒤, 그 타격 집중 기간이 끝나는 직후 시간을 추천합니다.")
+            st.caption("🔍 **[도출 원리]** 해당 매물에 등록한 경쟁사들의 과거 갱신 기록을 분석하여 '가장 많이 갱신한 시간대(최빈값)'를 구한 뒤, 그 광고 집중 기간이 끝나는 직후 시간을 추천합니다.")
             
             vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             vip_bundles = vip_current['매물묶음키'].dropna().unique()
