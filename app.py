@@ -773,7 +773,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 
     # 1-3. 하단: 서비스 결제 안내 (🚀 단일 9만원 배너로 변경)
         st.markdown("<br><hr>", unsafe_allow_html=True)
-        t.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br><br>", unsafe_allow_html=True)
         pricing_card = """
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
             <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
