@@ -511,6 +511,29 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             3. **📡 시장 & 경쟁사 동향:** 단지별 롤링 심각도와 라이벌 부동산의 갱신 주기(예산) 패턴을 딥하게 분석합니다.
             """)
 
+    # 💡 (이사 온 위치) 여기에 함수를 미리 정의해 둡니다.
+    @st.cache_data(show_spinner=False)
+    def get_cached_bp_df(_comp_df, _b_boosted_comp, total_sessions):
+        b_ranks = _comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
+        appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
+        avg_ranks = b_ranks.groupby('매물묶음키')['전체순위_숫자'].mean()
+        
+        bp = pd.DataFrame({
+            '매물묶음키': appearances.index,
+            '생존율_num': (appearances / total_sessions) * 100,
+            '평균 순위': avg_ranks
+        }).reset_index(drop=True)
+        
+        def get_action_plan(sr):
+            if sr >= 80: return "🟢 S급 (집중 타격)"
+            elif sr >= 40: return "🟡 A급 (가성비 방어)"
+            else: return "🔴 불량 (광고 중단)"
+        bp['AI 추천 액션'] = bp['생존율_num'].apply(get_action_plan)
+        
+        renew_counts = _b_boosted_comp.groupby('매물묶음키').size()
+        bp['갱신횟수'] = bp['매물묶음키'].map(renew_counts).fillna(0)
+        return bp
+
     # --- 메뉴 순서 변경 ---
     selected_menu = st.radio(
         "메뉴 선택",
@@ -745,28 +768,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
     # ==========================================================
-    # 💡 [로딩 속도 최적화] 단지 연산 데이터를 메모리에 캐싱하여 0.1초 만에 불러옵니다.
-    @st.cache_data(show_spinner=False)
-    def get_cached_bp_df(_comp_df, _b_boosted_comp, total_sessions):
-        b_ranks = _comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
-        appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
-        avg_ranks = b_ranks.groupby('매물묶음키')['전체순위_숫자'].mean()
-        
-        bp = pd.DataFrame({
-            '매물묶음키': appearances.index,
-            '생존율_num': (appearances / total_sessions) * 100,
-            '평균 순위': avg_ranks
-        }).reset_index(drop=True)
-        
-        def get_action_plan(sr):
-            if sr >= 80: return "🟢 S급 (집중 타격)"
-            elif sr >= 40: return "🟡 A급 (가성비 방어)"
-            else: return "🔴 불량 (광고 중단)"
-        bp['AI 추천 액션'] = bp['생존율_num'].apply(get_action_plan)
-        
-        renew_counts = _b_boosted_comp.groupby('매물묶음키').size()
-        bp['갱신횟수'] = bp['매물묶음키'].map(renew_counts).fillna(0)
-        return bp
 
     elif selected_menu == "🔍 통합 매물 검색 (심층 분석)":
         st.info("💡 **개별 매물 심층 차트:** 단지와 매물을 선택하면 현재 내 순위, 갱신 빈도, 최적 타격 시간, 그리고 랭킹 차트(ROI)를 종합 진단합니다.")
