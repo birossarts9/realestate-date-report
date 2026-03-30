@@ -766,6 +766,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         else:
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
+# 표와 결제 배너 사이에 넉넉한 여백(줄바꿈 2번)을 추가합니다.
+        st.markdown("<br><br>", unsafe_allow_html=True)
+
+        
+
     # 1-3. 하단: 서비스 결제 안내 (🚀 단일 9만원 배너로 변경)
         st.markdown("<br><hr>", unsafe_allow_html=True)
         pricing_card = """
