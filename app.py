@@ -561,7 +561,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#10b981;">🎯 경쟁이 적은 매물</span>
                 <div class="briefing-content">
-                    D+1일 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.
+                    D+2일(48시간) 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.
                 </div>
             </div>
         </div>
