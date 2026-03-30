@@ -569,13 +569,19 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
-                {"갱신시간": (now_kst - timedelta(minutes=34)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "동/호수": "101동 (84A)", "상태": "✅ 성공", "갱신 전 순위": "12위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 11계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=2, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "동/호수": "1103동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 6계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=4, minutes=50)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "동/호수": "5209동 (84B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 4계단 상승"},
+                {"갱신시간": (now_kst - timedelta(minutes=12)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "15위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 14계단 상승"},
+                {"갱신시간": (now_kst - timedelta(minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 6계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=1, minutes=20)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**9동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 4계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=2, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "19위 (🔴하위권)", "갱신 후 순위": "3위 (🟢상위권)", "성과 요약": "🚀 16계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=3, minutes=40)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "매물상세": "1**2동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "11위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 10계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=5, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산펜테리움리버테라스I", "매물상세": "7**5동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 5계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=6, minutes=50)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산신도시센트럴에일린의뜰", "매물상세": "8**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "14위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 13계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=8, minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**3동 (1**A)", "상태": "✅ 성공", "갱신 전 순위": "3위 (🟢상위권)", "갱신 후 순위": "3위 (🟢상위권)", "성과 요약": "🛡️ 상위권 유지중"},
+                {"갱신시간": (now_kst - timedelta(hours=10, minutes=25)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**1동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "9위 (🔴하위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 7계단 상승"},
             ]
             merged_df = pd.DataFrame(dummy_logs)
-            success_count = 14
-            up_defense_count = 14
+            success_count = len(merged_df)
+            up_defense_count = len(merged_df)
             
         else:
             df_exec = load_renewal_logs()
@@ -745,7 +751,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
+            # 1. 원본 리스트 (내림차순 유지/가나다순)
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
+            
+            # 💡 [마스킹 추가] 드롭다운 표시용 가림 처리 리스트
+            display_bundle_list = [mask_text(b) for b in bundle_list]
             
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
@@ -767,12 +777,32 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 else: return "🔴 불량 (광고 중단)"
             bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
             
-            # 생존율 1위 매물을 기본값으로
-            best_bundle = appearances.idxmax() if not appearances.empty else bundle_list[0]
-            default_idx = bundle_list.index(best_bundle) if best_bundle in bundle_list else 0
+            # 💡 [스마트 기본값 로직] 생존율 70% 이상 & 갱신횟수 3회 이상(타격시간대 존재)
+            renew_counts = boosted_df[boosted_df['단지명'] == search_comp].groupby('매물묶음키').size()
+            bp_df['갱신횟수'] = bp_df['매물묶음키'].map(renew_counts).fillna(0)
             
-            # 💡 연동 찌꺼기 싹 다 지우고 일반 콤보박스로 원복
-            search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle_select")
+            valid_candidates = bp_df[(bp_df['생존율_num'] >= 70) & (bp_df['갱신횟수'] >= 3)]
+            
+            if not valid_candidates.empty:
+                valid_candidates = valid_candidates.sort_values(by=['생존율_num', '갱신횟수'], ascending=[False, False])
+                best_bundle = valid_candidates.iloc[0]['매물묶음키']
+            else:
+                # 조건 만족하는 매물이 아예 없으면 그냥 생존율 1위로 세팅
+                best_bundle = bp_df.loc[bp_df['생존율_num'].idxmax()]['매물묶음키'] if not bp_df.empty else bundle_list[0]
+            
+            if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
+                target_bundle = st.session_state['clicked_bundle']
+            else:
+                target_bundle = best_bundle
+                
+            default_idx = bundle_list.index(target_bundle) if target_bundle in bundle_list else 0
+            
+            # 💡 [마스킹 반영] 화면에는 가려진 텍스트로 보이고, 내부적으로는 원본 키를 연결
+            search_bundle_display = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", display_bundle_list, index=default_idx, key="search_bundle_select")
+            search_bundle = bundle_list[display_bundle_list.index(search_bundle_display)]
+
+            if search_bundle != st.session_state.get('clicked_bundle'):
+                st.session_state['clicked_bundle'] = search_bundle
 
             if search_bundle:
                 st.markdown("---")
@@ -919,6 +949,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     df_empty_show['방치일수'] = df_empty_show['방치시간'].apply(lambda x: f"D+{int(x // 24)}일")
                     df_empty_show['단지명'] = df_empty_show['단지명'].apply(mask_text)
                     df_empty_show['동/호수'] = df_empty_show['동/호수'].apply(mask_text)
+                    # 💡 [추가] 층/타입 정보 완벽 마스킹
+                    df_empty_show['층/타입'] = df_empty_show['층/타입'].apply(mask_text)
                     st.dataframe(df_empty_show[['단지명', '동/호수', '층/타입', '방치일수']], use_container_width=True)
                 else:
                     st.info("현재 분석된 D+1일 이상 빈집이 없습니다.")
