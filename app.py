@@ -767,26 +767,12 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 else: return "🔴 불량 (광고 중단)"
             bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
             
+            # 생존율 1위 매물을 기본값으로
             best_bundle = appearances.idxmax() if not appearances.empty else bundle_list[0]
+            default_idx = bundle_list.index(best_bundle) if best_bundle in bundle_list else 0
             
-            # 💡 [무한 로딩 방지 핵심] 차트 클릭 정보를 Streamlit 세션에서 직접 꺼내옴
-            scatter_state = st.session_state.get("scatter_plot")
-            if scatter_state and "selection" in scatter_state and scatter_state["selection"]["points"]:
-                clicked_key = scatter_state["selection"]["points"][0]["customdata"][0]
-                st.session_state['clicked_bundle'] = clicked_key
-            
-            if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
-                target_bundle = st.session_state['clicked_bundle']
-            else:
-                target_bundle = best_bundle
-                
-            default_idx = bundle_list.index(target_bundle) if target_bundle in bundle_list else 0
-            
+            # 💡 연동 찌꺼기 싹 다 지우고 일반 콤보박스로 원복
             search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle_select")
-            
-            # 수동으로 드롭다운을 바꿨을 때의 처리
-            if search_bundle != st.session_state.get('clicked_bundle'):
-                st.session_state['clicked_bundle'] = search_bundle
 
             if search_bundle:
                 st.markdown("---")
@@ -817,8 +803,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
                     rec_desc = f"타사 주력 갱신({peak_hour}시) 포착. 직후 선점 권장"
                 
-                b_ranks = bdf.groupby('수집일시')['전체순위_숫자'].min()
-                survival_rate = (len(b_ranks) / total_sessions) * 100 if total_sessions > 0 else 0
+                b_ranks_hist = bdf.groupby('수집일시')['전체순위_숫자'].min()
+                survival_rate = (len(b_ranks_hist) / total_sessions) * 100 if total_sessions > 0 else 0
                 
                 if survival_rate >= 80: roi_status, roi_col = "🟢 S급 (집중 타격)", "#10b981"
                 elif survival_rate >= 40: roi_status, roi_col = "🟡 A급 (가성비 방어)", "#f59e0b"
@@ -874,19 +860,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 
                 fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
                 st.plotly_chart(fig2, use_container_width=True)
-                
-                # 💡 요청하신 불필요한 '상세 순위 표 보기' 삭제 완료
 
+                # 💡 강제 로딩 일으키던 클릭 연동 기능 영구 삭제, 단순 뷰어로만 제공
                 st.markdown("<br><hr>", unsafe_allow_html=True)
-                st.markdown("#### **📊 단지 내 매물 분포도 (클릭하여 돋보기 분석)**")
-                st.caption("오른쪽 위에 있을수록 네이버 알고리즘 점수가 높은 S급 매물입니다. **차트 안의 점을 클릭하면 해당 매물의 상세 분석이 위쪽 패널에 즉시 나타납니다.**")
+                st.markdown("#### **📊 단지 내 전체 매물 분포도 요약**")
+                st.caption("오른쪽 위에 있을수록 네이버 알고리즘 점수가 높은 S급 매물입니다. (해당 차트는 전체 현황 참고용입니다.)")
                 
                 if not bp_df.empty:
                     fig_scatter = px.scatter(
                         bp_df, x='생존율_num', y='평균 순위', 
                         color='AI 추천 액션', 
-                        custom_data=['매물묶음키'], 
-                        hover_data={'매물 스펙 (동/호수/가격)': True, '생존율_num': False, '매물묶음키': False},
+                        hover_data=['매물 스펙 (동/호수/가격)'],
                         color_discrete_map={
                             "🟢 S급 (집중 타격)": "#10b981", 
                             "🟡 A급 (가성비 방어)": "#f59e0b", 
@@ -894,10 +878,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                         }
                     )
                     fig_scatter.update_yaxes(autorange="reversed")
-                    fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위", clickmode='event+select')
+                    fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위")
                     
-                    # 💡 강제 새로고침(st.rerun)을 없애고 순수 연동만 시켜 무한 로딩 방지!
-                    st.plotly_chart(fig_scatter, use_container_width=True, on_select="rerun", selection_mode="points", key="scatter_plot")
+                    st.plotly_chart(fig_scatter, use_container_width=True)
                     
     # ==========================================================
     # 탭 3. 🎯 내 매물 방어 현황 (액션)
