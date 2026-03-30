@@ -681,9 +681,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     
-                    # 💡 동/호수 대신 층/타입이 결합된 '매물상세' 컬럼으로 출력
-                    st.dataframe(merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
-                    
+                    # 💡 여기서 표를 바로 그리지 않고 데이터만 저장합니다.
                     success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
                     up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|유지', na=False)])
                 except Exception as e:
@@ -707,7 +705,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".replace("`", "'")
 
-        # 💡 숨김 처리된 오후 보고용 버튼 UI (잘림 방지)
+        # 💡 [순서 정상화] 1. 제목과 복사 버튼 출력
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
             <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과 추적기</h3>
@@ -728,28 +726,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         </script>
         """, height=80)
 
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        pricing_card = """
-        <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
-            <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
-            <h2 style="color: #1e3a8a; margin-bottom: 15px; font-weight: 800; font-size: 28px;">TOP RANK 광고 자동화 솔루션</h2>
-            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">
-                월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로<br>상위 노출 스트레스에서 완벽하게 해방되세요!
-            </p>
-            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 24시간 무인 순위 방어</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ AI 시장 분석 리포트</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 불량 매물 누수 진단</span>
-            </div>
-            <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0;">
-                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">
-                    🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>
-                    📞 <b>가입 문의:</b> 010-8416-2806
-                </p>
-            </div>
-        </div>
-        """
-        st.markdown(pricing_card, unsafe_allow_html=True)
+        # 💡 [순서 정상화] 2. 안내 멘트 출력
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다. (우측 상단 복사 버튼을 눌러 고객에게 성과를 전송하세요)")
+        
+        # 💡 [순서 정상화] 3. 표 출력!
+        if not merged_df.empty:
+            st.dataframe(merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
+        else:
+            st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
@@ -761,10 +745,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         search_comp = c_search1.selectbox("🏢 단지명 선택", sorted(t_df['단지명'].dropna().unique()), key="search_comp")
         
         if search_comp:
-            # 1. 💡 리스트 자체는 무조건 가나다(동/호수) 순으로 정렬
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
             
-            # 2. 💡 로딩 속도 최적화 및 분포도용 bp_df 데이터 초고속 생성
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
             
@@ -787,7 +769,12 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
             best_bundle = appearances.idxmax() if not appearances.empty else bundle_list[0]
             
-            # 3. 💡 초기 접속 시에만 생존율 1위를 띄우고, 점 클릭 시 연동
+            # 💡 [무한 로딩 방지 핵심] 차트 클릭 정보를 Streamlit 세션에서 직접 꺼내옴
+            scatter_state = st.session_state.get("scatter_plot")
+            if scatter_state and "selection" in scatter_state and scatter_state["selection"]["points"]:
+                clicked_key = scatter_state["selection"]["points"][0]["customdata"][0]
+                st.session_state['clicked_bundle'] = clicked_key
+            
             if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
                 target_bundle = st.session_state['clicked_bundle']
             else:
@@ -797,13 +784,12 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             
             search_bundle = c_search2.selectbox("🏠 상세 매물 선택 (동/호수/스펙)", bundle_list, index=default_idx, key="search_bundle_select")
             
-            # 콤보박스가 수동으로 변경되면 상태 업데이트 (무한 로딩 방지)
+            # 수동으로 드롭다운을 바꿨을 때의 처리
             if search_bundle != st.session_state.get('clicked_bundle'):
                 st.session_state['clicked_bundle'] = search_bundle
 
             if search_bundle:
                 st.markdown("---")
-                # (이 아래 bdf = t_df[...] 부터는 기존 코드 그대로 유지하시면 됩니다.)
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
                 
@@ -889,14 +875,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                 fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
                 st.plotly_chart(fig2, use_container_width=True)
                 
-                t_show = t_hist[['수집일시', '전체순위', '최상단부동산']].dropna(subset=['전체순위']).copy()
-                t_show['최상단부동산'] = t_show['최상단부동산'].apply(lambda x: mask_text(x, True))
-                with st.expander("상세 순위 데이터 표 보기"):
-                    st.dataframe(t_show, use_container_width=True)
+                # 💡 요청하신 불필요한 '상세 순위 표 보기' 삭제 완료
 
-                # ==========================================================
-                # 3. 하단 매물 분포도 (점 클릭 시 위의 상세 데이터 연동)
-                # ==========================================================
                 st.markdown("<br><hr>", unsafe_allow_html=True)
                 st.markdown("#### **📊 단지 내 매물 분포도 (클릭하여 돋보기 분석)**")
                 st.caption("오른쪽 위에 있을수록 네이버 알고리즘 점수가 높은 S급 매물입니다. **차트 안의 점을 클릭하면 해당 매물의 상세 분석이 위쪽 패널에 즉시 나타납니다.**")
@@ -905,7 +885,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     fig_scatter = px.scatter(
                         bp_df, x='생존율_num', y='평균 순위', 
                         color='AI 추천 액션', 
-                        custom_data=['매물묶음키'], # 클릭 시 추출할 원본 키
+                        custom_data=['매물묶음키'], 
                         hover_data={'매물 스펙 (동/호수/가격)': True, '생존율_num': False, '매물묶음키': False},
                         color_discrete_map={
                             "🟢 S급 (집중 타격)": "#10b981", 
@@ -916,18 +896,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
                     fig_scatter.update_yaxes(autorange="reversed")
                     fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위", clickmode='event+select')
                     
-                    try:
-                        scatter_event = st.plotly_chart(fig_scatter, use_container_width=True, on_select="rerun", selection_mode="points", key="scatter_plot")
-                        
-                        # 클릭된 점이 있으면 session_state 업데이트 후 새로고침
-                        if scatter_event and 'selection' in scatter_event and scatter_event['selection']['points']:
-                            clicked_key = scatter_event['selection']['points'][0]['customdata'][0]
-                            if st.session_state.get('clicked_bundle') != clicked_key:
-                                st.session_state['clicked_bundle'] = clicked_key
-                                st.rerun() 
-                    except TypeError:
-                        # Streamlit 구버전 호환성을 위한 예외 처리
-                        st.plotly_chart(fig_scatter, use_container_width=True)
+                    # 💡 강제 새로고침(st.rerun)을 없애고 순수 연동만 시켜 무한 로딩 방지!
+                    st.plotly_chart(fig_scatter, use_container_width=True, on_select="rerun", selection_mode="points", key="scatter_plot")
+                    
     # ==========================================================
     # 탭 3. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
