@@ -728,13 +728,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
         </script>
         """, height=80)
 
-        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다. (우측 상단 복사 버튼을 눌러 고객에게 성과를 전송하세요)")
-        
-        if not merged_df.empty:
-            st.dataframe(merged_df[['갱신시간', '단지명', '동/호수', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
-        else:
-            st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
-
         st.markdown("<br><hr>", unsafe_allow_html=True)
         pricing_card = """
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
@@ -771,11 +764,28 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}""".repla
             # 1. 💡 리스트 자체는 무조건 가나다(동/호수) 순으로 정렬
             bundle_list = sorted(t_df[t_df['단지명'] == search_comp]['매물묶음키'].dropna().unique().tolist())
             
-            # 2. 💡 로딩 속도 최적화 (반복문 대신 판다스 연산으로 생존율 1위 0.1초 만에 찾기)
+            # 2. 💡 로딩 속도 최적화 및 분포도용 bp_df 데이터 초고속 생성
             comp_df = t_df[t_df['단지명'] == search_comp]
             total_sessions = max(comp_df['수집일시'].nunique(), 1)
-            bundle_survival = comp_df.groupby('매물묶음키')['수집일시'].nunique() / total_sessions
-            best_bundle = bundle_survival.idxmax() if not bundle_survival.empty else bundle_list[0]
+            
+            b_ranks = comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
+            appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
+            avg_ranks = b_ranks.groupby('매물묶음키')['전체순위_숫자'].mean()
+            
+            bp_df = pd.DataFrame({
+                '매물묶음키': appearances.index,
+                '생존율_num': (appearances / total_sessions) * 100,
+                '평균 순위': avg_ranks
+            }).reset_index(drop=True)
+            bp_df['매물 스펙 (동/호수/가격)'] = bp_df['매물묶음키'].apply(mask_text)
+            
+            def get_action_plan(sr):
+                if sr >= 80: return "🟢 S급 (집중 타격)"
+                elif sr >= 40: return "🟡 A급 (가성비 방어)"
+                else: return "🔴 불량 (광고 중단)"
+            bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
+            
+            best_bundle = appearances.idxmax() if not appearances.empty else bundle_list[0]
             
             # 3. 💡 초기 접속 시에만 생존율 1위를 띄우고, 점 클릭 시 연동
             if 'clicked_bundle' in st.session_state and st.session_state['clicked_bundle'] in bundle_list:
