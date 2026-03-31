@@ -866,7 +866,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
 
             if search_bundle:
                 st.markdown("---")
-                st.markdown("---")
                 bdf = t_df[(t_df['단지명'] == search_comp) & (t_df['매물묶음키'] == search_bundle)]
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == search_bundle]
                 
