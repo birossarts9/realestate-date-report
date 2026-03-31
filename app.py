@@ -309,8 +309,33 @@ def load_server_data():
     df = df[df['수집일시'] >= cutoff_date]
     return df
 
-with st.spinner("🚀 최신 시장 동향을 파악하고 있습니다. 잠시만 기다려 주세요..."):
-    raw_df = load_server_data()
+# 💡 [로딩 화면 최적화] 이탈 방지용 대형 텍스트 및 프로그레스 바 적용
+loading_placeholder = st.empty()
+progress_placeholder = st.empty()
+
+# 1. 시선을 사로잡는 대형 로딩 문구 출력
+loading_placeholder.markdown("""
+    <div style='text-align: center; padding: 50px 0 20px 0;'>
+        <h2 style='color: #1e3a8a; font-weight: 800; font-size: 28px;'>🚀 최신 네이버 부동산 데이터를 동기화 중입니다...</h2>
+        <p style='color: #64748b; font-size: 18px; margin-top: 10px;'>수만 개의 시장 데이터를 분석 중입니다. (약 3~5초 소요)</p>
+    </div>
+""", unsafe_allow_html=True)
+
+# 2. 프로그레스 바 애니메이션 (시각적 지루함 해소)
+import time
+my_bar = progress_placeholder.progress(0)
+for percent_complete in range(0, 85, 15):
+    time.sleep(0.1)
+    my_bar.progress(percent_complete)
+
+# 3. 실제 데이터 로딩 (이 구간에서 실제 시간이 소요됨)
+raw_df = load_server_data()
+
+# 4. 로딩 완료 시 100% 채우고 깔끔하게 화면에서 삭제
+my_bar.progress(100)
+time.sleep(0.2)
+loading_placeholder.empty()
+progress_placeholder.empty()
     
 if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
