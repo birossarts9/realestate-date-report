@@ -322,29 +322,41 @@ def load_server_data():
     df = df[df['수집일시'] >= cutoff_date]
     return df
 
-# 💡 [로딩 화면 최적화] 인트로 영상을 활용한 스플래시 스크린 적용
+# 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
 splash_placeholder = st.empty()
 
 with splash_placeholder.container():
-    # 영상을 중앙에 띄우고 아래에 로딩 문구를 배치합니다.
-    try:
-        # ⚠️ 깃허브에 올린 파일명과 대소문자가 완벽히 일치해야 합니다. (intro.mp4)
-        st.video("intro.mp4", autoplay=True, muted=True)
-    except:
-        pass
-        
+    # 1. 안내 문구
     st.markdown("""
-        <div style='text-align: center; padding: 20px 0;'>
+        <div style='text-align: center; padding: 20px 0 10px 0;'>
             <h2 style='color: #1e3a8a; font-weight: 800; font-size: 28px;'>🚀 최신 네이버 부동산 데이터를 동기화 중입니다...</h2>
             <p style='color: #64748b; font-size: 18px; margin-top: 10px;'>수만 개의 시장 데이터를 분석 중입니다. 잠시만 기다려주세요.</p>
         </div>
     """, unsafe_allow_html=True)
+    
+    # 2. 프로그레스 바 (가짜 애니메이션)
+    import time
+    my_bar = st.progress(0)
+    
+    # 3. 인트로 영상 (프로그레스 바 바로 아래에 배치)
+    try:
+        st.video("intro.mp4", autoplay=True, muted=True)
+    except:
+        pass
+        
+    # 4. 바 차오르는 애니메이션 (85%까지)
+    for percent_complete in range(0, 85, 15):
+        time.sleep(0.1)
+        my_bar.progress(percent_complete)
 
-# 실제 데이터 로딩 (이 구간에서 3~5초가 소요되며, 그동안 위 영상이 재생됩니다)
+# 실제 데이터 로딩 (이 구간에서 실제 시간 3~5초가 소요됨)
 raw_df = load_server_data()
 
-# 데이터 로딩이 끝나면 화면에서 영상과 문구를 깔끔하게 지워버립니다!
-splash_placeholder.empty()
+# 로딩이 완료되면 100%로 채우고 화면에서 싹 지움
+if splash_placeholder:
+    my_bar.progress(100)
+    time.sleep(0.2)
+    splash_placeholder.empty()
     
 if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
@@ -466,7 +478,8 @@ try:
     danger_count = len(danger_ls)
     empty_count = len(my_empty)
     
-    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br>"
+    # 💡 하이라이트 색상 완벽 복구 (총 매물: 보라색, 안전 매물: 파란색)
+    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br>"
     
     if danger_count > 0:
         master_conclusion += f"상위권에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
