@@ -203,20 +203,27 @@ div[data-testid="stExpander"] summary p {
 div[data-testid="stExpander"] {
     margin-bottom: 20px !important;
 }
+
+div[data-testid="stRadio"] label {
+    align-items: center !important; /* 동그라미와 텍스트를 수직 중앙으로 완벽하게 정렬 */
+}
 div[data-testid="stRadio"] label p {
-    font-size: 24px !important; /* 기존 18px에서 24px로 대폭 확대 */
-    font-weight: 900 !important; /* 글씨 굵기도 최대치로 상향 */
+    font-size: 24px !important;
+    font-weight: 900 !important;
     color: #1e3a8a !important;
-    padding: 5px 10px !important; /* 터치 영역(여백) 확보 */
+    padding: 0px 10px !important; /* 위아래 패딩을 지워 아래로 처지는 현상 차단 */
+    margin: 0 !important; 
+    line-height: 1.2 !important; /* 줄 간격 최적화 */
     transition: all 0.2s ease !important;
 }
 div[data-testid="stRadio"] label p:hover {
-    color: #3182f6 !important; /* 마우스 올렸을 때 색상 변화 추가 */
+    color: #3182f6 !important;
 }
 div[data-testid="stRadio"] > div {
-    gap: 30px !important; /* 메뉴와 메뉴 사이 간격을 15px -> 30px로 넉넉하게 띄움 */
+    gap: 30px !important;
     flex-wrap: wrap !important;
     padding-bottom: 10px !important;
+    align-items: center !important;
 }
 </style>
 """, unsafe_allow_html=True)
