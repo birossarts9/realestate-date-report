@@ -650,8 +650,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
                     df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
                     
-                    # 💡 층/타입 데이터 추가 추출
-                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수', '층/타입']].drop_duplicates(subset=['고유번호'], keep='last')
+                    # 💡 [수정] 층/타입/매물묶음키 데이터 추가 추출 (번호가 바뀌어도 추적하기 위함)
+                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수', '층/타입', '매물묶음키']].drop_duplicates(subset=['고유번호'], keep='last')
                     mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
                     
                     df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
@@ -661,8 +661,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
                     merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
                     merged_df['층/타입'] = merged_df['층/타입'].fillna("-")
-                    
-                    # 💡 매물 상세(동/호수 + 층/타입) 컬럼 생성
                     merged_df['매물상세'] = merged_df['동/호수'] + " (" + merged_df['층/타입'] + ")"
                     
                     merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
@@ -678,14 +676,23 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     tracking_results = []
                     global_latest_time = df['수집일시'].max()
 
+                    # 💡 [핵심 수정] 매물번호(ID) 추적이 아닌, 매물묶음키(스펙) + 내 부동산 이름으로 추적
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
                         if pd.isna(t0): continue
-                        m_num = str(row['매물번호']).strip()
-                        m_history = df[df['고유번호'].astype(str) == m_num].sort_values('수집일시')
+                        
+                        target_bundle_key = row.get('매물묶음키')
+                        
+                        # 매물묶음키를 찾지 못한 경우 (엑셀에 아예 수집된 적이 없는 번호)
+                        if pd.isna(target_bundle_key) or not target_bundle_key:
+                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (스펙 미상)"))
+                            continue
+                            
+                        # 🔍 고유번호 무시! '같은 스펙(매물묶음키)'을 가진 '내 부동산'의 매물 이력만 시간순으로 가져옴
+                        m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
                         
                         if m_history.empty:
-                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
+                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (이력 없음)"))
                             continue
                             
                         before_df = m_history[m_history['수집일시'] <= t0]
@@ -695,14 +702,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         
                         if not after_df.empty:
                             after_rank = int(after_df.iloc[0]['묶음내순위_숫자'])
-                            target_bundle = after_df.iloc[0]['매물묶음키']
                             latest_time = after_df.iloc[0]['수집일시']
                         else:
                             after_rank = pd.NA
-                            target_bundle = before_df.iloc[-1]['매물묶음키'] if not before_df.empty else ""
                             latest_time = before_df.iloc[-1]['수집일시'] if not before_df.empty else t0
 
-                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle)]['부동산명'].unique()) if target_bundle else 0
+                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle_key)]['부동산명'].unique()) if target_bundle_key else 0
                         
                         b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
                         b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "20위 밖 (권외)"
@@ -714,28 +719,21 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             a_str = f"{after_rank}위 ({a_tier})"
                             diff = (before_rank if pd.notna(before_rank) else 21) - after_rank
                             
-                            # 💡 3단계 정밀 판단 로직 적용
                             if pd.notna(before_rank) and before_rank <= 3 and after_rank <= 3:
                                 res = "🛡️ 상위권 유지중"
                             elif diff > 0: 
                                 res = f"🚀 {diff}계단 상승"
                             else: 
-                                if time_passed <= timedelta(hours=3):
-                                    res = "⏳ 인덱싱 대기중"
-                                elif time_passed <= timedelta(hours=12):
-                                    res = "🌀 롤링 밀림 (확인 지연)"
-                                else:
-                                    res = "⚠️ 변동 없음 (확인 필요)"
+                                if time_passed <= timedelta(hours=3): res = "⏳ 인덱싱 대기중"
+                                elif time_passed <= timedelta(hours=12): res = "🌀 롤링 밀림 (확인 지연)"
+                                else: res = "⚠️ 변동 없음 (확인 필요)"
                         else:
                             if time_passed <= timedelta(hours=3):
-                                a_str = "⏳ 크롤링 대기 중"
-                                res = "⏳ 인덱싱 대기중"
+                                a_str, res = "⏳ 크롤링 대기 중", "⏳ 인덱싱 대기중"
                             elif time_passed <= timedelta(hours=12):
-                                a_str = "🌀 20위 밖 (권외)"
-                                res = "🌀 롤링으로 인한 순위 확인 지연"
+                                a_str, res = "🌀 20위 밖 (권외)", "🌀 롤링으로 인한 순위 확인 지연"
                             else:
-                                a_str = "🔴 20위 밖 (권외)"
-                                res = "⚠️ 변동 없음 (확인 필요)"
+                                a_str, res = "🔴 20위 밖 (권외)", "⚠️ 변동 없음 (확인 필요)"
                                 
                         tracking_results.append((b_str, a_str, res))
                         
