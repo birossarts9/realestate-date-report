@@ -229,7 +229,7 @@ div[data-testid="stRadio"] > div {
 """, unsafe_allow_html=True)
 
 # --- 3. 유틸리티 함수 ---
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, max_entries=1, show_spinner=False)
 def load_renewal_logs():
     try:
         SHEET_ID = "1yEllJWWNwsd5FMvvgwSIvA46j10XU_8MxpRAWcs-ba8"
@@ -245,7 +245,7 @@ def clean_realtor_name(name):
     cleaned = re.sub(pattern, '', str(name)).strip()
     return cleaned if cleaned else str(name)
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(max_entries=1, show_spinner=False)
 def process_data(df):
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df.sort_values('수집일시')
@@ -285,7 +285,7 @@ def process_data(df):
     df['매물묶음키'] = df.apply(make_bundle_key, axis=1)
     return df
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=600, max_entries=1, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     KST = timezone(timedelta(hours=9))
@@ -545,7 +545,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             """)
 
     # 💡 (이사 온 위치) 여기에 함수를 미리 정의해 둡니다.
-    @st.cache_data(show_spinner=False)
+    @st.cache_data(max_entries=2, show_spinner=False)
     def get_cached_bp_df(_comp_df, _b_boosted_comp, total_sessions):
         b_ranks = _comp_df.groupby(['매물묶음키', '수집일시'])['전체순위_숫자'].min().reset_index()
         appearances = b_ranks.groupby('매물묶음키')['수집일시'].nunique()
