@@ -96,7 +96,7 @@ def mask_text(text, is_agent=False):
 # --- 1. 웹사이트 기본 세팅 및 UI 스타일링 ---
 st.set_page_config(
     page_title="TOP RANK 솔루션 | 프리미엄 부동산 자동화",
-    page_icon="logo.png", # 👑 대신 로고 파일명 입력
+    page_icon="LOGO.png", # 👑 대신 로고 파일명 입력
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -343,7 +343,7 @@ if raw_df is None:
 
 # 사이드바 맨 위에 로고 이미지 삽입
 try:
-    st.sidebar.image("logo.png", use_container_width=True)
+    st.sidebar.image("LOGO.png", use_container_width=True)
 except:
     pass # 파일이 없을 경우 에러 방지
 
