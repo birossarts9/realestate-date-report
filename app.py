@@ -309,43 +309,33 @@ def load_server_data():
     df = df[df['수집일시'] >= cutoff_date]
     return df
 
-# 💡 [로딩 화면 최적화] 이탈 방지용 대형 텍스트 및 프로그레스 바 적용
-loading_placeholder = st.empty()
-progress_placeholder = st.empty()
+# 💡 [로딩 화면 최적화] 인트로 영상을 활용한 스플래시 스크린 적용
+splash_placeholder = st.empty()
 
-# 1. 시선을 사로잡는 대형 로딩 문구 출력
-loading_placeholder.markdown("""
-    <div style='text-align: center; padding: 50px 0 20px 0;'>
-        <h2 style='color: #1e3a8a; font-weight: 800; font-size: 28px;'>🚀 최신 네이버 부동산 데이터를 동기화 중입니다...</h2>
-        <p style='color: #64748b; font-size: 18px; margin-top: 10px;'>수만 개의 시장 데이터를 분석 중입니다. (약 3~5초 소요)</p>
-    </div>
-""", unsafe_allow_html=True)
+with splash_placeholder.container():
+    # 영상을 중앙에 띄우고 아래에 로딩 문구를 배치합니다.
+    try:
+        # ⚠️ 깃허브에 올린 파일명과 대소문자가 완벽히 일치해야 합니다. (intro.mp4)
+        st.video("intro.mp4", autoplay=True, muted=True)
+    except:
+        pass
+        
+    st.markdown("""
+        <div style='text-align: center; padding: 20px 0;'>
+            <h2 style='color: #1e3a8a; font-weight: 800; font-size: 28px;'>🚀 최신 네이버 부동산 데이터를 동기화 중입니다...</h2>
+            <p style='color: #64748b; font-size: 18px; margin-top: 10px;'>수만 개의 시장 데이터를 분석 중입니다. 잠시만 기다려주세요.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-# 2. 프로그레스 바 애니메이션 (시각적 지루함 해소)
-import time
-my_bar = progress_placeholder.progress(0)
-for percent_complete in range(0, 85, 15):
-    time.sleep(0.1)
-    my_bar.progress(percent_complete)
-
-# 3. 실제 데이터 로딩 (이 구간에서 실제 시간이 소요됨)
+# 실제 데이터 로딩 (이 구간에서 3~5초가 소요되며, 그동안 위 영상이 재생됩니다)
 raw_df = load_server_data()
 
-# 4. 로딩 완료 시 100% 채우고 깔끔하게 화면에서 삭제
-my_bar.progress(100)
-time.sleep(0.2)
-loading_placeholder.empty()
-progress_placeholder.empty()
+# 데이터 로딩이 끝나면 화면에서 영상과 문구를 깔끔하게 지워버립니다!
+splash_placeholder.empty()
     
 if raw_df is None:
     st.error("🚨 서버에 데이터 파일이 없습니다.")
     st.stop()
-
-# 사이드바 맨 위에 로고 이미지 삽입
-try:
-    st.sidebar.image("LOGO.png", use_container_width=True)
-except:
-    pass # 파일이 없을 경우 에러 방지
 
 st.sidebar.title("📅 리포트 상세 설정")
 
