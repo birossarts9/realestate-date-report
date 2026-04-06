@@ -660,110 +660,157 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             
             if not df_exec.empty and len(df_exec) > 1:
                 try:
-                    df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
-                    df_exec.rename(columns={df_exec.columns[0]: '갱신시간', df_exec.columns[1]: '매물번호', df_exec.columns[2]: '상태', df_exec.columns[3]: '비고'}, inplace=True)
+                    # 1. 헤더를 첫 행으로 올리고, 절대 고장 나지 않게 '이름'으로 데이터 색출
+                    df_exec.columns = df_exec.iloc[0]
+                    df_exec = df_exec[1:].copy()
                     
-                    # 💡 [수정] 층/타입/매물묶음키 데이터 추가 추출 (번호가 바뀌어도 추적하기 위함)
+                    merged_df = df_exec.copy()
+                    # 헤더 이름이 '일시'든 '갱신시간'이든 알아서 찾도록 유연성 부여
+                    time_col = '일시' if '일시' in merged_df.columns else merged_df.columns[0]
+                    merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
+                    
+                    status_col = '갱신여부' if '갱신여부' in merged_df.columns else '상태' if '상태' in merged_df.columns else merged_df.columns[2]
+                    merged_df['상태'] = merged_df.get(status_col, '상태불명')
+                    
+                    if '매물번호' in merged_df.columns:
+                        merged_df['매물번호'] = merged_df['매물번호'].astype(str).str.strip()
+                    else:
+                        merged_df['매물번호'] = "번호없음"
+
+                    # 💡 층/타입 데이터 및 매물묶음키(스펙) 병합
                     mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수', '층/타입', '매물묶음키']].drop_duplicates(subset=['고유번호'], keep='last')
                     mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
-                    
-                    df_exec['매물번호'] = df_exec['매물번호'].astype(str).str.strip()
                     mapping_df['매물번호'] = mapping_df['매물번호'].astype(str).str.strip()
                     
-                    merged_df = pd.merge(df_exec, mapping_df, on='매물번호', how='left')
-                    merged_df['단지명'] = merged_df['단지명'].fillna("정보 수집중")
+                    merged_df = pd.merge(merged_df, mapping_df, on='매물번호', how='left')
+                    merged_df['단지명'] = merged_df['단지명'].fillna("정보 없음")
                     merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
                     merged_df['층/타입'] = merged_df['층/타입'].fillna("-")
                     merged_df['매물상세'] = merged_df['동/호수'] + " (" + merged_df['층/타입'] + ")"
                     
-                    merged_df['갱신시간'] = pd.to_datetime(merged_df['갱신시간'], errors='coerce')
                     merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
                     
-                    def get_tier(rank, total):
-                        if pd.isna(rank): return "-"
-                        rank = int(rank)
-                        if total <= 3: return "🟢상위권"
-                        elif 4 <= total <= 5: return "🟢상위권" if rank <= 2 else "🟡중위권"
-                        else: return "🟢상위권" if rank <= 3 else "🟡중위권" if rank <= 8 else "🔴하위권"
-
                     tracking_results = []
-                    global_latest_time = df['수집일시'].max()
-
-                    # 💡 [핵심 수정] 매물번호(ID) 추적이 아닌, 매물묶음키(스펙) + 내 부동산 이름으로 추적
+                    trend_data = [] # 📈 스파크라인 궤적용 데이터
+                    
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
                         if pd.isna(t0): continue
                         
                         target_bundle_key = row.get('매물묶음키')
                         
-                        # 매물묶음키를 찾지 못한 경우 (엑셀에 아예 수집된 적이 없는 번호)
                         if pd.isna(target_bundle_key) or not target_bundle_key:
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (스펙 미상)"))
+                            trend_data.append([])
                             continue
                             
-                        # 🔍 고유번호 무시! '같은 스펙(매물묶음키)'을 가진 '내 부동산'의 매물 이력만 시간순으로 가져옴
                         m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
                         
                         if m_history.empty:
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (이력 없음)"))
+                            trend_data.append([])
                             continue
                             
                         before_df = m_history[m_history['수집일시'] <= t0]
-                        after_df = m_history[m_history['수집일시'] > t0 + pd.Timedelta(seconds=10)]
+                        after_df = m_history[m_history['수집일시'] > t0]
                         
                         before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
+                        b_str = f"{before_rank}위" if pd.notna(before_rank) else "20위 밖(권외)"
                         
                         if not after_df.empty:
-                            after_rank = int(after_df.iloc[0]['묶음내순위_숫자'])
-                            latest_time = after_df.iloc[0]['수집일시']
-                        else:
-                            after_rank = pd.NA
-                            latest_time = before_df.iloc[-1]['수집일시'] if not before_df.empty else t0
-
-                        total_comp = len(df[(df['수집일시'] == latest_time) & (df['매물묶음키'] == target_bundle_key)]['부동산명'].unique()) if target_bundle_key else 0
-                        
-                        b_tier = get_tier(before_rank, total_comp) if pd.notna(before_rank) else "-"
-                        b_str = f"{before_rank}위 ({b_tier})" if pd.notna(before_rank) else "20위 밖 (권외)"
-                        
-                        time_passed = global_latest_time - t0
-                        
-                        if pd.notna(after_rank):
-                            a_tier = get_tier(after_rank, total_comp)
-                            a_str = f"{after_rank}위 ({a_tier})"
-                            diff = (before_rank if pd.notna(before_rank) else 21) - after_rank
+                            # 💡 갱신 이후 달성한 "최고 순위"와 "현재 순위" 추출
+                            best_rank = int(after_df['묶음내순위_숫자'].min())
+                            current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
                             
-                            if pd.notna(before_rank) and before_rank <= 3 and after_rank <= 3:
-                                res = "🛡️ 상위권 유지중"
-                            elif diff > 0: 
-                                res = f"🚀 {diff}계단 상승"
-                            else: 
-                                if time_passed <= timedelta(hours=3): res = "⏳ 인덱싱 대기중"
-                                elif time_passed <= timedelta(hours=12): res = "🌀 롤링 밀림 (확인 지연)"
-                                else: res = "⚠️ 변동 없음 (확인 필요)"
-                        else:
-                            if time_passed <= timedelta(hours=3):
-                                a_str, res = "⏳ 크롤링 대기 중", "⏳ 인덱싱 대기중"
-                            elif time_passed <= timedelta(hours=12):
-                                a_str, res = "🌀 20위 밖 (권외)", "🌀 롤링으로 인한 순위 확인 지연"
+                            # 📈 그래프 시각화 보정 (1위가 그래프 상단으로 솟구치도록 21에서 빼줌)
+                            ranks = after_df['묶음내순위_숫자'].tolist()
+                            trend = [21 - min(int(r), 21) for r in ranks]
+                            
+                            a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
+                            
+                            if best_rank <= 3:
+                                res = "🚀 1페이지 진입 방어"
+                            elif pd.notna(before_rank) and best_rank < before_rank:
+                                res = f"🔼 {before_rank - best_rank}계단 상승 방어"
                             else:
-                                a_str, res = "🔴 20위 밖 (권외)", "⚠️ 변동 없음 (확인 필요)"
-                                
+                                res = "⚠️ 순위 변동 없음 (롤링 극심)"
+                        else:
+                            a_str = "⏳ 수집 대기 중"
+                            res = "인덱싱 대기 중"
+                            trend = []
+                            
                         tracking_results.append((b_str, a_str, res))
+                        trend_data.append(trend)
                         
                     merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
-                    merged_df['갱신 후 순위'] = [x[1] for x in tracking_results]
+                    merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
+                    merged_df['순위 궤적'] = trend_data # 스파크라인 열 탑재
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     
-                    # 💡 여기서 표를 바로 그리지 않고 데이터만 저장합니다.
                     success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
-                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|유지', na=False)])
+                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|진입', na=False)])
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
             else:
                 success_count, up_defense_count = 0, 0
+                
+            pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
+            
+            오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
+            시스템이 자동으로 갱신한 광고 현황 보고드립니다.
+            
+            🚀 1. 자동 갱신 처리 결과
+            - 오늘 시스템이 자동으로 갱신 처리한 매물: 총 {success_count}건
+            
+            📈 2. 순위 방어 및 상승 성과
+            - 갱신 직후 상위권 방어 및 탈환 성공: 총 {up_defense_count}건 
+            - 타사에 밀려났던 매물들을 최적의 타이밍에 복구하였습니다.
+            
+            👉 오늘 자동 갱신된 매물 궤적 및 목록 확인하기
+            https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
+            
+            # (복사 버튼 출력 부분 코드는 기존과 동일하게 유지)
+            components.html(f"""
+            <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
+                <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
+                <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+                    <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+                </button>
+            </div>
+            <script>
+            document.getElementById('copyBtnPm').onclick = function() {{
+                navigator.clipboard.writeText(`{pm_briefing_text}`).then(function() {{
+                    const msg = document.getElementById('copyMsgPm');
+                    msg.innerText = '✅ 복사완료';
+                    msg.style.opacity = '1';
+                    setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
+                }});
+            }};
+            </script>
+            """, height=80)
+            
+            st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
+            
+            # 💡 [핵심] 스파크라인(LineChartColumn)을 탑재하여 표 출력!
+            if not merged_df.empty:
+                st.dataframe(
+                    merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']], 
+                    use_container_width=True,
+                    column_config={
+                        "순위 궤적": st.column_config.LineChartColumn(
+                            "순위 흐름 (갱신 이후)",
+                            y_min=0,
+                            y_max=21,
+                            help="그래프가 위로 솟구칠수록 1위에 가까운 안전한 상태를 의미하며, 아래로 꺾이면 경쟁자에 의해 밀려나고 있음을 뜻합니다."
+                        )
+                    }
+                )
+            else:
+                st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
                 
         pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
