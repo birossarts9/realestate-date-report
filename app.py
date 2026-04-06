@@ -665,52 +665,53 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     df_exec = df_exec[1:].copy()
                     
                     merged_df = df_exec.copy()
-                    # 헤더 이름이 '일시'든 '갱신시간'이든 알아서 찾도록 유연성 부여
-                    time_col = '일시' if '일시' in merged_df.columns else merged_df.columns[0]
+                    
+                    # 💡 헤더 이름이 살짝 달라도 유연하게 찾도록 세팅 (일시/갱신시간 등)
+                    time_col = '일시' if '일시' in merged_df.columns else '갱신시간' if '갱신시간' in merged_df.columns else merged_df.columns[0]
                     merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
                     
-                    status_col = '갱신여부' if '갱신여부' in merged_df.columns else '상태' if '상태' in merged_df.columns else merged_df.columns[2]
+                    status_col = '상태' if '상태' in merged_df.columns else '갱신여부' if '갱신여부' in merged_df.columns else merged_df.columns[4]
                     merged_df['상태'] = merged_df.get(status_col, '상태불명')
                     
-                    if '매물번호' in merged_df.columns:
-                        merged_df['매물번호'] = merged_df['매물번호'].astype(str).str.strip()
-                    else:
-                        merged_df['매물번호'] = "번호없음"
-
-                    # 💡 층/타입 데이터 및 매물묶음키(스펙) 병합
-                    mapping_df = df[df['고유번호'] != '기록없음'][['고유번호', '단지명', '동/호수', '층/타입', '매물묶음키']].drop_duplicates(subset=['고유번호'], keep='last')
-                    mapping_df.rename(columns={'고유번호': '매물번호'}, inplace=True)
-                    mapping_df['매물번호'] = mapping_df['매물번호'].astype(str).str.strip()
+                    # 🚨 [핵심 해결] 엑셀에서 번호로 스펙을 찾지 않고, 봇이 적어준 '매물스펙'을 다이렉트로 가져옵니다!
+                    spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세' if '매물상세' in merged_df.columns else '매물묶음키' if '매물묶음키' in merged_df.columns else merged_df.columns[2]
                     
-                    merged_df = pd.merge(merged_df, mapping_df, on='매물번호', how='left')
-                    merged_df['단지명'] = merged_df['단지명'].fillna("정보 없음")
-                    merged_df['동/호수'] = merged_df['동/호수'].fillna("-")
-                    merged_df['층/타입'] = merged_df['층/타입'].fillna("-")
-                    merged_df['매물상세'] = merged_df['동/호수'] + " (" + merged_df['층/타입'] + ")"
-                    
-                    merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)]
+                    merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
                     
                     tracking_results = []
                     trend_data = [] # 📈 스파크라인 궤적용 데이터
+                    display_danji = []
+                    display_detail = []
                     
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
                         if pd.isna(t0): continue
                         
-                        target_bundle_key = row.get('매물묶음키')
+                        target_bundle_key = str(row.get(spec_col, '')).strip()
                         
-                        if pd.isna(target_bundle_key) or not target_bundle_key:
+                        if not target_bundle_key or target_bundle_key == "nan":
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (스펙 미상)"))
                             trend_data.append([])
+                            display_danji.append("정보 없음")
+                            display_detail.append("-")
                             continue
                             
+                        # 🔍 지문(스펙)을 들고 엑셀에서 해당 매물의 전체 생애주기 이력을 쫙 뽑아옴
                         m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
                         
                         if m_history.empty:
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (이력 없음)"))
                             trend_data.append([])
+                            # 화면 표시용 텍스트 쪼개기
+                            parts = target_bundle_key.split('|')
+                            display_danji.append(parts[0] if len(parts) > 0 else "정보 없음")
+                            display_detail.append(f"{parts[1]} ({parts[2]})" if len(parts) > 2 else target_bundle_key)
                             continue
                             
+                        # 💡 정상 추적된 경우 단지명과 상세정보 예쁘게 세팅
+                        display_danji.append(m_history.iloc[-1]['단지명'])
+                        display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
+                        
                         before_df = m_history[m_history['수집일시'] <= t0]
                         after_df = m_history[m_history['수집일시'] > t0]
                         
@@ -742,6 +743,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         tracking_results.append((b_str, a_str, res))
                         trend_data.append(trend)
                         
+                    merged_df['단지명'] = display_danji
+                    merged_df['매물상세'] = display_detail
                     merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                     merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
