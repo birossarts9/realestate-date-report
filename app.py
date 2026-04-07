@@ -646,15 +646,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
-                {"갱신시간": (now_kst - timedelta(minutes=12)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "15위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 14계단 상승"},
-                {"갱신시간": (now_kst - timedelta(minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 6계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=1, minutes=20)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**9동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 4계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=2, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "19위 (🔴하위권)", "갱신 후 순위": "3위 (🟢상위권)", "성과 요약": "🚀 16계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=3, minutes=40)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "매물상세": "1**2동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "11위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 10계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=5, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산펜테리움리버테라스I", "매물상세": "7**5동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 5계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=6, minutes=50)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산신도시센트럴에일린의뜰", "매물상세": "8**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "14위 (🔴하위권)", "갱신 후 순위": "1위 (🟢상위권)", "성과 요약": "🚀 13계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=8, minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**3동 (1**A)", "상태": "✅ 성공", "갱신 전 순위": "3위 (🟢상위권)", "갱신 후 순위": "3위 (🟢상위권)", "성과 요약": "🛡️ 상위권 유지중"},
-                {"갱신시간": (now_kst - timedelta(hours=10, minutes=25)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**1동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "9위 (🔴하위권)", "갱신 후 순위": "2위 (🟢상위권)", "성과 요약": "🚀 7계단 상승"},
+                {"갱신시간": (now_kst - timedelta(minutes=12)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "15위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 1위)", "순위 궤적": [20, 20, 20, 20, 20], "성과 요약": "🚀 14계단 상승"},
+                {"갱신시간": (now_kst - timedelta(minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "8위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 2위 (현재 2위)", "순위 궤적": [19, 19, 19, 19, 19], "성과 요약": "🚀 6계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=1, minutes=20)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**9동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "5위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 1위)", "순위 궤적": [20, 20, 20, 20, 20], "성과 요약": "🚀 4계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=2, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "19위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 3위 (현재 3위)", "순위 궤적": [18, 18, 18, 18, 18], "성과 요약": "🚀 16계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=3, minutes=40)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "매물상세": "1**2동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "11위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 3위)", "순위 궤적": [20, 19, 18, 18, 18], "성과 요약": "🚀 10계단 상승"},
+                {"갱신시간": (now_kst - timedelta(hours=5, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산펜테리움리버테라스I", "매물상세": "7**5동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "7위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 2위 (현재 5위)", "순위 궤적": [19, 18, 17, 16, 16], "성과 요약": "🚀 5계단 상승"}
             ]
             merged_df = pd.DataFrame(dummy_logs)
             success_count = len(merged_df)
@@ -708,13 +705,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         if m_history.empty:
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (이력 없음)"))
                             trend_data.append([])
-                            # 화면 표시용 텍스트 쪼개기
                             parts = target_bundle_key.split('|')
                             display_danji.append(parts[0] if len(parts) > 0 else "정보 없음")
                             display_detail.append(f"{parts[1]} ({parts[2]})" if len(parts) > 2 else target_bundle_key)
                             continue
                             
-                        # 💡 정상 추적된 경우 단지명과 상세정보 예쁘게 세팅
                         display_danji.append(m_history.iloc[-1]['단지명'])
                         display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
                         
@@ -725,11 +720,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         b_str = f"{before_rank}위" if pd.notna(before_rank) else "20위 밖(권외)"
                         
                         if not after_df.empty:
-                            # 💡 갱신 이후 달성한 "최고 순위"와 "현재 순위" 추출
                             best_rank = int(after_df['묶음내순위_숫자'].min())
                             current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
                             
-                            # 📈 그래프 시각화 보정 (1위가 그래프 상단으로 솟구치도록 21에서 빼줌)
                             ranks = after_df['묶음내순위_숫자'].tolist()
                             trend = [21 - min(int(r), 21) for r in ranks]
                             
@@ -754,11 +747,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                     merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
-                    merged_df['순위 궤적'] = trend_data # 스파크라인 열 탑재
+                    merged_df['순위 궤적'] = trend_data 
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     
-                    success_count = len(merged_df[merged_df['상태'].str.contains('성공', na=False)])
+                    success_count = len(merged_df[merged_df['상태'].str.contains('성공|완료', na=False)])
                     up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|진입', na=False)])
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
@@ -781,7 +774,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 👉 오늘 자동 갱신된 매물 목록 확인하기
 https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
 
-        # 💡 [순서 정상화] 1. 제목과 복사 버튼 출력 (이 아래 코드는 그대로 유지)
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
             <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
@@ -802,16 +794,25 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </script>
         """, height=80)
 
-        # 💡 [순서 정상화] 2. 안내 멘트 출력
         st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
         
-        # 💡 [순서 정상화] 3. 표 출력!
+        # 💡 [핵심 복구] 스파크라인 및 단일 표 출력!
         if not merged_df.empty:
-            st.dataframe(merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 순위', '성과 요약']], use_container_width=True)
+            st.dataframe(
+                merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']], 
+                use_container_width=True,
+                column_config={
+                    "순위 궤적": st.column_config.LineChartColumn(
+                        "순위 흐름 (갱신 이후)",
+                        y_min=0,
+                        y_max=21,
+                        help="그래프가 위로 솟구칠수록 1위에 가까운 안전한 상태를 의미하며, 아래로 꺾이면 경쟁자에 의해 밀려나고 있음을 뜻합니다."
+                    )
+                }
+            )
         else:
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
-# 표와 결제 배너 사이에 넉넉한 여백(줄바꿈 2번)을 추가합니다.
         st.markdown("<br><br>", unsafe_allow_html=True)
 
         
