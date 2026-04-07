@@ -290,28 +290,34 @@ def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     KST = timezone(timedelta(hours=9))
     now = datetime.now(KST)
-    target_files = []
+    base_names = []
 
-    current_file = f"naver_market_report_{now.strftime('%Y_%m')}.xlsx"
-    target_files.append(current_file)
+    # 1. 이번 달 데이터 이름 (확장자 제외)
+    base_names.append(f"naver_market_report_{now.strftime('%Y_%m')}")
     
+    # 2. 지난 달 데이터 (15일 이전인 경우)
     if now.day <= 15:
         last_month = now.replace(day=1) - timedelta(days=1)
-        last_month_file = f"naver_market_report_{last_month.strftime('%Y_%m')}.xlsx"
-        target_files.append(last_month_file)
+        base_names.append(f"naver_market_report_{last_month.strftime('%Y_%m')}")
         
-    if os.path.exists(os.path.join(current_dir, "data.xlsx")):
-        target_files.append("data.xlsx")
+    # 3. 구형 데이터 (data)
+    base_names.append("data")
         
     df_list = []
-    for file_name in target_files:
-        file_path = os.path.join(current_dir, file_name)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_excel(file_path)
+    for base_name in base_names:
+        parquet_path = os.path.join(current_dir, f"{base_name}.parquet")
+        excel_path = os.path.join(current_dir, f"{base_name}.xlsx")
+        
+        try:
+            # 💡 핵심: 파케이 파일이 존재하면 초고속으로 읽고, 없으면 엑셀을 읽습니다.
+            if os.path.exists(parquet_path):
+                df = pd.read_parquet(parquet_path)
                 df_list.append(df)
-            except Exception:
-                pass 
+            elif os.path.exists(excel_path):
+                df = pd.read_excel(excel_path)
+                df_list.append(df)
+        except Exception:
+            pass 
                 
     if not df_list:
         return None
