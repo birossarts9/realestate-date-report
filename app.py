@@ -766,61 +766,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             else:
                 success_count, up_defense_count = 0, 0
                 
-            pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
-            
-            오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
-            시스템이 자동으로 갱신한 광고 현황 보고드립니다.
-            
-            🚀 1. 자동 갱신 처리 결과
-            - 오늘 시스템이 자동으로 갱신 처리한 매물: 총 {success_count}건
-            
-            📈 2. 순위 방어 및 상승 성과
-            - 갱신 직후 상위권 방어 및 탈환 성공: 총 {up_defense_count}건 
-            - 타사에 밀려났던 매물들을 최적의 타이밍에 복구하였습니다.
-            
-            👉 오늘 자동 갱신된 매물 궤적 및 목록 확인하기
-            https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
-            
-            # (복사 버튼 출력 부분 코드는 기존과 동일하게 유지)
-            components.html(f"""
-            <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
-                <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
-                <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
-                    <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
-                </button>
-            </div>
-            <script>
-            document.getElementById('copyBtnPm').onclick = function() {{
-                navigator.clipboard.writeText(`{pm_briefing_text}`).then(function() {{
-                    const msg = document.getElementById('copyMsgPm');
-                    msg.innerText = '✅ 복사완료';
-                    msg.style.opacity = '1';
-                    setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
-                }});
-            }};
-            </script>
-            """, height=80)
-            
-            st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
-            
-            # 💡 [핵심] 스파크라인(LineChartColumn)을 탑재하여 표 출력!
-            if not merged_df.empty:
-                st.dataframe(
-                    merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']], 
-                    use_container_width=True,
-                    column_config={
-                        "순위 궤적": st.column_config.LineChartColumn(
-                            "순위 흐름 (갱신 이후)",
-                            y_min=0,
-                            y_max=21,
-                            help="그래프가 위로 솟구칠수록 1위에 가까운 안전한 상태를 의미하며, 아래로 꺾이면 경쟁자에 의해 밀려나고 있음을 뜻합니다."
-                        )
-                    }
-                )
-            else:
-                st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
-                
         pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
 오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.
