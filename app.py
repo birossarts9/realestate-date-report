@@ -679,7 +679,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     # 🚨 [핵심 해결] 엑셀에서 번호로 스펙을 찾지 않고, 봇이 적어준 '매물스펙'을 다이렉트로 가져옵니다!
                     spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세' if '매물상세' in merged_df.columns else '매물묶음키' if '매물묶음키' in merged_df.columns else merged_df.columns[2]
                     
-                    merged_df = merged_df[(merged_df['갱신시간'] >= start_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
+                    # 💡 [영업용 필터 적용] 무조건 최근 72시간(3일) 이내의 로그만 자름
+                    show_limit_dt = pd.to_datetime(datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)) - timedelta(days=3)
+                    merged_df = merged_df[(merged_df['갱신시간'] >= show_limit_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
+                    
+                    # 💡 [방어기제] 에러 났거나 변동 없는 찝찝한 내역은 숨기고, '성공'한 것만 보여줌
+                    merged_df = merged_df[merged_df['상태'].str.contains('성공|완료', na=False)]
                     
                     tracking_results = []
                     trend_data = [] # 📈 스파크라인 궤적용 데이터
