@@ -8,3 +8,4 @@ streamlit-autorefresh
 python-calamine
 oauth2client
 gspread
+pyarrow
