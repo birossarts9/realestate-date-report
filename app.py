@@ -532,32 +532,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 📊 2. 주요 경쟁사 광고 패턴
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
-- 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
+# ... (위쪽 브리핑 텍스트 코드) ...
+    - 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
     # --- UI 렌더링 시작 ---
     st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
-
-    <textarea id="hiddenText" style="display:none;">{briefing_text}</textarea>
-
-    <script>
-    document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
-    document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
-    document.getElementById('copyBtn').onclick = function() {{
-        // 💡 숨겨둔 상자에서 텍스트를 꺼내오면 줄바꿈/특수문자 에러가 원천 차단됩니다.
-        const textToCopy = document.getElementById('hiddenText').value;
-        navigator.clipboard.writeText(textToCopy).then(function() {{
-            const btn = document.getElementById('copyBtn');
-            const msg = document.getElementById('copyMsg');
-            btn.style.color = '#10b981';
-            msg.innerText = '✅ 복사완료';
-            msg.style.opacity = '1';
-            setTimeout(() => {{ btn.style.color = '#b0bec5'; msg.style.opacity = '0'; }}, 2000);
-        }}).catch(function(err) {{
-            console.error('복사 실패:', err);
-        }});
-    }};
-    </script>
-    """, height=80)
 
     if IS_DEMO_MODE:
         with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
