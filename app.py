@@ -534,23 +534,24 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
 - 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
-    safe_briefing_text = json.dumps(briefing_text)
-
     # --- UI 렌더링 시작 ---
     components.html(f"""
     <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
-    <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
-    <button id="copyBtn" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; transition: all 0.2s; outline: none;" title="오늘의 브리핑 문구 복사">
-    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
-    <span id="copyMsg" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
-    </button>
+        <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
+        <button id="copyBtn" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #b0bec5; transition: all 0.2s; outline: none;" title="오늘의 브리핑 문구 복사">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+            <span id="copyMsg" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+        </button>
     </div>
+
+    <textarea id="hiddenText" style="display:none;">{briefing_text}</textarea>
+
     <script>
     document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
     document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
     document.getElementById('copyBtn').onclick = function() {{
-        // 💡 [핵심 수정] 포장된 텍스트를 변수에 담아서 안전하게 클립보드에 복사합니다.
-        const textToCopy = {safe_briefing_text};
+        // 💡 숨겨둔 상자에서 텍스트를 꺼내오면 줄바꿈/특수문자 에러가 원천 차단됩니다.
+        const textToCopy = document.getElementById('hiddenText').value;
         navigator.clipboard.writeText(textToCopy).then(function() {{
             const btn = document.getElementById('copyBtn');
             const msg = document.getElementById('copyMsg');
