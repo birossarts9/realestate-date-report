@@ -12,6 +12,7 @@ import threading
 from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components
 from oauth2client.service_account import ServiceAccountCredentials
+import json
 
 # 1. 시트 접근 권한 설정
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -533,6 +534,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
 - 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
+    safe_briefing_text = json.dumps(briefing_text)
+
     # --- UI 렌더링 시작 ---
     components.html(f"""
     <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
@@ -546,13 +549,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
     document.getElementById('copyBtn').onmouseover = function() {{ this.style.color = '#90a4ae'; }};
     document.getElementById('copyBtn').onmouseout = function() {{ this.style.color = '#b0bec5'; }};
     document.getElementById('copyBtn').onclick = function() {{
-        navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
+        // 💡 [핵심 수정] 포장된 텍스트를 변수에 담아서 안전하게 클립보드에 복사합니다.
+        const textToCopy = {safe_briefing_text};
+        navigator.clipboard.writeText(textToCopy).then(function() {{
             const btn = document.getElementById('copyBtn');
             const msg = document.getElementById('copyMsg');
             btn.style.color = '#10b981';
             msg.innerText = '✅ 복사완료';
             msg.style.opacity = '1';
             setTimeout(() => {{ btn.style.color = '#b0bec5'; msg.style.opacity = '0'; }}, 2000);
+        }}).catch(function(err) {{
+            console.error('복사 실패:', err);
         }});
     }};
     </script>
