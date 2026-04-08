@@ -457,6 +457,10 @@ try:
     boosted_raw = boosted_raw[(boosted_raw['수집일시'] >= start_dt) & (boosted_raw['수집일시'] <= end_dt)]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
     
+    # 👇 [추가할 코드] 경쟁사 갱신 데이터도 현재 고객의 타겟 단지 안에서만 찾도록 자물쇠를 채웁니다!
+    if target_complexes:
+        boosted_df = boosted_df[boosted_df['단지명'].isin(target_complexes)].copy()
+    
     if not boosted_df.empty:
         battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='경쟁사_갱신횟수')
         real_red_oceans = battle_grounds[battle_grounds['경쟁사_갱신횟수'] >= 3].sort_values('경쟁사_갱신횟수', ascending=False)
@@ -1215,17 +1219,18 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             filter_comp = st.selectbox("단지 필터", complex_list_with_all, key="ms_comp")
             ms_df = ms_counts.copy()
             if filter_comp != "전체 단지": ms_df = ms_df[ms_df['단지명'] == filter_comp]
-            agg_ms = ms_df.groupby('부동산명').agg({'매물건수':'sum', '총점수':'sum'}).reset_index().sort_values('총점수', ascending=False)
+            
+            # 💡 [핵심 수정] 먼저 이름을 축약한 뒤에 그룹(groupby)으로 묶어야 겹치는 막대기 없이 깔끔하게 합산됩니다.
+            ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
+            agg_ms = ms_df.groupby('부동산명_축약').agg({'매물건수':'sum', '총점수':'sum'}).reset_index().sort_values('총점수', ascending=False)
             
             c_m1, c_m2 = st.columns([1, 1])
             with c_m1:
-                ms_show = agg_ms.copy()
-                ms_show['부동산명'] = ms_show['부동산명'].apply(lambda x: mask_text(x, True))
-                st.dataframe(ms_show, use_container_width=True)
+                st.dataframe(agg_ms.rename(columns={'부동산명_축약': '부동산명'}), use_container_width=True)
             with c_m2:
-                agg_ms['부동산명_축약'] = agg_ms['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
                 top10 = agg_ms.head(10).sort_values('총점수', ascending=True)
                 fig = px.bar(top10, x='총점수', y='부동산명_축약', orientation='h', title=f"{mask_text(filter_comp)} 점유율 Top 10", text='총점수', color_discrete_sequence=['#3182f6'])
+                fig.update_layout(barmode='group') # 만약을 위한 겹침 방지 레이아웃 강제 설정
                 st.plotly_chart(fig, use_container_width=True)
                 
         with ana_tab2:
