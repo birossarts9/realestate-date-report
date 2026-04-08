@@ -1192,8 +1192,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         st.markdown(f"""
                         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
                             <strong style="color:#1e3a8a; font-size: 16px;">💡 AI 대표님 매물 예산 컨설팅 요약</strong><br>
-                            <span style="color:#ef4444; font-weight:bold;">🚨 광고비 누수 경고:</span> 현재 대표님 매물 중 <b>{waste_count}개</b>는 알고리즘 점수가 낮아 봇을 돌려도 20위 밖으로 튕겨나갑니다. 즉시 갱신을 멈추고 집주인 인증을 다시 받으세요.<br>
-                            <span style="color:#10b981; font-weight:bold;">🎯 집중 타격 추천:</span> 반면 <b>{focus_count}개</b>는 상위권 안착률이 매우 높은 S급 매물입니다. 이 매물들에 자동 갱신(봇)을 집중하시면 1위를 독식할 수 있습니다.
+                            <span style="color:#ef4444; font-weight:bold;">🚨 광고비 누수 경고:</span> 현재 대표님 매물 중 <b>{waste_count}개</b>는 알고리즘 점수가 낮아 봇을 돌려도 20위 밖으로 튕겨나갑니다.<br>
+                            <span style="color:#10b981; font-weight:bold;">🎯 집중 타격 추천:</span> 반면 <b>{focus_count}개</b>는 상위권 안착률이 매우 높은 S급 매물입니다. 이 매물들에 자동 갱신(봇)을 집중하시면 상위권을 차지할 수 있습니다.
                         </div>
                         """, unsafe_allow_html=True)
 
