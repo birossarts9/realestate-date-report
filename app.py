@@ -535,6 +535,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
     # --- UI 렌더링 시작 ---
+    st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
+
     components.html(f"""
     <div style="display: flex; align-items: center; margin-bottom: 25px; font-family: sans-serif;">
         <h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin: 0;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>
@@ -618,13 +620,31 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
-        # 💡 [시인성 극대화] 배경은 눈이 편안한 연한 색, 글씨 크기는 22px로 시원하게 확대
+        # 💡 1. 타이틀과 복사 버튼을 가로로 나란히 배치
+        components.html(f"""
+        <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px;">
+            <span style="font-size: 32px; margin-right: 15px;">💡</span>
+            <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
+            <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="아침 브리핑 복사">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+                <span id="copyMsgAm" style="font-size: 15px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
+            </button>
+        </div>
+        <script>
+        document.getElementById('copyBtnAm').onclick = function() {{
+            navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
+                const msg = document.getElementById('copyMsgAm');
+                msg.innerText = '✅ 오전 브리핑 복사완료';
+                msg.style.opacity = '1';
+                setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
+            }});
+        }};
+        </script>
+        """, height=60)
+
+        # 💡 2. 그 바로 아래에 마스터 결론 텍스트 블록 배치
         st.markdown(f"""
-        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 30px; border-radius: 12px; margin-bottom: 25px;">
-            <div style="display: flex; align-items: center; margin-bottom: 20px;">
-                <span style="font-size: 32px; margin-right: 15px;">💡</span>
-                <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
-            </div>
+        <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px;">
             <div style="font-size: 22px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
                 {master_conclusion}
             </div>
