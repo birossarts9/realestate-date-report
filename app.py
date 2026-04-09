@@ -225,7 +225,11 @@ def load_renewal_logs():
 
 def clean_realtor_name(name):
     pattern = r'공인중개사사무소|공인중개사|중개사무소|부동산|중개사|공인|중개|사무소'
-    cleaned = re.sub(pattern, '', str(name)).strip()
+    cleaned = re.sub(pattern, '', str(name))
+    
+    # ⭐ [핵심 추가] 글자 사이의 모든 띄어쓰기(공백)를 흔적도 없이 날려버립니다.
+    cleaned = re.sub(r'\s+', '', cleaned)
+    
     return cleaned if cleaned else str(name)
 
 @st.cache_data(max_entries=1, show_spinner=False)
