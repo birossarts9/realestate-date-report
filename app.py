@@ -231,15 +231,28 @@ def clean_realtor_name(name):
 @st.cache_data(max_entries=1, show_spinner=False)
 def process_data(df):
     df['수집일시'] = pd.to_datetime(df['수집일시'])
-    df = df.sort_values('수집일시')
-    time_diff_mins = df['수집일시'].diff().dt.total_seconds() / 60.0
-    df['새_세션'] = (time_diff_mins > 40) | time_diff_mins.isna()
-    df['세션ID'] = df['새_세션'].cumsum()
     
-    session_rep = df.groupby('세션ID')['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
-    df = pd.merge(df, session_rep, on='세션ID', how='left')
+    # ⭐ [핵심 해결] 전체 시간이 아닌 '단지명' 기준으로 먼저 정렬합니다.
+    df = df.sort_values(['단지명', '수집일시'])
+    
+    # ⭐ '같은 단지' 내에서 앞뒤 데이터의 시간 차이를 계산합니다.
+    time_diff_mins = df.groupby('단지명')['수집일시'].diff().dt.total_seconds() / 60.0
+    
+    # 간격이 40분 이상 차이나면 새로운 세션(회차)으로 간주합니다.
+    df['새_세션'] = (time_diff_mins > 40) | time_diff_mins.isna()
+    
+    # 단지별로 1회차, 2회차 세션 번호를 매깁니다.
+    df['세션ID'] = df.groupby('단지명')['새_세션'].cumsum()
+    
+    # 각 단지의 세션별 대표 시간을 구해서 오차를 통일시킵니다.
+    session_rep = df.groupby(['단지명', '세션ID'])['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
+    df = pd.merge(df, session_rep, on=['단지명', '세션ID'], how='left')
     df['수집일시'] = df['대표수집일시']
     
+    # 전체 데이터를 다시 시간순으로 정렬하여 차트가 정상적으로 그려지게 합니다.
+    df = df.sort_values('수집일시')
+    
+    # (이하 기존 왜곡 영역 및 파싱 로직 동일 유지)
     session_times = df['수집일시'].drop_duplicates().sort_values()
     gap_check = session_times.diff().dt.total_seconds() / 3600.0
     gap_starts = session_times[gap_check > 2.5].tolist()
