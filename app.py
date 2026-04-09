@@ -233,7 +233,7 @@ def process_data(df):
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df.sort_values('수집일시')
     time_diff_mins = df['수집일시'].diff().dt.total_seconds() / 60.0
-    df['새_세션'] = (time_diff_mins > 5) | time_diff_mins.isna()
+    df['새_세션'] = (time_diff_mins > 40) | time_diff_mins.isna()
     df['세션ID'] = df['새_세션'].cumsum()
     
     session_rep = df.groupby('세션ID')['수집일시'].min().dt.floor('min').reset_index(name='대표수집일시')
