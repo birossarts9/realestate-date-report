@@ -1324,11 +1324,16 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     elif freq <= 8.0: return "🐢 주 1~2회"
                     else: return "💤 비정기적 (월 1~2회)"
 
-                realtor_stats = boosted_df.groupby('부동산명').agg(
-                    총횟수=('부동산명', 'count'),
+                boosted_df['부동산명_정제'] = boosted_df['부동산명'].apply(clean_realtor_name)
+                
+                realtor_stats = boosted_df.groupby('부동산명_정제').agg(
+                    총횟수=('부동산명_정제', 'count'),
                     평균시간=('활동시간대', lambda x: int(round(x.mean()))),
                     갱신빈도=('수집일시', calc_freq) 
                 ).reset_index()
+                
+                # 아래 출력 코드가 그대로 작동하도록 컬럼명을 원래대로(부동산명) 돌려놓습니다.
+                realtor_stats = realtor_stats.rename(columns={'부동산명_정제': '부동산명'})
                 
                 stat_df_final = realtor_stats.sort_values('총횟수', ascending=False)
                 
