@@ -564,7 +564,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.session_state['last_logged_menu'] = selected_menu
     else:
         if st.session_state['last_logged_menu'] != selected_menu:
-            log_visitor_to_gsheets(tracking_id, action=f"열람_{selected_menu}")
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
