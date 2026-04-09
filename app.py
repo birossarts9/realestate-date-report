@@ -712,20 +712,26 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
         
                             before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
-                            before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else 999
-                            b_str = f"{before_rank}위" if before_rank != 999 else "20위 밖(권외)"
         
+                            # ⭐ 묶음내순위는 20위 제한이 없으므로 그대로 가져옴 (없으면 None)
+                            before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
+                            b_str = f"{before_rank}위" if before_rank is not None else "신규 진입"
+                    
                             if not after_df.empty:
                                 best_rank = int(after_df['묶음내순위_숫자'].min())
                                 current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
                                 
-                                # 묶음내 순위 그대로 가져오기
-                                trend = [int(r) for r in after_df['묶음내순위_숫자'].tolist()]
+                                # ⭐ 그래프 우상향을 위한 '상승폭' 계산
+                                # 기준점: 갱신 전 순위 (없으면 갱신 후 가장 낮았던 순위)
+                                base_rank = before_rank if before_rank is not None else int(after_df['묶음내순위_숫자'].max())
+                                trend = [(base_rank - int(r)) for r in after_df['묶음내순위_숫자'].tolist()]
+                                
                                 a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
-        
+                    
+                                # 성과 요약 판단
                                 if best_rank <= 3:
                                     res = "🚀 상위권 진입 방어"
-                                elif before_rank == 999 or best_rank < before_rank:
+                                elif before_rank is None or best_rank < before_rank:
                                     res = "🔼 순위 상승"
                                 elif best_rank == before_rank:
                                     res = "➖ 순위 유지"
