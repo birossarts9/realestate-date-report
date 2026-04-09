@@ -673,9 +673,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
                     
                     # '성공' 필터 및 내 부동산 필터
-                    merged_df = merged_df[merged_df['상태'].str.contains('성공|완료', na=False)]
+                    merged_df = merged_df[merged_df['상태'].astype(str).str.contains('성공|완료', na=False)]
                     realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
-                    merged_df = merged_df[merged_df[realtor_col].str.contains(filter_realtor_name, na=False)].copy()
+                    merged_df = merged_df[merged_df[realtor_col].astype(str).str.contains(filter_realtor_name, na=False)].copy()
 
                     # 🚨 [여기서부터 빠졌던 순위 추적 루프 시작]
                     tracking_results, trend_data, display_danji, display_detail = [], [], [], []
@@ -684,7 +684,16 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
                         target_bundle_key = str(row.get(spec_col, '')).strip()
-                        m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
+                        parts = [p.strip() for p in target_bundle_key.split('|')]
+                        
+                        if len(parts) >= 5:
+                            # 크롤러 규격을 대시보드 규격으로 변환
+                            danji_name = parts[0]
+                            converted_key = f"{parts[1]} | {parts[2]} | {parts[3]} | {parts[4]}"
+                            # 1번 문제 방지를 위해 여기서도 .astype(str) 적용
+                            m_history = df[(df['단지명'] == danji_name) & (df['매물묶음키'] == converted_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
+                        else:
+                            m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
                         
                         if m_history.empty:
                             tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
