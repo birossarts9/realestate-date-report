@@ -686,12 +686,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         merged_df = merged_df.drop_duplicates(subset=[spec_col], keep='first')
         
                         tracking_results, trend_data, display_danji, display_detail = [], [], [], []
+                        total_defense_seconds = 0  # 전체 누적 방어 시간 계산용
         
                         for idx, row in merged_df.iterrows():
                             t0 = row['갱신시간']
                             raw_key = str(row.get(spec_col, '')).strip()
         
-                            # ⭐ [해결 2] 누락되었던 크롤러 키 파싱 로직 결합
                             parts = [p.strip() for p in raw_key.split('|')]
                             if len(parts) >= 5:
                                 target_bundle_key = f"{parts[1]} | {parts[2]} | {parts[3]} | {parts[4]}"
@@ -700,11 +700,10 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                                 target_bundle_key = raw_key
                                 danji_cond = True
         
-                            # 파싱된 키로 정확하게 매칭
                             m_history = df[danji_cond & (df['매물묶음키'] == target_bundle_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
         
                             if m_history.empty:
-                                tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
+                                tracking_results.append(("기록 없음", "기록 없음", "추적 불가", "-"))
                                 trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
                                 continue
         
@@ -712,54 +711,72 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
         
                             before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
-        
-                            # ⭐ 묶음내순위는 20위 제한이 없으므로 그대로 가져옴 (없으면 None)
+                            
                             before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
                             b_str = f"{before_rank}위" if before_rank is not None else "신규 진입"
-                    
+        
                             if not after_df.empty:
                                 best_rank = int(after_df['묶음내순위_숫자'].min())
                                 current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
                                 
-                                # ⭐ 그래프 우상향을 위한 '상승폭' 계산
-                                # 기준점: 갱신 전 순위 (없으면 갱신 후 가장 낮았던 순위)
+                                # [그래프 우상향] 상승폭 계산
                                 base_rank = before_rank if before_rank is not None else int(after_df['묶음내순위_숫자'].max())
                                 trend = [(base_rank - int(r)) for r in after_df['묶음내순위_숫자'].tolist()]
                                 
                                 a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
-                    
-                                # 성과 요약 판단
-                                if best_rank <= 3:
+        
+                                # ⭐ 1. 롤링 상태 메시지 적용
+                                if current_rank > best_rank:
+                                    res = "🔄 네이버 롤링 중"
+                                elif best_rank <= 3:
                                     res = "🚀 상위권 진입 방어"
                                 elif before_rank is None or best_rank < before_rank:
                                     res = "🔼 순위 상승"
-                                elif best_rank == before_rank:
-                                    res = "➖ 순위 유지"
                                 else:
-                                    res = "🔽 순위 하락"
-                            else:
-                                a_str, res, trend = "⏳ 수집 대기 중", "인덱싱 대기 중", []
+                                    res = "➖ 순위 유지"
         
-                            tracking_results.append((b_str, a_str, res))
+                                # ⭐ 2. 누적 점유 시간 (상위 3위 이내) 계산
+                                item_defense_seconds = 0
+                                sorted_after = after_df.sort_values('수집일시')
+                                prev_time = pd.to_datetime(t0)
+        
+                                for _, r in sorted_after.iterrows():
+                                    curr_time = pd.to_datetime(r['수집일시'])
+                                    if int(r['묶음내순위_숫자']) <= 3:  # 3위 이내일 때만 누적
+                                        item_defense_seconds += (curr_time - prev_time).total_seconds()
+                                    prev_time = curr_time
+        
+                                total_defense_seconds += item_defense_seconds
+        
+                                # 개별 매물 시간 포맷팅 (X시간 Y분)
+                                h = int(item_defense_seconds // 3600)
+                                m = int((item_defense_seconds % 3600) // 60)
+                                time_str = f"{h}시간 {m}분" if h > 0 else f"{m}분" if m > 0 else "-"
+        
+                            else:
+                                a_str, res, trend, time_str = "⏳ 수집 대기 중", "인덱싱 대기 중", [], "-"
+        
+                            tracking_results.append((b_str, a_str, res, time_str))
                             trend_data.append(trend)
         
                         merged_df['단지명'], merged_df['매물상세'] = display_danji, display_detail
                         merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                         merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
                         merged_df['성과 요약'] = [x[2] for x in tracking_results]
+                        merged_df['상위(3위) 방어시간'] = [x[3] for x in tracking_results] # 새 컬럼 추가
                         merged_df['순위 궤적'] = trend_data
         
                         merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
-        
                         success_count = len(merged_df)
-                        # ⭐ 빈 데이터 프레임 에러 방지를 위해 astype(str) 한 번 더 강제화
-                        up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입', na=False)])
+                        up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
                         
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
+                    total_defense_seconds = 0
             else:
                 success_count, up_defense_count = 0, 0
+                total_defense_seconds = 0
 
 # 브리핑 텍스트 및 UI 렌더링 코드는 동일하게 이어집니다.
                 
@@ -798,17 +815,21 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </script>
         """, height=80)
 
-        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 광고를 갱신하여 상위권을 탈환한 내역입니다.")
-
+        total_h = int(total_defense_seconds // 3600)
+        total_m = int((total_defense_seconds % 3600) // 60)
+        total_time_str = f"{total_h}시간 {total_m}분" if total_h > 0 else f"{total_m}분"
+        
+        st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {total_time_str}**")
+        st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 갱신하여 상위권을 탈환하고 방어한 내역입니다.")
+        
         if not merged_df.empty:
             st.dataframe(
-                merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']],
+                merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '상위(3위) 방어시간', '순위 궤적', '성과 요약']],
                 use_container_width=True,
                 column_config={
                     "순위 궤적": st.column_config.LineChartColumn(
-                        "순위 흐름 (갱신 이후)",
-                        # ⭐ y_min, y_max를 삭제하여 실제 순위 숫자가 제대로 툴팁에 찍히게 만듦
-                        help="마우스를 올리면 실제 묶음 내 순위를 확인할 수 있습니다. (그래프가 낮을수록 1위에 가깝습니다.)"
+                        "상승폭 (갱신 직전 대비)", 
+                        help="마우스를 올리면 갱신 전 대비 몇 계단 상승했는지 표시됩니다. (그래프가 위로 솟구칠수록 순위 상승)"
                     )
                 }
             )
