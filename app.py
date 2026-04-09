@@ -639,6 +639,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         """, unsafe_allow_html=True)
 
         # 4. [자동 갱신 성과 데이터 로직]
+        total_defense_seconds = 0  # ⭐ [문제 해결] 데이터가 0건일 때를 대비한 기본값 사전 선언
+
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
@@ -658,8 +660,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             merged_df = pd.DataFrame(dummy_logs)
             success_count = len(merged_df)
             up_defense_count = len(merged_df)
-
-            pass
+            total_defense_seconds = 15300  # ⭐ [문제 해결] 데모 모드용 가짜 방어 시간 (4시간 15분) 추가
         else:
             df_exec = load_renewal_logs()
             merged_df = pd.DataFrame()
