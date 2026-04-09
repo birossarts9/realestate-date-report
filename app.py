@@ -1036,11 +1036,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 )
 
                 if selected_bundles:
-                    plot_df = all_lines_df[all_lines_df['매물명_축약'].isin(selected_bundles)]
+                    plot_df = all_lines_df[all_lines_df['매물명_축약'].isin(selected_bundles)].copy()
                 else:
-                    plot_df = all_lines_df
-
-                # ⭐ [핵심 추가] 이빨 빠진 시간에 선이 가로지르지 않고 '권외(31위)'로 내리꽂히도록 빈 시간 채워넣기
+                    plot_df = all_lines_df.copy()
+    
+                # ⭐ [핵심 추가] MultiIndex 에러 방지: 동일 시간, 동일 매물 중복 데이터 제거
+                plot_df = plot_df.drop_duplicates(subset=['수집일시', '매물명_축약'])
+    
+                # 이빨 빠진 시간에 선이 가로지르지 않고 '권외(31위)'로 내리꽂히도록 빈 시간 채워넣기
                 all_times = comp_df['수집일시'].drop_duplicates()
                 plot_items = plot_df['매물명_축약'].unique()
                 
@@ -1049,7 +1052,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 
                 full_plot_df['전체순위_시각화'] = full_plot_df['전체순위_시각화'].fillna(31)
                 full_plot_df['부동산명'] = full_plot_df['부동산명'].fillna('권외 (30위 밖)')
-
+    
                 fig_spaghetti = px.line(
                     full_plot_df, # plot_df 대신 그리드가 채워진 full_plot_df 사용
                     x='수집일시', 
