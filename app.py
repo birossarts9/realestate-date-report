@@ -691,8 +691,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     show_limit_dt = pd.to_datetime(datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)) - timedelta(days=3)
                     merged_df = merged_df[(merged_df['갱신시간'] >= show_limit_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
                     
-                    # 💡 [방어기제] 에러 났거나 변동 없는 찝찝한 내역은 숨기고, '성공'한 것만 보여줌
+                    # 💡 [방어기제] 1. '성공'한 내역만 필터링
                     merged_df = merged_df[merged_df['상태'].str.contains('성공|완료', na=False)]
+                    
+                    # 💡 [핵심 추가] 2. 현재 대시보드에 접속한 '해당 부동산'의 로그만 남기기 (타사 데이터 노출 차단)
+                    # 시트의 '부동산명' 컬럼에 현재 접속한 filter_realtor_name이 포함된 경우만 남깁니다.
+                    realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
+                    merged_df = merged_df[merged_df[realtor_col].str.contains(filter_realtor_name, na=False)].copy()
                     
                     tracking_results = []
                     trend_data = [] # 📈 스파크라인 궤적용 데이터
