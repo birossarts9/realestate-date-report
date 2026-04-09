@@ -306,9 +306,15 @@ def load_server_data():
         return None
         
     df = pd.concat(df_list, ignore_index=True).drop_duplicates()
-    cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=30)
+    cutoff_date = pd.to_datetime('today') - pd.Timedelta(days=7)   # 🚨 긴급 조치: 30일 -> 7일로 축소
     df['수집일시'] = pd.to_datetime(df['수집일시'])
     df = df[df['수집일시'] >= cutoff_date]
+    
+    # 💡 덤으로 메모리 찌꺼기 즉각 청소 (선택사항)
+    import gc
+    del df_list
+    gc.collect()
+    
     return df
 
 # 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
