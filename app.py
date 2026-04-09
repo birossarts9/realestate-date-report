@@ -667,80 +667,95 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 try:
                     df_exec.columns = df_exec.iloc[0]
                     df_exec = df_exec[1:].copy()
-                    merged_df = df_exec.astype(str) # 🚨 여기서 에러 방지!
-                    
+                    merged_df = df_exec.astype(str)
+        
                     time_col = '일시' if '일시' in merged_df.columns else '갱신시간' if '갱신시간' in merged_df.columns else merged_df.columns[0]
                     merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
-                    
-                    # 1. '성공' 필터 및 내 부동산 필터 (astype(str) 추가하여 1번 문제 원천 차단)
+        
+                    # 1. '성공' 필터 및 내 부동산 필터
                     merged_df = merged_df[merged_df['상태'].astype(str).str.contains('성공|완료', na=False)]
                     realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
                     merged_df = merged_df[merged_df[realtor_col].astype(str).str.contains(filter_realtor_name, na=False)].copy()
-            
-                    # ⭐ [문제 해결] 같은 매물 중복 제거 (가장 최신 갱신 건 하나만 남김)
-                    spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세'
-                    merged_df = merged_df.sort_values('갱신시간', ascending=False)
-                    merged_df = merged_df.drop_duplicates(subset=[spec_col], keep='first')
-            
-                    tracking_results, trend_data, display_danji, display_detail = [], [], [], []
-            
-                    for idx, row in merged_df.iterrows():
-                        t0 = row['갱신시간']
-                        target_bundle_key = str(row.get(spec_col, '')).strip()
-            
-                        # ⭐ [문제 해결] df['부동산명'] 에러 방지를 위해 astype(str) 명시
-                        m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
-            
-                        if m_history.empty:
-                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
-                            trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
-                            continue
-            
-                        display_danji.append(m_history.iloc[-1]['단지명'])
-                        display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
-            
-                        before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
-                        before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else 999
-                        b_str = f"{before_rank}위" if before_rank != 999 else "20위 밖(권외)"
-            
-                        if not after_df.empty:
-                            best_rank = int(after_df['묶음내순위_숫자'].min())
-                            current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
-            
-                            # ⭐ [문제 해결] 21을 빼는 착시 수식 제거, F열(묶음내 순위) 원본 그대로 삽입
-                            trend = [int(r) for r in after_df['묶음내순위_숫자'].tolist()]
-                            a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
-            
-                            # ⭐ [문제 해결] 성과 요약 로직 정교화
-                            if best_rank <= 3:
-                                res = "🚀 상위권 진입 방어"
-                            elif before_rank == 999 or best_rank < before_rank:
-                                res = "🔼 순위 상승"
-                            elif best_rank == before_rank:
-                                res = "➖ 순위 유지"
+        
+                    # ⭐ [해결 1] 해당 부동산의 실행 로그가 없으면 에러가 나지 않게 바로 처리
+                    if merged_df.empty:
+                        success_count, up_defense_count = 0, 0
+                    else:
+                        spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세'
+                        merged_df = merged_df.sort_values('갱신시간', ascending=False)
+                        merged_df = merged_df.drop_duplicates(subset=[spec_col], keep='first')
+        
+                        tracking_results, trend_data, display_danji, display_detail = [], [], [], []
+        
+                        for idx, row in merged_df.iterrows():
+                            t0 = row['갱신시간']
+                            raw_key = str(row.get(spec_col, '')).strip()
+        
+                            # ⭐ [해결 2] 누락되었던 크롤러 키 파싱 로직 결합
+                            parts = [p.strip() for p in raw_key.split('|')]
+                            if len(parts) >= 5:
+                                target_bundle_key = f"{parts[1]} | {parts[2]} | {parts[3]} | {parts[4]}"
+                                danji_cond = (df['단지명'] == parts[0])
                             else:
-                                res = "🔽 순위 하락"
-                        else:
-                            a_str, res, trend = "⏳ 수집 대기 중", "인덱싱 대기 중", []
-            
-                        tracking_results.append((b_str, a_str, res))
-                        trend_data.append(trend)
-            
-                    merged_df['단지명'], merged_df['매물상세'] = display_danji, display_detail
-                    merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
-                    merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
-                    merged_df['성과 요약'] = [x[2] for x in tracking_results]
-                    merged_df['순위 궤적'] = trend_data
-            
-                    merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
-            
-                    success_count = len(merged_df[merged_df['상태'].astype(str).str.contains('성공|완료', na=False)])
-                    up_defense_count = len(merged_df[merged_df['성과 요약'].str.contains('상승|진입', na=False)])
+                                target_bundle_key = raw_key
+                                danji_cond = True
+        
+                            # 파싱된 키로 정확하게 매칭
+                            m_history = df[danji_cond & (df['매물묶음키'] == target_bundle_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
+        
+                            if m_history.empty:
+                                tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
+                                trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
+                                continue
+        
+                            display_danji.append(m_history.iloc[-1]['단지명'])
+                            display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
+        
+                            before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
+                            before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else 999
+                            b_str = f"{before_rank}위" if before_rank != 999 else "20위 밖(권외)"
+        
+                            if not after_df.empty:
+                                best_rank = int(after_df['묶음내순위_숫자'].min())
+                                current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
+                                
+                                # 묶음내 순위 그대로 가져오기
+                                trend = [int(r) for r in after_df['묶음내순위_숫자'].tolist()]
+                                a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
+        
+                                if best_rank <= 3:
+                                    res = "🚀 상위권 진입 방어"
+                                elif before_rank == 999 or best_rank < before_rank:
+                                    res = "🔼 순위 상승"
+                                elif best_rank == before_rank:
+                                    res = "➖ 순위 유지"
+                                else:
+                                    res = "🔽 순위 하락"
+                            else:
+                                a_str, res, trend = "⏳ 수집 대기 중", "인덱싱 대기 중", []
+        
+                            tracking_results.append((b_str, a_str, res))
+                            trend_data.append(trend)
+        
+                        merged_df['단지명'], merged_df['매물상세'] = display_danji, display_detail
+                        merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
+                        merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
+                        merged_df['성과 요약'] = [x[2] for x in tracking_results]
+                        merged_df['순위 궤적'] = trend_data
+        
+                        merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
+        
+                        success_count = len(merged_df)
+                        # ⭐ 빈 데이터 프레임 에러 방지를 위해 astype(str) 한 번 더 강제화
+                        up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입', na=False)])
+                        
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
             else:
                 success_count, up_defense_count = 0, 0
+
+# 브리핑 텍스트 및 UI 렌더링 코드는 동일하게 이어집니다.
                 
         pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고
 
