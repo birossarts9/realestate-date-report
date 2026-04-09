@@ -34,34 +34,40 @@ def load_realtor_map():
         with open("realtors.json", "r", encoding="utf-8") as f:
             try:
                 return json.load(f)
-            except json.JSONDecodeError as e:
-                st.session_state['json_error'] = str(e)
-                return {"a123": "더자이디엘"}
             except Exception:
-                return {"a123": "더자이디엘"}
-    return {"a123": "더자이디엘"}
+                pass
+    # 파일이 없거나 에러 시 최소한의 demo 데이터 반환
+    return {"demo": {"name": "체험용 부동산", "complexes": ["다산e편한세상자이", "힐스테이트다산", "다산한양수자인리버팰리스"]}}
 
 REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-client_id = query_params.get("id", "demo") # 아무것도 안 적혀있으면 demo로
+user_id = query_params.get("id", "demo")
 ref_id = query_params.get("ref", "unknown")
-tracking_id = f"user:{client_id}_ref:{ref_id}"
+tracking_id = f"user:{user_id}_ref:{ref_id}"
 
-# 💡 [핵심 안전장치] 리스트에 없는 이상한 ID를 치고 들어오면 무조건 demo로 강제 이동!
-if client_id not in realtors:
-    client_id = "demo"
+# 💡 [핵심 안전장치] URL로 들어온 id가 realtors.json에 아예 없으면 무조건 'demo'로 강제 고정!
+if user_id not in REALTOR_MAP:
+    user_id = "demo"
 
-# 최종 확정된 ID로 세팅
-IS_DEMO_MODE = (client_id == "demo")
-current_realtor = realtors[client_id]
+# --- 🚀 데모 모드 데이터 매핑 로직 ---
+IS_DEMO_MODE = (user_id == "demo")
 
-filter_realtor_name = current_realtor["name"]
-target_complexes = current_realtor["complexes"]
-display_realtor = filter_realtor_name
+# 최종 확정된 user_id로 부동산 정보 세팅
+current_realtor = REALTOR_MAP.get(user_id)
 
-# 블라인드 처리 함수 (데모 모드용)
+if isinstance(current_realtor, dict):
+    filter_realtor_name = current_realtor.get("name", "체험용 부동산")
+    target_complexes = current_realtor.get("complexes", [])
+else:
+    filter_realtor_name = str(current_realtor)
+    target_complexes = []
+
+raw_demo = REALTOR_MAP.get("demo", {"name": "체험용 부동산"})
+demo_name = raw_demo.get("name", "체험용 부동산") if isinstance(raw_demo, dict) else str(raw_demo)
+display_realtor = demo_name if IS_DEMO_MODE else filter_realtor_name
+
 def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
