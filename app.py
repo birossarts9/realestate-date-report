@@ -691,12 +691,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     show_limit_dt = pd.to_datetime(datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)) - timedelta(days=3)
                     merged_df = merged_df[(merged_df['갱신시간'] >= show_limit_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
                     
+                    # 🚨 [핵심 해결] 에러 방지를 위해 모든 데이터를 강제로 문자열(str)로 변환 후 처리
+                    merged_df['상태'] = merged_df['상태'].astype(str)
+                    
                     # 💡 [방어기제] 1. '성공'한 내역만 필터링
                     merged_df = merged_df[merged_df['상태'].str.contains('성공|완료', na=False)]
                     
-                    # 💡 [핵심 추가] 2. 현재 대시보드에 접속한 '해당 부동산'의 로그만 남기기 (타사 데이터 노출 차단)
-                    # 시트의 '부동산명' 컬럼에 현재 접속한 filter_realtor_name이 포함된 경우만 남깁니다.
+                    # 💡 [핵심 추가] 2. 현재 대시보드에 접속한 '해당 부동산'의 로그만 남기기
                     realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
+                    
+                    # 👇 여기서 .astype(str)을 추가하여 숫자/NaN 데이터로 인한 에러를 원천 차단합니다.
+                    merged_df[realtor_col] = merged_df[realtor_col].astype(str)
                     merged_df = merged_df[merged_df[realtor_col].str.contains(filter_realtor_name, na=False)].copy()
                     
                     tracking_results = []
