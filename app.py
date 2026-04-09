@@ -532,12 +532,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 📊 2. 주요 경쟁사 광고 패턴
 - 최대 활동 업체: {top_spender if top_spender_raw_name else '없음'}
-# ... (위쪽 브리핑 텍스트 코드) ...
-    - 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
+- 주력 갱신 시간대: {peak_hour_str if top_spender_raw_name else '데이터 분석 중'}"""
 
-    # --- UI 렌더링 시작 ---
+# --- UI 렌더링 시작 ---
+    # 1. 깔끔한 대형 제목 (중복 방지)
     st.markdown(f"<h1 style='font-size: 42px; font-weight: 800; color: #1e3a8a; margin-bottom: 25px;'>📊 {display_realtor} 대표님을 위한 시장 동향</h1>", unsafe_allow_html=True)
-
+    
     if IS_DEMO_MODE:
         with st.expander("🚀 **체험판 200% 활용 가이드 (처음 오셨다면 클릭하세요!)**", expanded=False):
             st.markdown("""
@@ -589,14 +589,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
     # 탭 1. 📊 오늘의 AI 성과 (핵심 요약)
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
-        
-        # 💡 1. 타이틀과 복사 버튼을 가로로 나란히 배치
+        # 1. [오전 브리핑 복사 버튼]
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px;">
             <span style="font-size: 32px; margin-right: 15px;">💡</span>
             <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
             <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="아침 브리핑 복사">
-                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 105.656 5.656l-1.102 1.101"></path></svg>
                 <span id="copyMsgAm" style="font-size: 15px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
             </button>
         </div>
@@ -612,7 +611,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         </script>
         """, height=60)
 
-        # 💡 2. 그 바로 아래에 마스터 결론 텍스트 블록 배치
+        # 2. [결론 텍스트 블록]
         st.markdown(f"""
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px;">
             <div style="font-size: 22px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
@@ -621,30 +620,25 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         </div>
         """, unsafe_allow_html=True)
         
+        # 3. [전략 카드 3종]
         st.markdown(f"""
         <div class="strategy-grid" style="margin-top: 5px;">
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
-                <div class="briefing-content">
-                    현재 대표님의 단지별 랭킹은<br>
-                    <span style="color:#3182f6;">[{rank_summary}]</span> 입니다.
-                </div>
+                <div class="briefing-content">현재 대표님의 단지별 랭킹은<br><span style="color:#3182f6;">[{rank_summary}]</span> 입니다.</div>
             </div>
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 상위권 탈환 필요</span>
-                <div class="briefing-content">
-                    상위 노출에서 밀려난 위험 매물이 <span style="color:#ef4444;">{danger_count}건</span> 발견되었습니다.
-                </div>
+                <div class="briefing-content">상위 노출에서 밀려난 위험 매물이 <span style="color:#ef4444;">{danger_count}건</span> 발견되었습니다.</div>
             </div>
             <div class="briefing-strategy-card">
                 <span class="strategy-tag" style="background-color:#10b981;">🎯 경쟁이 적은 매물</span>
-                <div class="briefing-content">
-                    D+2일(48시간) 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.
-                </div>
+                <div class="briefing-content">D+2일(48시간) 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
+        # 4. [자동 갱신 성과 데이터 로직]
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
@@ -664,113 +658,60 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             merged_df = pd.DataFrame(dummy_logs)
             success_count = len(merged_df)
             up_defense_count = len(merged_df)
-            
+
+            pass
         else:
             df_exec = load_renewal_logs()
             merged_df = pd.DataFrame()
-            
             if not df_exec.empty and len(df_exec) > 1:
                 try:
-                    # 1. 헤더를 첫 행으로 올리고, 절대 고장 나지 않게 '이름'으로 데이터 색출
                     df_exec.columns = df_exec.iloc[0]
                     df_exec = df_exec[1:].copy()
+                    merged_df = df_exec.astype(str) # 🚨 여기서 에러 방지!
                     
-                    merged_df = df_exec.copy()
-                    
-                    # 💡 헤더 이름이 살짝 달라도 유연하게 찾도록 세팅 (일시/갱신시간 등)
                     time_col = '일시' if '일시' in merged_df.columns else '갱신시간' if '갱신시간' in merged_df.columns else merged_df.columns[0]
                     merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
                     
-                    status_col = '상태' if '상태' in merged_df.columns else '갱신여부' if '갱신여부' in merged_df.columns else merged_df.columns[4]
-                    merged_df['상태'] = merged_df.get(status_col, '상태불명')
-                    
-                    # 🚨 [핵심 해결] 엑셀에서 번호로 스펙을 찾지 않고, 봇이 적어준 '매물스펙'을 다이렉트로 가져옵니다!
-                    spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세' if '매물상세' in merged_df.columns else '매물묶음키' if '매물묶음키' in merged_df.columns else merged_df.columns[2]
-                    
-                    # 💡 [영업용 필터 적용] 무조건 최근 72시간(3일) 이내의 로그만 자름
-                    show_limit_dt = pd.to_datetime(datetime.now(timezone(timedelta(hours=9))).replace(tzinfo=None)) - timedelta(days=3)
-                    merged_df = merged_df[(merged_df['갱신시간'] >= show_limit_dt) & (merged_df['갱신시간'] <= end_dt)].copy()
-                    
-                    # 🚨 [핵심 해결] 에러 방지를 위해 모든 데이터를 강제로 문자열(str)로 변환 후 처리
-                    merged_df['상태'] = merged_df['상태'].astype(str)
-                    
-                    # 💡 [방어기제] 1. '성공'한 내역만 필터링
+                    # '성공' 필터 및 내 부동산 필터
                     merged_df = merged_df[merged_df['상태'].str.contains('성공|완료', na=False)]
-                    
-                    # 💡 [핵심 추가] 2. 현재 대시보드에 접속한 '해당 부동산'의 로그만 남기기
                     realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
-                    
-                    # 👇 여기서 .astype(str)을 추가하여 숫자/NaN 데이터로 인한 에러를 원천 차단합니다.
-                    merged_df[realtor_col] = merged_df[realtor_col].astype(str)
                     merged_df = merged_df[merged_df[realtor_col].str.contains(filter_realtor_name, na=False)].copy()
-                    
-                    tracking_results = []
-                    trend_data = [] # 📈 스파크라인 궤적용 데이터
-                    display_danji = []
-                    display_detail = []
+
+                    # 🚨 [여기서부터 빠졌던 순위 추적 루프 시작]
+                    tracking_results, trend_data, display_danji, display_detail = [], [], [], []
+                    spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세'
                     
                     for idx, row in merged_df.iterrows():
                         t0 = row['갱신시간']
-                        if pd.isna(t0): continue
-                        
                         target_bundle_key = str(row.get(spec_col, '')).strip()
-                        
-                        if not target_bundle_key or target_bundle_key == "nan":
-                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (스펙 미상)"))
-                            trend_data.append([])
-                            display_danji.append("정보 없음")
-                            display_detail.append("-")
-                            continue
-                            
-                        # 🔍 지문(스펙)을 들고 엑셀에서 해당 매물의 전체 생애주기 이력을 쫙 뽑아옴
                         m_history = df[(df['매물묶음키'] == target_bundle_key) & (df['부동산명'].str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
                         
                         if m_history.empty:
-                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가 (이력 없음)"))
-                            trend_data.append([])
-                            parts = target_bundle_key.split('|')
-                            display_danji.append(parts[0] if len(parts) > 0 else "정보 없음")
-                            display_detail.append(f"{parts[1]} ({parts[2]})" if len(parts) > 2 else target_bundle_key)
+                            tracking_results.append(("기록 없음", "기록 없음", "추적 불가"))
+                            trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
                             continue
                             
                         display_danji.append(m_history.iloc[-1]['단지명'])
                         display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
-                        
-                        before_df = m_history[m_history['수집일시'] <= t0]
-                        after_df = m_history[m_history['수집일시'] > t0]
-                        
+                        before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
                         before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else pd.NA
                         b_str = f"{before_rank}위" if pd.notna(before_rank) else "20위 밖(권외)"
                         
                         if not after_df.empty:
-                            best_rank = int(after_df['묶음내순위_숫자'].min())
-                            current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
-                            
-                            ranks = after_df['묶음내순위_숫자'].tolist()
-                            trend = [21 - min(int(r), 21) for r in ranks]
-                            
+                            best_rank, current_rank = int(after_df['묶음내순위_숫자'].min()), int(after_df.iloc[-1]['묶음내순위_숫자'])
+                            trend = [21 - min(int(r), 21) for r in after_df['묶음내순위_숫자'].tolist()]
                             a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
-                            
-                            if best_rank <= 3:
-                                res = "🚀 1페이지 진입 방어"
-                            elif pd.notna(before_rank) and best_rank < before_rank:
-                                res = f"🔼 {before_rank - best_rank}계단 상승 방어"
-                            else:
-                                res = "⚠️ 순위 변동 없음 (롤링 극심)"
+                            res = "🚀 상위권 진입 방어" if best_rank <= 3 else "🔼 순위 상승"
                         else:
-                            a_str = "⏳ 수집 대기 중"
-                            res = "인덱싱 대기 중"
-                            trend = []
+                            a_str, res, trend = "⏳ 수집 대기 중", "인덱싱 대기 중", []
                             
-                        tracking_results.append((b_str, a_str, res))
-                        trend_data.append(trend)
-                        
-                    merged_df['단지명'] = display_danji
-                    merged_df['매물상세'] = display_detail
+                        tracking_results.append((b_str, a_str, res)); trend_data.append(trend)
+
+                    merged_df['단지명'], merged_df['매물상세'] = display_danji, display_detail
                     merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
                     merged_df['갱신 후 최고순위'] = [x[1] for x in tracking_results]
                     merged_df['성과 요약'] = [x[2] for x in tracking_results]
-                    merged_df['순위 궤적'] = trend_data 
+                    merged_df['순위 궤적'] = trend_data
                     
                     merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                     
