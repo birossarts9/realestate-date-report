@@ -708,11 +708,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
                             
                             before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
-                            b_str = f"{before_rank}위" if before_rank is not None else "신규 진입"
-        
+                            b_str = f"{before_rank}위" if pd.notna(before_rank) else "30위 밖(권외)"
+                
+                            # 2. 궤적 리스트 계산식을 31 기준으로 변경
                             if not after_df.empty:
-                                best_rank = int(after_df['묶음내순위_숫자'].min())
-                                current_rank = int(after_df.iloc[-1]['묶음내순위_숫자'])
+                                best_rank, current_rank = int(after_df['묶음내순위_숫자'].min()), int(after_df.iloc[-1]['묶음내순위_숫자'])
+                                trend = [31 - min(int(r), 31) for r in after_df['묶음내순위_숫자'].tolist()]
                                 
                                 # [그래프 우상향] 상승폭 계산
                                 base_rank = before_rank if before_rank is not None else int(after_df['묶음내순위_숫자'].max())
@@ -819,12 +820,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         
         if not merged_df.empty:
             st.dataframe(
-                merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '상위(3위) 방어시간', '순위 궤적', '성과 요약']],
+                merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']],
                 use_container_width=True,
                 column_config={
                     "순위 궤적": st.column_config.LineChartColumn(
-                        "상승폭 (갱신 직전 대비)", 
-                        help="마우스를 올리면 갱신 전 대비 몇 계단 상승했는지 표시됩니다. (그래프가 위로 솟구칠수록 순위 상승)"
+                        "순위 흐름 (갱신 이후)",
+                        y_min=0,
+                        y_max=31,  # 👈 여기를 31로 수정
+                        help="그래프가 위로 솟구칠수록 1위에 가까운 안전한 상태를 의미하며, 아래로 꺾이면 경쟁자에 의해 밀려나고 있음을 뜻합니다."
                     )
                 }
             )
@@ -974,7 +977,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 comp_times = comp_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
                 t_hist = pd.merge(pd.DataFrame({'수집일시': comp_times}), b_hist, on='수집일시', how='left')
                 
-                t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
+                t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(31)
 
                 df_exec = load_renewal_logs()
                 renew_times = []
@@ -990,7 +993,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     if start_dt <= rt <= end_dt:
                         fig2.add_vline(x=rt, line_dash="dash", line_color="#ef4444", annotation_text="🚀갱신")
                 
-                fig2.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+                fig2.update_yaxes(autorange="reversed", range=[31.5, 0.5])
                 st.plotly_chart(fig2, use_container_width=True)
 
                 # 💡 강제 로딩 일으키던 클릭 연동 기능 영구 삭제, 단순 뷰어로만 제공
@@ -1014,17 +1017,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     
                     st.plotly_chart(fig_scatter, use_container_width=True)
 
-        # --- (기존 개별 매물 차트 코드 아래에 추가) ---
+            # --- (기존 개별 매물 차트 코드 아래에 추가) ---
             st.markdown("<br><hr>", unsafe_allow_html=True)
             st.markdown(f"#### 🌀 **[{search_comp}] 단지 전체 매물 롤링 궤적 (스파게티 차트)**")
             st.caption("💡 단지 내 매물의 순위 변동을 봅니다. 선들이 넓게 퍼질수록 네이버의 롤링이 극심하다는 뜻입니다.")
 
             if not comp_df.empty:
                 all_lines_df = comp_df.copy()
-                all_lines_df['전체순위_시각화'] = all_lines_df['전체순위_숫자'].fillna(21)
+                # 💡 21에서 31로 변경
+                all_lines_df['전체순위_시각화'] = all_lines_df['전체순위_숫자'].fillna(31) 
                 all_lines_df['매물명_축약'] = all_lines_df['매물묶음키'].apply(mask_text)
 
-                # ⭐ [개선 1] 원하는 매물만 골라서 보는 멀티셀렉트 검색창 추가
                 unique_bundles = sorted(all_lines_df['매물명_축약'].unique())
                 selected_bundles = st.multiselect(
                     "🔎 비교할 매물을 선택하세요 (여러 개 선택 가능, 비워두면 단지 전체 표시)",
@@ -1032,14 +1035,23 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     default=[]
                 )
 
-                # 선택한 매물이 있으면 필터링, 없으면 100% 전체 표시
                 if selected_bundles:
                     plot_df = all_lines_df[all_lines_df['매물명_축약'].isin(selected_bundles)]
                 else:
                     plot_df = all_lines_df
 
+                # ⭐ [핵심 추가] 이빨 빠진 시간에 선이 가로지르지 않고 '권외(31위)'로 내리꽂히도록 빈 시간 채워넣기
+                all_times = comp_df['수집일시'].drop_duplicates()
+                plot_items = plot_df['매물명_축약'].unique()
+                
+                idx = pd.MultiIndex.from_product([all_times, plot_items], names=['수집일시', '매물명_축약'])
+                full_plot_df = plot_df.set_index(['수집일시', '매물명_축약']).reindex(idx).reset_index()
+                
+                full_plot_df['전체순위_시각화'] = full_plot_df['전체순위_시각화'].fillna(31)
+                full_plot_df['부동산명'] = full_plot_df['부동산명'].fillna('권외 (30위 밖)')
+
                 fig_spaghetti = px.line(
-                    plot_df, 
+                    full_plot_df, # plot_df 대신 그리드가 채워진 full_plot_df 사용
                     x='수집일시', 
                     y='전체순위_시각화', 
                     color='매물명_축약', 
@@ -1047,18 +1059,18 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     hover_data=['부동산명']
                 )
                 
-                fig_spaghetti.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+                # 💡 Y축 범위를 31.5로 늘림
+                fig_spaghetti.update_yaxes(autorange="reversed", range=[31.5, 0.5])
                 
-                # ⭐ [개선 2] 범례 겹침 현상 완벽 해결 (우측으로 빼고 높이 확보)
                 fig_spaghetti.update_layout(
-                    height=600, # 차트 위아래를 시원하게 늘림
+                    height=600, 
                     legend=dict(
                         title="매물 리스트",
-                        orientation="v", # 세로로 정렬
+                        orientation="v",
                         yanchor="top", y=1,
-                        xanchor="left", x=1.02 # 차트 우측 바깥으로 뺌
+                        xanchor="left", x=1.02 
                     ),
-                    margin=dict(r=250) # 범례 글자가 짤리지 않게 우측 여백을 넉넉히 줌
+                    margin=dict(r=250) 
                 )
                 
                 st.plotly_chart(fig_spaghetti, use_container_width=True)
