@@ -969,7 +969,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     return pd.Series({'전체순위': grp['전체순위_숫자'].min(), '최상단부동산': realtor})
                 
                 b_hist = bdf.groupby('수집일시').apply(get_bundle_state, include_groups=False).reset_index()
-                t_hist = pd.merge(pd.DataFrame({'수집일시': global_times}), b_hist, on='수집일시', how='left')
+        
+                # ⭐ [핵심 해결] 엉뚱한 단지 시간이 섞이지 않도록, 현재 선택된 단지(comp_df)의 시간만 뼈대로 씁니다.
+                comp_times = comp_df['수집일시'].drop_duplicates().sort_values().reset_index(drop=True)
+                t_hist = pd.merge(pd.DataFrame({'수집일시': comp_times}), b_hist, on='수집일시', how='left')
+                
                 t_hist['전체순위차트용'] = t_hist['전체순위'].fillna(21)
 
                 df_exec = load_renewal_logs()
