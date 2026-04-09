@@ -1014,39 +1014,54 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     
                     st.plotly_chart(fig_scatter, use_container_width=True)
 
-    # --- (기존 개별 매물 차트 코드 아래에 추가) ---
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        st.markdown(f"#### 🌀 **[{search_comp}] 단지 전체 매물 롤링 궤적 (스파게티 차트)**")
-        st.caption("💡 단지 내 모든 매물의 순위 변동을 한눈에 봅니다. 선들이 넓게 퍼질수록(표준편차가 클수록) 네이버의 롤링이 극심하게 일어나고 있다는 뜻입니다.")
+        # --- (기존 개별 매물 차트 코드 아래에 추가) ---
+            st.markdown("<br><hr>", unsafe_allow_html=True)
+            st.markdown(f"#### 🌀 **[{search_comp}] 단지 전체 매물 롤링 궤적 (스파게티 차트)**")
+            st.caption("💡 단지 내 매물의 순위 변동을 봅니다. 선들이 넓게 퍼질수록 네이버의 롤링이 극심하다는 뜻입니다.")
 
-        if not comp_df.empty:
-            # 전체 차트용 데이터 복사 및 결측치(권외) 21위 처리
-            all_lines_df = comp_df.copy()
-            all_lines_df['전체순위_시각화'] = all_lines_df['전체순위_숫자'].fillna(21)
-            
-            # 내 매물과 경쟁사 매물 구분하기 (내 매물은 굵게, 나머지는 투명하게)
-            # 매물묶음키 글자가 너무 길면 차트가 지저분해지므로 축약
-            all_lines_df['매물명_축약'] = all_lines_df['매물묶음키'].apply(mask_text)
+            if not comp_df.empty:
+                all_lines_df = comp_df.copy()
+                all_lines_df['전체순위_시각화'] = all_lines_df['전체순위_숫자'].fillna(21)
+                all_lines_df['매물명_축약'] = all_lines_df['매물묶음키'].apply(mask_text)
 
-            fig_spaghetti = px.line(
-                all_lines_df, 
-                x='수집일시', 
-                y='전체순위_시각화', 
-                color='매물명_축약', # 매물별로 다른 색상의 선을 그립니다
-                markers=True,
-                hover_data=['부동산명']
-            )
-            
-            # 1위가 맨 위에 오도록 Y축 뒤집기
-            fig_spaghetti.update_yaxes(autorange="reversed", range=[21.5, 0.5])
-            
-            # 범례(Legend)가 너무 길면 화면을 가리므로 아래쪽으로 이동
-            fig_spaghetti.update_layout(
-                legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
-                height=500
-            )
-            
-            st.plotly_chart(fig_spaghetti, use_container_width=True)
+                # ⭐ [개선 1] 원하는 매물만 골라서 보는 멀티셀렉트 검색창 추가
+                unique_bundles = sorted(all_lines_df['매물명_축약'].unique())
+                selected_bundles = st.multiselect(
+                    "🔎 비교할 매물을 선택하세요 (여러 개 선택 가능, 비워두면 단지 전체 표시)",
+                    options=unique_bundles,
+                    default=[]
+                )
+
+                # 선택한 매물이 있으면 필터링, 없으면 100% 전체 표시
+                if selected_bundles:
+                    plot_df = all_lines_df[all_lines_df['매물명_축약'].isin(selected_bundles)]
+                else:
+                    plot_df = all_lines_df
+
+                fig_spaghetti = px.line(
+                    plot_df, 
+                    x='수집일시', 
+                    y='전체순위_시각화', 
+                    color='매물명_축약', 
+                    markers=True,
+                    hover_data=['부동산명']
+                )
+                
+                fig_spaghetti.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+                
+                # ⭐ [개선 2] 범례 겹침 현상 완벽 해결 (우측으로 빼고 높이 확보)
+                fig_spaghetti.update_layout(
+                    height=600, # 차트 위아래를 시원하게 늘림
+                    legend=dict(
+                        title="매물 리스트",
+                        orientation="v", # 세로로 정렬
+                        yanchor="top", y=1,
+                        xanchor="left", x=1.02 # 차트 우측 바깥으로 뺌
+                    ),
+                    margin=dict(r=250) # 범례 글자가 짤리지 않게 우측 여백을 넉넉히 줌
+                )
+                
+                st.plotly_chart(fig_spaghetti, use_container_width=True)
     # ==========================================================
     # 탭 3. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
