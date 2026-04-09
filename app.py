@@ -45,47 +45,23 @@ REALTOR_MAP = load_realtor_map()
 
 # URL 파라미터 인식
 query_params = st.query_params
-user_id = query_params.get("id", "demo")
+client_id = query_params.get("id", "demo") # 아무것도 안 적혀있으면 demo로
 ref_id = query_params.get("ref", "unknown")
-tracking_id = f"user:{user_id}_ref:{ref_id}"
+tracking_id = f"user:{client_id}_ref:{ref_id}"
 
-# --- [3] 구글 시트 유입 및 활동 로깅 로직 ---
-def log_visitor_to_gsheets(uid, action="접속"):
-    if "ref:unknown" in uid:
-        return
-        
-    WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
-    
-    def send_log():
-        try:
-            KST = timezone(timedelta(hours=9))
-            now_str = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-            requests.get(f"{WEB_APP_URL}?timestamp={now_str}&user_id={uid}&action={action}", timeout=10)
-        except:
-            pass
-            
-    threading.Thread(target=send_log, daemon=True).start()
+# 💡 [핵심 안전장치] 리스트에 없는 이상한 ID를 치고 들어오면 무조건 demo로 강제 이동!
+if client_id not in realtors:
+    client_id = "demo"
 
-if not st.session_state.get('entry_logged', False):
-    log_visitor_to_gsheets(tracking_id, action="입장")
-    st.session_state['entry_logged'] = True
+# 최종 확정된 ID로 세팅
+IS_DEMO_MODE = (client_id == "demo")
+current_realtor = realtors[client_id]
 
-# --- 🚀 데모 모드 데이터 매핑 로직 ---
-IS_DEMO_MODE = (user_id == "demo")
-active_id = "a123" if IS_DEMO_MODE else user_id
+filter_realtor_name = current_realtor["name"]
+target_complexes = current_realtor["complexes"]
+display_realtor = filter_realtor_name
 
-raw_realtor = REALTOR_MAP.get(active_id, REALTOR_MAP.get("a123", "더자이디엘"))
-if isinstance(raw_realtor, dict):
-    filter_realtor_name = raw_realtor.get("name", "더자이디엘")
-    target_complexes = raw_realtor.get("complexes", [])
-else:
-    filter_realtor_name = str(raw_realtor)
-    target_complexes = []
-
-raw_demo = REALTOR_MAP.get("demo", "성우부동산(체험용)")
-demo_name = raw_demo.get("name", "성우부동산(체험용)") if isinstance(raw_demo, dict) else str(raw_demo)
-display_realtor = demo_name if IS_DEMO_MODE else filter_realtor_name
-
+# 블라인드 처리 함수 (데모 모드용)
 def mask_text(text, is_agent=False):
     if not IS_DEMO_MODE: return text
     if is_agent:
