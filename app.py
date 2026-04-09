@@ -1013,7 +1013,40 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     fig_scatter.update_layout(xaxis_title="매물 생존율 (%)", yaxis_title="평균 노출 순위")
                     
                     st.plotly_chart(fig_scatter, use_container_width=True)
-                    
+
+    # --- (기존 개별 매물 차트 코드 아래에 추가) ---
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        st.markdown(f"#### 🌀 **[{search_comp}] 단지 전체 매물 롤링 궤적 (스파게티 차트)**")
+        st.caption("💡 단지 내 모든 매물의 순위 변동을 한눈에 봅니다. 선들이 넓게 퍼질수록(표준편차가 클수록) 네이버의 롤링이 극심하게 일어나고 있다는 뜻입니다.")
+
+        if not comp_df.empty:
+            # 전체 차트용 데이터 복사 및 결측치(권외) 21위 처리
+            all_lines_df = comp_df.copy()
+            all_lines_df['전체순위_시각화'] = all_lines_df['전체순위_숫자'].fillna(21)
+            
+            # 내 매물과 경쟁사 매물 구분하기 (내 매물은 굵게, 나머지는 투명하게)
+            # 매물묶음키 글자가 너무 길면 차트가 지저분해지므로 축약
+            all_lines_df['매물명_축약'] = all_lines_df['매물묶음키'].apply(mask_text)
+
+            fig_spaghetti = px.line(
+                all_lines_df, 
+                x='수집일시', 
+                y='전체순위_시각화', 
+                color='매물명_축약', # 매물별로 다른 색상의 선을 그립니다
+                markers=True,
+                hover_data=['부동산명']
+            )
+            
+            # 1위가 맨 위에 오도록 Y축 뒤집기
+            fig_spaghetti.update_yaxes(autorange="reversed", range=[21.5, 0.5])
+            
+            # 범례(Legend)가 너무 길면 화면을 가리므로 아래쪽으로 이동
+            fig_spaghetti.update_layout(
+                legend=dict(orientation="h", yanchor="bottom", y=-0.5, xanchor="center", x=0.5),
+                height=500
+            )
+            
+            st.plotly_chart(fig_spaghetti, use_container_width=True)
     # ==========================================================
     # 탭 3. 🎯 내 매물 방어 현황 (액션)
     # ==========================================================
