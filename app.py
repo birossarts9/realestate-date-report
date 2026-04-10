@@ -486,28 +486,38 @@ try:
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
     # ==========================================================
-    # 🎯 [핵심] AI 마스터 결론 (고객 맞춤형 직관적 성적표)
+    # 🎯 [핵심] AI 마스터 결론 (최근 3일 평균 등수 기반 성적표)
     # ==========================================================
-    # ⭐ [오류 해결] 지워졌던 변수 복구
-    danger_count = len(danger_ls)
-    empty_count = len(my_empty)
+    # ⭐ 1. 최근 3일 데이터 필터링 및 평균 순위 계산
+    three_days_ago = end_dt - pd.Timedelta(days=3)
+    recent_my_df = t_df[(t_df['부동산명'].str.contains(filter_realtor_name, na=False)) & (t_df['수집일시'] >= three_days_ago)]
+    
+    if not recent_my_df.empty:
+        avg_ranks = recent_my_df.groupby(['단지명', '동/호수', '층/타입', '매물묶음키'])['묶음내순위_숫자'].mean().reset_index()
+        
+        # 등급 분류 (1~5위: 상위권, 6~10위: 중위권, 11위 밖: 하위권)
+        safe_df = avg_ranks[avg_ranks['묶음내순위_숫자'] <= 5]
+        mid_df = avg_ranks[(avg_ranks['묶음내순위_숫자'] > 5) & (avg_ranks['묶음내순위_숫자'] <= 10)]
+        danger_df = avg_ranks[avg_ranks['묶음내순위_숫자'] > 10]
+    else:
+        safe_df = mid_df = danger_df = pd.DataFrame()
 
-    total_my_bundles = len(my_ls)
-    safe_my_bundles = len(my_ls[my_ls['묶음내순위_숫자'] <= 3])
+    total_my_bundles = len(avg_ranks) if not recent_my_df.empty else 0
+    safe_my_bundles = len(safe_df)
+    mid_my_bundles = len(mid_df)
+    danger_count = len(danger_df)
     safe_ratio = int((safe_my_bundles / total_my_bundles) * 100) if total_my_bundles > 0 else 0
 
-    # ⭐ [개선] 매물을 단지별로 묶고 전체 스펙(매물묶음키)을 처리하는 로직
-    safe_df = my_ls[my_ls['묶음내순위_숫자'] <= 3]
-    danger_df = my_ls[my_ls['묶음내순위_숫자'] > 3]
-
+    # ⭐ 2. UI 표시용 및 문자 발송용 HTML/텍스트 생성 함수 (평균 등수 추가)
     def build_ui_html(df):
         if df.empty: return "해당 없음"
         html_str = ""
         for danji, grp in df.groupby('단지명'):
             danji_masked = mask_text(danji)
             html_str += f"<div style='margin-bottom: 12px;'><b style='color:#0f172a; font-size: 15px;'>🏢 [{danji_masked}]</b><br>"
-            for spec in grp['매물묶음키'].unique():
-                html_str += f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 {mask_text(spec)}<br>"
+            for _, row in grp.iterrows():
+                spec_masked = mask_text(row['매물묶음키'])
+                html_str += f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 {spec_masked} <span style='color:#64748b; font-size:12px;'>(평균 {row['묶음내순위_숫자']:.1f}위)</span><br>"
             html_str += "</div>"
         return html_str
 
@@ -516,27 +526,31 @@ try:
         items = []
         for danji, grp in df.groupby('단지명'):
             danji_masked = mask_text(danji)
-            for spec in grp['매물묶음키'].unique():
-                items.append(f" - [{danji_masked}] {mask_text(spec)}")
+            for _, row in grp.iterrows():
+                spec_masked = mask_text(row['매물묶음키'])
+                items.append(f" - [{danji_masked}] {spec_masked} (평균 {row['묶음내순위_숫자']:.1f}위)")
         
-        # 문자는 3개만 보여주고 짜르기
         if len(items) > 3:
             return "\n".join(items[:3]) + f"\n   ...외 {len(items)-3}건 (상세 내역은 대시보드 접속 확인)"
         else:
             return "\n".join(items)
 
     safe_ui_html = build_ui_html(safe_df)
+    mid_ui_html = build_ui_html(mid_df)
     danger_ui_html = build_ui_html(danger_df)
 
     safe_sms_text = build_sms_text(safe_df)
+    mid_sms_text = build_sms_text(mid_df)
     danger_sms_text = build_sms_text(danger_df)
 
-    # 💡 [화면 UI] details 태그 부분 렌더링 오류 방지를 위해 한 줄로 밀착
-    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
+    # ⭐ 3. 화면 UI 렌더링 (아코디언 3단 구성)
+    master_conclusion = f"최근 3일간 대표님이 관리 중인 활동 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(평균 5위 이내)에 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
 
-    master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 매물 목록 열기 (총 {safe_my_bundles}개)</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 S급 매물입니다.</span></details>"
+    master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 매물 (평균 1~5위) : 총 {safe_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 고객에게 안정적으로 노출되고 있는 핵심 S급 매물입니다.</span></details>"
 
-    master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 매물 목록 열기 (총 {danger_count}개)</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 누락되어 갱신 효율이 떨어지는 매물입니다.</span></details>"
+    master_conclusion += f"<details style='background-color:#fffbeb; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #f59e0b; outline: none;'><summary style='font-size: 18px; color: #b45309; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟡 중위권 매물 (평균 6~10위) : 총 {mid_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{mid_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 꾸준한 갱신 관리를 통해 상위권 진입이 가능한 잠재 매물입니다.</span></details>"
+
+    master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 매물 (평균 11위 밖) : 총 {danger_count}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 노출이 거의 되지 않아 갱신 효율이 떨어지거나 패널티가 의심되는 매물입니다.</span></details>"
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
@@ -569,7 +583,7 @@ try:
             
             top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하며 시장을 과열시키고 있습니다."
 
-    # ⭐ 브리핑 텍스트 완성 (문자용)
+    # ⭐ 브리핑 텍스트 완성 (문자 발송용 3단계 분류)
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
@@ -582,12 +596,15 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - {top3_str}
 
 💡 3. [오늘의 AI 마스터 결론]
-현재 전체 관리 매물 {total_my_bundles}개 중, 상위권(3위 이내) 방어 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+최근 3일 기준 관리 매물 {total_my_bundles}개 중, 상위권 방어 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
 
-🟢 [상위권 방어 현황]
+🟢 [상위권 (평균 1~5위)]
 {safe_sms_text}
 
-🔴 [하위권 이탈 현황]
+🟡 [중위권 (평균 6~10위)]
+{mid_sms_text}
+
+🔴 [하위권 (평균 11위 밖)]
 {danger_sms_text}"""
 
 # --- UI 렌더링 시작 ---
