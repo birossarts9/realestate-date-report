@@ -1292,7 +1292,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 battle_df = pd.DataFrame(battle_data)
                 st.dataframe(battle_df[["단지명", "동/호수 및 스펙", "경쟁사 수", "시장 상태", "⭐ 추천 갱신시간", "전략 사유"]], use_container_width=True)
 
-        wwith act_tab4:
+        with act_tab4:
             st.markdown("#### 🌀 단지별 알고리즘 변동성 진단")
             st.caption("해당 단지에서 네이버 노출 순위가 얼마나 요동치고 있는지 진단합니다.")
             
