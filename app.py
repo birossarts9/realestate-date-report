@@ -1004,17 +1004,44 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 total_renews = len(b_boosted)
                 daily_renews = total_renews / analysis_days
                 
-                if total_renews == 0: renew_status, renew_col = "🧊 갱신 없음 (빈집)", "#10b981"
-                elif daily_renews >= 3: renew_status, renew_col = f"🔥 일평균 {daily_renews:.1f}회 (초경쟁)", "#ef4444"
-                elif daily_renews >= 1: renew_status, renew_col = f"⚠️ 일평균 {daily_renews:.1f}회 (보통)", "#f59e0b"
-                else: renew_status, renew_col = f"💧 주기적 갱신 (일 {daily_renews:.1f}회)", "#3b82f6"
+                # 갱신 빈도 워딩 수정
+                if total_renews == 0: renew_status, renew_col = "🧊 방치됨 (빈집 털이 찬스)", "#10b981"
+                elif daily_renews >= 3: renew_status, renew_col = f"🔥 일평균 {daily_renews:.1f}회 (초경쟁 격전지)", "#ef4444"
+                elif daily_renews >= 1: renew_status, renew_col = f"⚠️ 일평균 {daily_renews:.1f}회 (일반적 경쟁)", "#f59e0b"
+                else: renew_status, renew_col = f"💧 일평균 {daily_renews:.1f}회 (느슨한 경쟁)", "#3b82f6"
 
+                # AI 추천 타격 시간 설명 수정
                 rec_time = "-"
                 rec_desc = "데이터 누적 중"
                 if total_renews >= 3:
-                    peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                    rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
-                    rec_desc = f"타사 주력 갱신({peak_hour}시) 포착. 직후 선점 권장"
+                    active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
+                
+                    if len(active_hours) <= 1:
+                        # 갱신이 한 시간대에만 몰려있으면 그 직후를 추천
+                        best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
+                        rec_time = f"⏰ {best_hour:02d}:00"
+                        rec_desc = f"경쟁사 활동이 {active_hours[0]}시에 집중됩니다. 직후 무혈입성을 권장합니다."
+                    else:
+                        # 시간대별 틈새(Gap) 계산 (원형 배열 고려)
+                        max_gap = 0
+                        best_hour = 0
+                        for i in range(len(active_hours)):
+                            curr_h = active_hours[i]
+                            next_h = active_hours[(i + 1) % len(active_hours)]
+                            gap = (next_h - curr_h) % 24
+                            
+                            if gap > max_gap:
+                                max_gap = gap
+                                # 빈집이 시작되는 시간 (경쟁자 마지막 타격 직후)
+                                best_hour = (curr_h + 1) % 24 
+                                
+                        if max_gap >= 3:
+                            rec_time = f"⏰ {best_hour:02d}:00"
+                            rec_desc = f"타사 갱신 종료! 이때부터 약 {max_gap}시간 동안 빈집(단독 노출)이 열립니다."
+                        else:
+                            # 틈새가 3시간도 안 되면 초경쟁 상태
+                            rec_time = "🔥 분산 타격"
+                            rec_desc = "경쟁사가 쉴 새 없이 갱신 중입니다. 고정 시간 대신 봇을 통한 수시 방어가 필수입니다."
                 
                 b_ranks_hist = bdf.groupby('수집일시')['전체순위_숫자'].min()
                 survival_rate = (len(b_ranks_hist) / total_sessions) * 100 if total_sessions > 0 else 0
@@ -1265,20 +1292,21 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 battle_df = pd.DataFrame(battle_data)
                 st.dataframe(battle_df[["단지명", "동/호수 및 스펙", "경쟁사 수", "시장 상태", "⭐ 추천 갱신시간", "전략 사유"]], use_container_width=True)
 
-        with act_tab4:
-            st.markdown("#### 🌀 단지별 노출 롤링 및 갱신 성과 진단")
-            st.caption("🔍 **[도출 원리]** 선택된 분석 기간 동안 해당 매물의 전체 노출 순위 변동폭을 바탕으로 롤링 심각도를 진단하며, 네이버 매물 진정성 점수를 역추산하여 타격 효율(ROI)을 판별합니다.")
+        wwith act_tab4:
+            st.markdown("#### 🌀 단지별 알고리즘 변동성 진단")
+            st.caption("해당 단지에서 네이버 노출 순위가 얼마나 요동치고 있는지 진단합니다.")
             
             all_valid_ranks = t_df.dropna(subset=['전체순위_숫자'])
             if not all_valid_ranks.empty:
                 market_volatility = all_valid_ranks.groupby('단지명')['전체순위_숫자'].std().mean()
-                if market_volatility >= 4: m_status, m_col = "🌋 매우 극심", "#ef4444"
-                elif market_volatility >= 2: m_status, m_col = "🌊 변동 주의", "#f59e0b"
+                # ⭐ 롤링 지수라는 말 대신 '순위 요동/경쟁 과열'로 표현
+                if market_volatility >= 4: m_status, m_col = "🌋 순위 변화 심함", "#ef4444"
+                elif market_volatility >= 2: m_status, m_col = "🌊 변동 잦음", "#f59e0b"
                 else: m_status, m_col = "💧 비교적 안정", "#10b981"
                 
                 st.markdown(f"""
                 <div style="background-color: {m_col}; padding: 10px 20px; border-radius: 10px; color: white; font-weight: bold; margin-bottom: 20px;">
-                    📡 현재 시장 전체 롤링 지수: {m_status} (평균 변동폭: {market_volatility:.1f}계단)
+                    📡 현재 이 단지의 알고리즘 변동 상태: {m_status} (평균 {market_volatility:.1f}계단씩 뒤섞임)
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -1314,14 +1342,15 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     bp_df = bp_df.sort_values(by=['생존율_num', '평균 순위'], ascending=[False, True])
                     
                     def get_action_plan(sr):
-                        if sr >= 80: return "🟢 집중 타격 (예산 집중)"
-                        elif sr >= 40: return "🟡 가성비 방어 (틈새 공략)"
-                        else: return "🔴 광고 중단 (인증 재등록)"
+                        if sr >= 80: return "🟢 S급 매물 (투자 대비 효율이 좋음. 예산 집중 추천)"
+                        elif sr >= 40: return "🟡 A급 매물 (투자 대비 효율이 적음. 선택적 집중 추천)"
+                        else: return "🔴 F급 매물 (투자 대비 효율이 없음. 잠시 중단 추천)"
                         
                     def get_reason(sr):
-                        if sr >= 80: return "네이버 우대 매물 (갱신 시 1위 고정 확정적)"
-                        elif sr >= 40: return "일반 매물 (롤링 치열, 지속적 봇 관리 필요)"
-                        else: return "페널티 매물 (갱신해도 알고리즘에 의해 강제 누락됨)"
+                        # ⭐ '1위' 단어 삭제 및 '롤링' 등 난해한 용어를 직관적인 결과로 치환
+                        if sr >= 80: return "네이버 알고리즘 우대 매물 (네이버 부동산에서 상단 노출될 확률이 높음)"
+                        elif sr >= 40: return "순위 변동이 잦은 일반 매물 (네이버 부동산에서 상단 노출될 확률이 적음)"
+                        else: return "거의 노출이 되지 않는 불량 매물 (광고비를 써도 노출되지 않을 확률이 높)"
 
                     bp_df['AI 추천 액션'] = bp_df['생존율_num'].apply(get_action_plan)
                     bp_df['진단 사유'] = bp_df['생존율_num'].apply(get_reason)
