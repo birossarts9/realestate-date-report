@@ -488,27 +488,75 @@ try:
     # ==========================================================
     # 🎯 [핵심] AI 마스터 결론 (고객 맞춤형 직관적 성적표)
     # ==========================================================
+    # ⭐ [오류 해결] 지워졌던 변수 복구
+    danger_count = len(danger_ls)
+    empty_count = len(my_empty)
+
     total_my_bundles = len(my_ls)
     safe_my_bundles = len(my_ls[my_ls['묶음내순위_숫자'] <= 3])
     safe_ratio = int((safe_my_bundles / total_my_bundles) * 100) if total_my_bundles > 0 else 0
-    
-    # ⭐ [추가] 상위권 / 하위권 매물 동/호수 명단 추출
-    safe_units = my_ls[my_ls['묶음내순위_숫자'] <= 3]['동/호수'].dropna().unique().tolist()
-    danger_units = my_ls[my_ls['묶음내순위_숫자'] > 3]['동/호수'].dropna().unique().tolist()
 
-    safe_units_str = ", ".join([mask_text(u) for u in safe_units]) if safe_units else "해당 없음"
-    danger_units_str = ", ".join([mask_text(u) for u in danger_units]) if danger_units else "해당 없음"
-    
-    # 대시보드 화면 표출용 HTML 코드
+    # ⭐ [개선] 매물을 단지별로 묶고 전체 스펙(매물묶음키)을 처리하는 로직
+    safe_df = my_ls[my_ls['묶음내순위_숫자'] <= 3]
+    danger_df = my_ls[my_ls['묶음내순위_숫자'] > 3]
+
+    def build_ui_html(df):
+        if df.empty: return "해당 없음"
+        html_str = ""
+        for danji, grp in df.groupby('단지명'):
+            danji_masked = mask_text(danji)
+            html_str += f"<div style='margin-bottom: 12px;'><b style='color:#0f172a; font-size: 15px;'>🏢 [{danji_masked}]</b><br>"
+            for spec in grp['매물묶음키'].unique():
+                html_str += f"&nbsp;&nbsp;&nbsp;&nbsp;🔹 {mask_text(spec)}<br>"
+            html_str += "</div>"
+        return html_str
+
+    def build_sms_text(df):
+        if df.empty: return "해당 없음"
+        items = []
+        for danji, grp in df.groupby('단지명'):
+            danji_masked = mask_text(danji)
+            for spec in grp['매물묶음키'].unique():
+                items.append(f" - [{danji_masked}] {mask_text(spec)}")
+        
+        # 문자는 3개만 보여주고 짜르기
+        if len(items) > 3:
+            return "\n".join(items[:3]) + f"\n   ...외 {len(items)-3}건 (상세 내역은 대시보드 접속 확인)"
+        else:
+            return "\n".join(items)
+
+    safe_ui_html = build_ui_html(safe_df)
+    danger_ui_html = build_ui_html(danger_df)
+
+    safe_sms_text = build_sms_text(safe_df)
+    danger_sms_text = build_sms_text(danger_df)
+
+    # 💡 [화면 UI] details 태그를 사용하여 '클릭 시 펼쳐지는(아코디언)' UI 적용
     master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
-    
-    master_conclusion += f"<div style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6;'>"
-    master_conclusion += f"<span style='font-size: 18px; color: #1e3a8a;'>🟢 <b>상위권 매물:</b> {safe_units_str}</span><br>"
-    master_conclusion += f"<span style='font-size: 14px; color: #475569; margin-top: 5px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 매물입니다.</span></div>"
 
-    master_conclusion += f"<div style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444;'>"
-    master_conclusion += f"<span style='font-size: 18px; color: #991b1b;'>🔴 <b>하위권 매물:</b> {danger_units_str}</span><br>"
-    master_conclusion += f"<span style='font-size: 14px; color: #475569; margin-top: 5px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지지 않는 매물입니다.</span></div>"
+    master_conclusion += f"""
+    <details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'>
+        <summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>
+            ▶ 🟢 상위권 매물 목록 열기 (총 {safe_my_bundles}개)
+        </summary>
+        <div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>
+            {safe_ui_html}
+        </div>
+        <span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 S급 매물입니다.</span>
+    </details>
+    """
+
+    master_conclusion += f"""
+    <details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'>
+        <summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>
+            ▶ 🔴 하위권 매물 목록 열기 (총 {danger_count}개)
+        </summary>
+        <div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>
+            {danger_ui_html}
+        </div>
+        <span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 누락되어 갱신 효율이 떨어지는 매물입니다.</span>
+    </details>
+    """
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
@@ -541,7 +589,7 @@ try:
             
             top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하며 시장을 과열시키고 있습니다."
 
-    # ⭐ 브리핑 텍스트 완성 (고객에게 발송되는 복사 내용)
+    # ⭐ 브리핑 텍스트 완성 (문자용)
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
@@ -554,13 +602,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - {top3_str}
 
 💡 3. [오늘의 AI 마스터 결론]
-현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+현재 전체 관리 매물 {total_my_bundles}개 중, 상위권(3위 이내) 방어 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
 
-🟢 상위권: {safe_units_str}
-(현재 네이버 알고리즘으로 고객에게 많이 보여지는 매물입니다)
+🟢 [상위권 방어 현황]
+{safe_sms_text}
 
-🔴 하위권: {danger_units_str}
-(현재 네이버 알고리즘으로 고객에게 많이 보여지지 않는 매물입니다)"""
+🔴 [하위권 이탈 현황]
+{danger_sms_text}"""
 
 # --- UI 렌더링 시작 ---
     # 1. 깔끔한 대형 제목 (중복 방지)
