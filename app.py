@@ -1023,38 +1023,38 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         rec_desc = f"경쟁사 활동이 {active_hours[0]}시에 집중됩니다. 직후 무혈입성을 권장합니다."
                     else:
                         # [수정 후] - '심야(00~08시) 제외 실제 유효 노출 시간' 계산 로직 적용
-                    max_effective_gap = -1
-                    best_hour = 12
-                    real_gap_len = 0
-                    
-                    for i in range(len(active_hours)):
-                        curr_h = active_hours[i]
-                        next_h = active_hours[(i + 1) % len(active_hours)]
-                        raw_gap = (next_h - curr_h) % 24
-                        if raw_gap == 0: raw_gap = 24  # 하루 종일 안 누르는 경우
+                        max_effective_gap = -1
+                        best_hour = 12
+                        real_gap_len = 0
                         
-                        strike_hour = (curr_h + 1) % 24
-                        
-                        # ⭐ [핵심] 타격 시간부터 빈집 끝날 때까지 1시간씩 돌면서 '심야'인지 '영업시간'인지 검사
-                        effective_gap = 0
-                        for h in range(strike_hour, strike_hour + raw_gap):
-                            real_h = h % 24
-                            # 00시 ~ 07시(새벽)는 유효 시간에서 제외, 08시부터 23시까지만 +1점
-                            if 8 <= real_h <= 23:
-                                effective_gap += 1
-                                
-                        # 유효 시간이 가장 큰 구간을 승자로 채택!
-                        if effective_gap > max_effective_gap:
-                            max_effective_gap = effective_gap
-                            best_hour = strike_hour
-                            real_gap_len = raw_gap
+                        for i in range(len(active_hours)):
+                            curr_h = active_hours[i]
+                            next_h = active_hours[(i + 1) % len(active_hours)]
+                            raw_gap = (next_h - curr_h) % 24
+                            if raw_gap == 0: raw_gap = 24  # 하루 종일 안 누르는 경우
                             
-                    if max_effective_gap >= 3:
-                        rec_time = f"⏰ {best_hour:02d}:00"
-                        rec_desc = f"심야(00~08시)를 제외한 '순수 영업 유효시간'이 가장 긴 구간입니다. (총 {real_gap_len}시간 단독 노출)"
-                    else:
-                        rec_time = "🔥 분산 타격"
-                        rec_desc = "경쟁사가 쉴 새 없이 갱신 중입니다. 고정 시간 대신 봇을 통한 수시 방어가 필수입니다."
+                            strike_hour = (curr_h + 1) % 24
+                            
+                            # ⭐ [핵심] 타격 시간부터 빈집 끝날 때까지 1시간씩 돌면서 '심야'인지 '영업시간'인지 검사
+                            effective_gap = 0
+                            for h in range(strike_hour, strike_hour + raw_gap):
+                                real_h = h % 24
+                                # 00시 ~ 07시(새벽)는 유효 시간에서 제외, 08시부터 23시까지만 +1점
+                                if 8 <= real_h <= 23:
+                                    effective_gap += 1
+                                    
+                            # 유효 시간이 가장 큰 구간을 승자로 채택!
+                            if effective_gap > max_effective_gap:
+                                max_effective_gap = effective_gap
+                                best_hour = strike_hour
+                                real_gap_len = raw_gap
+                                
+                        if max_effective_gap >= 3:
+                            rec_time = f"⏰ {best_hour:02d}:00"
+                            rec_desc = f"심야(00~08시)를 제외한 '순수 영업 유효시간'이 가장 긴 구간입니다. (총 {real_gap_len}시간 단독 노출)"
+                        else:
+                            rec_time = "🔥 분산 타격"
+                            rec_desc = "경쟁사가 쉴 새 없이 갱신 중입니다. 고정 시간 대신 봇을 통한 수시 방어가 필수입니다."
                 
                 b_ranks_hist = bdf.groupby('수집일시')['전체순위_숫자'].min()
                 survival_rate = (len(b_ranks_hist) / total_sessions) * 100 if total_sessions > 0 else 0
