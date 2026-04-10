@@ -13,6 +13,8 @@ from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components
 from oauth2client.service_account import ServiceAccountCredentials
 import json
+from PIL import Image, ImageDraw, ImageFont
+import io
 
 # 1. 시트 접근 권한 설정
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -334,6 +336,47 @@ def load_server_data():
     
     return df
 
+# [여기에 추가!] 카톡 리포트 이미지 생성 함수
+def generate_kakao_report_image(realtor_name, safe_count, danger_count, red_ocean_count):
+    width, height = 600, 650
+    img = Image.new('RGB', (width, height), color=(30, 58, 138)) 
+    draw = ImageDraw.Draw(img)
+    
+    try:
+        # 서버/로컬에 나눔고딕 등 폰트 파일이 있다면 이름을 맞춰주세요.
+        font_title = ImageFont.truetype("malgun.ttf", 32)
+        font_sub = ImageFont.truetype("malgun.ttf", 22)
+        font_body = ImageFont.truetype("malgun.ttf", 18)
+        font_large = ImageFont.truetype("malgunbd.ttf", 60) 
+    except:
+        font_title = font_sub = font_body = font_large = ImageFont.load_default()
+
+    now_str = datetime.now().strftime('%Y.%m.%d')
+    draw.text((40, 40), "TOP RANK AI", font=font_title, fill=(255, 255, 255))
+    draw.text((40, 90), "📊 오늘의 시장 동향 리포트", font=font_sub, fill=(200, 212, 230))
+    draw.text((40, 125), f"🏢 {realtor_name} 대표님 ({now_str})", font=font_body, fill=(200, 212, 230))
+    
+    draw.rounded_rectangle([(30, 170), (570, 550)], radius=20, fill=(255, 255, 255))
+    
+    draw.text((50, 200), "🛡️ 현재 내 매물 방어율", font=font_sub, fill=(50, 65, 85))
+    draw.text((90, 260), "🟢 상위권 안전", font=font_body, fill=(34, 197, 94))
+    draw.text((105, 300), f"{safe_count}건", font=font_large, fill=(30, 58, 138))
+    
+    draw.text((360, 260), "🔴 누수 경고", font=font_body, fill=(239, 68, 68))
+    draw.text((375, 300), f"{danger_count}건", font=font_large, fill=(239, 68, 68))
+
+    draw.line([(50, 400), (550, 400)], fill=(226, 232, 240), width=2)
+    
+    draw.text((50, 430), "🎯 AI 마스터 브리핑", font=font_sub, fill=(49, 130, 246))
+    summary_text = f"상위권 1~3위 방어율이 매우 우수합니다.\n다만 {danger_count}건의 예산 누수 매물과 {red_ocean_count}건의 과열 단지가\n감지되었으니 즉시 대시보드를 확인해 주세요."
+    draw.text((50, 470), summary_text, font=font_body, fill=(71, 85, 105))
+
+    draw.text((40, 580), "👇 전송된 링크를 눌러 상세 전략과 갱신 시간을 확인하세요", font=font_body, fill=(255, 255, 255))
+
+    img_buffer = io.BytesIO()
+    img.save(img_buffer, format="PNG")
+    return img_buffer.getvalue()
+
 # 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
 splash_placeholder = st.empty()
 
@@ -484,6 +527,23 @@ try:
         top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
         global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
+
+    # [여기에 추가!] 카톡 발송용 다운로드 버튼 UI
+    safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
+    danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
+    red_ocean_val = len(my_red) if 'my_red' in locals() else 0
+
+    st.markdown("### 📱 1초 카톡 브리핑 전송")
+    st.caption("고객에게 전송할 요약 이미지를 생성합니다.")
+    report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, red_ocean_val)
+    st.download_button(
+        label="📸 요약 리포트 저장 (카톡 전송용)",
+        data=report_image_bytes,
+        file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
+        mime="image/png",
+        type="primary"
+    )
+    st.markdown("---") # 시각적 구분선
 
     # ==========================================================
     # 🎯 [핵심] AI 마스터 결론 (최근 3일 평균 등수 기반 성적표)
