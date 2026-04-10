@@ -556,8 +556,17 @@ try:
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
-    analysis_period_str = f"{start_dt.strftime('%Y.%m.%d')} ~ {end_dt.strftime('%Y.%m.%d')}"
-    analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+    
+    # ⭐ [핵심 수정] 사이드바 설정일이 아닌, '실제 수집된 데이터의 첫 날과 마지막 날'을 기준으로 기간 산출
+    if not t_df.empty:
+        actual_start_dt = t_df['수집일시'].min().date()
+        actual_end_dt = t_df['수집일시'].max().date()
+    else:
+        actual_start_dt = start_dt.date()
+        actual_end_dt = end_dt.date()
+
+    analysis_period_str = f"{actual_start_dt.strftime('%Y.%m.%d')} ~ {actual_end_dt.strftime('%Y.%m.%d')}"
+    analysis_days = max(1, (actual_end_dt - actual_start_dt).days + 1)
     
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 상위 노출 순위 없음"
