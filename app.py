@@ -488,16 +488,16 @@ try:
     # ==========================================================
     # 🎯 [핵심] AI 마스터 결론 (최근 3일 평균 등수 기반 성적표)
     # ==========================================================
-    # ⭐ 1. 최근 3일 데이터 필터링 및 평균 순위 계산
+    # ⭐ [오류 완벽 해결] 에러 주범이었던 빈집 카운트 변수 무조건 복구!!
     empty_count = len(my_empty)
-    
+
+    # 1. 최근 3일 데이터 필터링 및 평균 순위 계산
     three_days_ago = end_dt - pd.Timedelta(days=3)
     recent_my_df = t_df[(t_df['부동산명'].str.contains(filter_realtor_name, na=False)) & (t_df['수집일시'] >= three_days_ago)]
     
     if not recent_my_df.empty:
         avg_ranks = recent_my_df.groupby(['단지명', '동/호수', '층/타입', '매물묶음키'])['묶음내순위_숫자'].mean().reset_index()
         
-        # 등급 분류 (1~5위: 상위권, 6~10위: 중위권, 11위 밖: 하위권)
         safe_df = avg_ranks[avg_ranks['묶음내순위_숫자'] <= 5]
         mid_df = avg_ranks[(avg_ranks['묶음내순위_숫자'] > 5) & (avg_ranks['묶음내순위_숫자'] <= 10)]
         danger_df = avg_ranks[avg_ranks['묶음내순위_숫자'] > 10]
@@ -507,10 +507,10 @@ try:
     total_my_bundles = len(avg_ranks) if not recent_my_df.empty else 0
     safe_my_bundles = len(safe_df)
     mid_my_bundles = len(mid_df)
-    danger_count = len(danger_df)
+    danger_count = len(danger_df) # 전략 카드용 에러 방지 재할당
     safe_ratio = int((safe_my_bundles / total_my_bundles) * 100) if total_my_bundles > 0 else 0
 
-    # ⭐ 2. UI 표시용 및 문자 발송용 HTML/텍스트 생성 함수 (평균 등수 추가)
+    # 2. UI 및 문자용 텍스트/HTML 생성
     def build_ui_html(df):
         if df.empty: return "해당 없음"
         html_str = ""
@@ -545,14 +545,14 @@ try:
     mid_sms_text = build_sms_text(mid_df)
     danger_sms_text = build_sms_text(danger_df)
 
-    # ⭐ 3. 화면 UI 렌더링 (아코디언 3단 구성 + 직관적 한 줄 요약)
+    # ⭐ 3. 화면 UI 렌더링 (대시보드에서도 클릭 전부터 설명이 바로 보이도록 제목에 고정!)
     master_conclusion = f"최근 3일간 대표님이 관리 중인 활동 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(평균 5위 이내)에 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
 
-    master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 매물 (평균 1~5위) : 총 {safe_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div><span style='font-size: 14px; font-weight: bold; color: #2563eb; margin-top: 10px; display: block;'>💡 📞 손님 문의가 빗발치는 노출 최상단 명당자리입니다. (현재 상태 유지)</span></details>"
+    master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 16px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 (평균 1~5위) : 📞 고객에게 인기가 많은 매물 (유지) - 총 {safe_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div></details>"
 
-    master_conclusion += f"<details style='background-color:#fffbeb; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #f59e0b; outline: none;'><summary style='font-size: 18px; color: #b45309; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟡 중위권 매물 (평균 6~10위) : 총 {mid_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{mid_ui_html}</div><span style='font-size: 14px; font-weight: bold; color: #d97706; margin-top: 10px; display: block;'>💡 🚀 조금만 관리하면 최상단으로 치고 올라갈 A급 매물입니다. (봇 갱신 집중)</span></details>"
+    master_conclusion += f"<details style='background-color:#fffbeb; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #f59e0b; outline: none;'><summary style='font-size: 16px; color: #b45309; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟡 중위권 (평균 6~10위) : 🚀 고객에게 인기가 있는 매물 (집중) - 총 {mid_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{mid_ui_html}</div></details>"
 
-    master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 매물 (평균 11위 밖) : 총 {danger_count}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div><span style='font-size: 14px; font-weight: bold; color: #dc2626; margin-top: 10px; display: block;'>💡 💸 광고비를 써도 손님 눈에 안 띄는 죽은 매물입니다. (즉시 광고 끄고 재등록 권장)</span></details>"
+    master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 16px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 (평균 11위 밖) : 💸 고객에게 거의 보여지지 않는 매물 (보류) - 총 {danger_count}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div></details>"
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
@@ -593,7 +593,7 @@ try:
             
             top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하며 시장을 과열시키고 있습니다."
 
-    # ⭐ 브리핑 텍스트 완성 (문자 발송용에도 설명 추가!)
+    # ⭐ 브리핑 텍스트 완성 (요청하신 워딩 100% 반영)
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
