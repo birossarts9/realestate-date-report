@@ -518,6 +518,10 @@ try:
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
     
+    # ⭐ [추가] 분석 기간 및 분석 일수 계산
+    analysis_period_str = f"{start_dt.strftime('%Y.%m.%d')} ~ {end_dt.strftime('%Y.%m.%d')}"
+    analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+    
     # 1. 내 랭킹 텍스트
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 상위 노출 순위 없음"
@@ -525,16 +529,14 @@ try:
     plain_danger = f"상위권에서 이탈한 위험 매물이 {danger_count}개 발생했으며, " if danger_count > 0 else "현재 상위권에서 이탈한 매물 없이 방어 중이며, "
     plain_empty = f"타 부동산이 집중적으로 갱신하지 않는 매물이 {empty_count}개 포착되었습니다."
     
-    # ⭐ 2. [추가] Top 3 경쟁사 도출 및 갱신 횟수 합산 로직
+    # 2. Top 3 경쟁사 도출 및 갱신 횟수 평균 계산 로직
     top3_str = "분석된 타사 데이터 없음"
     
     if not boosted_df.empty:
-        # 띄어쓰기를 완전히 제거한 깨끗한 이름으로 경쟁사 활동 내역 묶기
         temp_boosted = boosted_df.copy()
         temp_boosted['부동산명_정제'] = temp_boosted['부동산명'].apply(clean_realtor_name)
         top_competitors = temp_boosted.groupby('부동산명_정제').size().reset_index(name='갱신횟수')
         
-        # 갱신 횟수 기준으로 1, 2, 3위 추출
         top_competitors = top_competitors.sort_values('갱신횟수', ascending=False).head(3)
         
         if not top_competitors.empty:
@@ -542,27 +544,34 @@ try:
             total_top3_renews = 0
             
             for i, row in enumerate(top_competitors.itertuples(), 1):
-                masked_name = mask_text(row.부동산명_정제, True) # 데모 모드일 경우 이름 가리기
+                masked_name = mask_text(row.부동산명_정제, True) 
                 top_list.append(f"{i}위 {masked_name}")
                 total_top3_renews += row.갱신횟수
                 
             top_names_str = ", ".join(top_list)
-            top3_str = f"현재 {top_names_str} 입니다.\n이 {len(top_competitors)}곳은 분석 기간 동안 총 {total_top3_renews}회를 갱신하며 시장을 과열시키고 있습니다."
+            
+            # ⭐ [핵심 수정] 3곳 합산이 아닌, '1곳당 평균 갱신 횟수'와 '일평균'으로 쪼개서 계산
+            comp_count = len(top_competitors)
+            avg_per_comp = total_top3_renews / comp_count
+            daily_avg_per_comp = avg_per_comp / analysis_days
+            
+            top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하고 있습니다."
 
-    # 3. 최종 브리핑 텍스트 완성
+    # ⭐ 3. 최종 브리핑 텍스트 완성 (기간 추가 및 결론 위치 하단으로 이동)
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
-
-💡 [오늘의 AI 마스터 결론]
-현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
-{plain_danger}{plain_empty}
+(분석 기간: {analysis_period_str})
 
 🏆 1. 내 부동산 단지별 랭킹 현황
 - 현재 대표님의 단지별 랭킹은 [{rank_summary}] 입니다.
 
 ⚔️ 2. 경계해야 할 타사 활동 패턴 (타겟 단지 기준)
-- {top3_str}"""
+- {top3_str}
+
+💡 3. [오늘의 AI 마스터 결론]
+현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+{plain_danger}{plain_empty}"""
 
 # --- UI 렌더링 시작 ---
     # 1. 깔끔한 대형 제목 (중복 방지)
