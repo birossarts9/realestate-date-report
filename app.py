@@ -531,8 +531,12 @@ try:
     safe_sms_text = build_sms_text(safe_df)
     danger_sms_text = build_sms_text(danger_df)
 
-    # 💡 [화면 UI] details 태그를 사용하여 '클릭 시 펼쳐지는(아코디언)' UI 적용
+    # 💡 [화면 UI] details 태그 부분 렌더링 오류 방지를 위해 한 줄로 밀착
     master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
+
+    master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 매물 목록 열기 (총 {safe_my_bundles}개)</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 S급 매물입니다.</span></details>"
+
+    master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 매물 목록 열기 (총 {danger_count}개)</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 누락되어 갱신 효율이 떨어지는 매물입니다.</span></details>"
 
     master_conclusion += f"""
     <details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'>
