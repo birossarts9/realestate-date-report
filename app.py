@@ -486,78 +486,62 @@ try:
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
     # ==========================================================
-    # 🎯 [핵심] AI 마스터 결론
+    # 🎯 [핵심] AI 마스터 결론 (고객 맞춤형 직관적 성적표)
     # ==========================================================
     total_my_bundles = len(my_ls)
     safe_my_bundles = len(my_ls[my_ls['묶음내순위_숫자'] <= 3])
     safe_ratio = int((safe_my_bundles / total_my_bundles) * 100) if total_my_bundles > 0 else 0
-    danger_count = len(danger_ls)
-    empty_count = len(my_empty)
     
-    # 💡 하이라이트 색상 완벽 복구 (총 매물: 보라색, 안전 매물: 파란색)
-    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br>"
+    # ⭐ [추가] 상위권 / 하위권 매물 동/호수 명단 추출
+    safe_units = my_ls[my_ls['묶음내순위_숫자'] <= 3]['동/호수'].dropna().unique().tolist()
+    danger_units = my_ls[my_ls['묶음내순위_숫자'] > 3]['동/호수'].dropna().unique().tolist()
+
+    safe_units_str = ", ".join([mask_text(u) for u in safe_units]) if safe_units else "해당 없음"
+    danger_units_str = ", ".join([mask_text(u) for u in danger_units]) if danger_units else "해당 없음"
     
-    if danger_count > 0:
-        master_conclusion += f"상위권에서 이탈한 위험 매물이 <b style='color:#ef4444;'>{danger_count}개</b> 발생했으며, "
-    else:
-        master_conclusion += f"현재 상위권에서 이탈한 매물 없이 방어 중이며, "
-        
-    master_conclusion += f"타 부동산이 집중적으로 갱신하지 않는 매물이 <b style='color:#10b981;'>{empty_count}개</b> 포착되었습니다.<br>"
+    # 대시보드 화면 표출용 HTML 코드
+    master_conclusion = f"현재 대표님이 관리 중인 전체 VIP 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
     
-    if not boosted_df.empty:
-        master_conclusion += f"오늘 경쟁사들의 주력 갱신 시간대는 <b>오전 {global_peak_hour}시</b>로 분석됩니다. 시스템이 해당 시간을 피해 <b><span style='color:#3182f6;'>{(global_peak_hour + 1) % 24:02d}시</span></b>에 광고를 진행하면 상위권 노출에 유리합니다.<br>"
-    else:
-        master_conclusion += "현재 경쟁사들의 뚜렷한 타격 패턴이 집계되지 않아 데이터를 누적하고 있습니다.<br>"
-        
-    # 💡 안내 문구 위치 변경, 볼드 처리, 시인성(색상) 대폭 강화
-    master_conclusion += "<div style='font-size:15px; color:#1e293b; font-weight:600; margin-top: 15px; line-height: 1.6; background-color: #f1f5f9; padding: 15px; border-radius: 8px; border-left: 4px solid #94a3b8;'>"
-    master_conclusion += "<i>* <b>롤링(Rolling)이란?</b> 네이버 부동산에서 광고 효율을 분산하기 위해 특정 시간이나 접속자마다 매물 노출 순위를 무작위로 뒤섞는 알고리즘 현상을 뜻합니다.</i><br>"
-    master_conclusion += "<i style='margin-top: 8px; display: block;'>* <b>[데이터 수집 범위 안내]</b> 본 시스템은 실질적인 고객 유입이 발생하는 <b>상위 20위 이내의 매물만을 집중 스캔</b>합니다. 20위 밖으로 밀려난 매물은 광고 효율이 현저히 떨어지는 것으로 판단하여 '순위 확인 불가(권외)'로 표기됩니다.</i>"
-    master_conclusion += "</div>"
+    master_conclusion += f"<div style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6;'>"
+    master_conclusion += f"<span style='font-size: 18px; color: #1e3a8a;'>🟢 <b>상위권 매물:</b> {safe_units_str}</span><br>"
+    master_conclusion += f"<span style='font-size: 14px; color: #475569; margin-top: 5px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 매물입니다.</span></div>"
+
+    master_conclusion += f"<div style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444;'>"
+    master_conclusion += f"<span style='font-size: 18px; color: #991b1b;'>🔴 <b>하위권 매물:</b> {danger_units_str}</span><br>"
+    master_conclusion += f"<span style='font-size: 14px; color: #475569; margin-top: 5px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지지 않는 매물입니다.</span></div>"
 
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
-    
-    # ⭐ [추가] 분석 기간 및 분석 일수 계산
     analysis_period_str = f"{start_dt.strftime('%Y.%m.%d')} ~ {end_dt.strftime('%Y.%m.%d')}"
     analysis_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
     
-    # 1. 내 랭킹 텍스트
     rank_summary = " / ".join([f"{mask_text(k)} {v}위" for k, v in my_ranks_dict.items() if v != '권외'])
     if not rank_summary: rank_summary = "분석된 상위 노출 순위 없음"
     
-    plain_danger = f"상위권에서 이탈한 위험 매물이 {danger_count}개 발생했으며, " if danger_count > 0 else "현재 상위권에서 이탈한 매물 없이 방어 중이며, "
-    plain_empty = f"타 부동산이 집중적으로 갱신하지 않는 매물이 {empty_count}개 포착되었습니다."
-    
-    # 2. Top 3 경쟁사 도출 및 갱신 횟수 평균 계산 로직
     top3_str = "분석된 타사 데이터 없음"
     
     if not boosted_df.empty:
         temp_boosted = boosted_df.copy()
         temp_boosted['부동산명_정제'] = temp_boosted['부동산명'].apply(clean_realtor_name)
         top_competitors = temp_boosted.groupby('부동산명_정제').size().reset_index(name='갱신횟수')
-        
         top_competitors = top_competitors.sort_values('갱신횟수', ascending=False).head(3)
         
         if not top_competitors.empty:
             top_list = []
             total_top3_renews = 0
-            
             for i, row in enumerate(top_competitors.itertuples(), 1):
                 masked_name = mask_text(row.부동산명_정제, True) 
                 top_list.append(f"{i}위 {masked_name}")
                 total_top3_renews += row.갱신횟수
                 
             top_names_str = ", ".join(top_list)
-            
-            # ⭐ [핵심 수정] 3곳 합산이 아닌, '1곳당 평균 갱신 횟수'와 '일평균'으로 쪼개서 계산
             comp_count = len(top_competitors)
             avg_per_comp = total_top3_renews / comp_count
             daily_avg_per_comp = avg_per_comp / analysis_days
             
-            top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하고 있습니다."
+            top3_str = f"현재 {top_names_str} 입니다.\n이 {comp_count}곳은 최근 {analysis_days}일 동안 1곳당 평균 {avg_per_comp:.1f}회 (일평균 {daily_avg_per_comp:.1f}회)를 갱신하며 시장을 과열시키고 있습니다."
 
-    # ⭐ 3. 최종 브리핑 텍스트 완성 (기간 추가 및 결론 위치 하단으로 이동)
+    # ⭐ 브리핑 텍스트 완성 (고객에게 발송되는 복사 내용)
     briefing_text = f"""☀️ [{briefing_date} 작전 브리핑] AI 시장 동향 리포트
 안녕하세요, {display_realtor} 대표님.
 TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
@@ -570,8 +554,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - {top3_str}
 
 💡 3. [오늘의 AI 마스터 결론]
-현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 안정적으로 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
-{plain_danger}{plain_empty}"""
+현재 대표님이 관리 중인 전체 VIP 매물 {total_my_bundles}개 중, 상위권(3위 이내)에 방어 중인 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+
+🟢 상위권: {safe_units_str}
+(현재 네이버 알고리즘으로 고객에게 많이 보여지는 매물입니다)
+
+🔴 하위권: {danger_units_str}
+(현재 네이버 알고리즘으로 고객에게 많이 보여지지 않는 매물입니다)"""
 
 # --- UI 렌더링 시작 ---
     # 1. 깔끔한 대형 제목 (중복 방지)
