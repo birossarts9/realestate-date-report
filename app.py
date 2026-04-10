@@ -489,6 +489,8 @@ try:
     # 🎯 [핵심] AI 마스터 결론 (최근 3일 평균 등수 기반 성적표)
     # ==========================================================
     # ⭐ 1. 최근 3일 데이터 필터링 및 평균 순위 계산
+    empty_count = len(my_empty)
+    
     three_days_ago = end_dt - pd.Timedelta(days=3)
     recent_my_df = t_df[(t_df['부동산명'].str.contains(filter_realtor_name, na=False)) & (t_df['수집일시'] >= three_days_ago)]
     
