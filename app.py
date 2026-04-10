@@ -538,30 +538,6 @@ try:
 
     master_conclusion += f"<details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'><summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🔴 하위권 매물 목록 열기 (총 {danger_count}개)</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{danger_ui_html}</div><span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 누락되어 갱신 효율이 떨어지는 매물입니다.</span></details>"
 
-    master_conclusion += f"""
-    <details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'>
-        <summary style='font-size: 18px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>
-            ▶ 🟢 상위권 매물 목록 열기 (총 {safe_my_bundles}개)
-        </summary>
-        <div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>
-            {safe_ui_html}
-        </div>
-        <span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 고객에게 많이 보여지는 S급 매물입니다.</span>
-    </details>
-    """
-
-    master_conclusion += f"""
-    <details style='background-color:#fef2f2; padding: 15px; border-radius: 10px; border-left: 5px solid #ef4444; outline: none;'>
-        <summary style='font-size: 18px; color: #991b1b; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>
-            ▶ 🔴 하위권 매물 목록 열기 (총 {danger_count}개)
-        </summary>
-        <div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>
-            {danger_ui_html}
-        </div>
-        <span style='font-size: 13px; color: #64748b; margin-top: 10px; display: block;'>* 현재 네이버 알고리즘으로 누락되어 갱신 효율이 떨어지는 매물입니다.</span>
-    </details>
-    """
-
     # --- 작전 브리핑(문자 발송용) 텍스트 ---
     briefing_date = end_dt.strftime('%Y-%m-%d')
     analysis_period_str = f"{start_dt.strftime('%Y.%m.%d')} ~ {end_dt.strftime('%Y.%m.%d')}"
