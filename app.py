@@ -373,16 +373,16 @@ def generate_kakao_report_image(realtor_name, safe_count, danger_count, rank_sum
     draw.text((580, 420), f"{danger_count} 건", font=font_bold, fill=(240, 68, 82)) # 레드 포인트
 
     # 4. [카드 2] 랭킹 및 경쟁사 점유율
-    draw.rounded_rectangle([(40, 520), (760, 790)], radius=25, fill=(255, 255, 255))
+    draw.rounded_rectangle([(40, 520), (760, 810)], radius=25, fill=(255, 255, 255))
     draw.text((80, 560), "[ 내 단지별 랭킹 현황 ]", font=font_bold, fill=(25, 31, 40))
     wrapped_ranks = textwrap.fill(rank_summary, width=45)
     draw.text((80, 610), wrapped_ranks, font=font_body, fill=(107, 118, 132), spacing=10)
 
-    draw.line([(80, 690), (720, 690)], fill=(242, 244, 246), width=2)
-    draw.text((80, 720), "[ 타사 점유율 Top 3 ]", font=font_bold, fill=(25, 31, 40))
-    # 텍스트가 너무 길면 줄바꿈 처리
+    draw.line([(80, 700), (720, 700)], fill=(242, 244, 246), width=2)
+    draw.text((80, 730), "[ 타사 점유율 Top 3 ]", font=font_bold, fill=(25, 31, 40))
     wrapped_comp = top_comp_str.split("입니다.")[0].replace("현재 ", "")
-    draw.text((320, 725), wrapped_comp, font=font_small, fill=(240, 68, 82))
+    # 💡 [해결] x좌표를 80으로 당기고, y좌표를 770으로 내려서 아랫줄에 깔끔하게 적히도록 수정
+    draw.text((80, 770), wrapped_comp, font=font_body, fill=(240, 68, 82))
 
     # 5. [카드 3] 자동 갱신 성과 및 업셀링 훅(Hook)
     draw.rounded_rectangle([(40, 810), (760, 1030)], radius=25, fill=(232, 243, 255)) # 연한 블루 배경
@@ -554,18 +554,6 @@ try:
         top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
         global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
-
-    # [수정할 영역] 기존 카톡 발송용 다운로드 버튼 UI 교체
-    safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
-    danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
-    
-    # 텍스트 데이터 안전하게 가져오기
-    rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
-    top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
-    auto_renew_val = success_count if 'success_count' in locals() else 0
-
-    st.markdown("### 📱 1초 카톡 브리핑 전송")
-    st.caption("고객에게 전송할 요약 이미지를 생성합니다.")
     
     # 파라미터가 늘어났으므로 호출 부분도 맞춰줍니다
     report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
@@ -993,6 +981,33 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         
         st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {total_time_str}**")
         st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 갱신하여 상위권을 탈환하고 방어한 내역입니다.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+            <div>
+                <h3 style="margin: 0 0 5px 0; color: #1e3a8a; font-weight: bold;">📱 1초 카톡 브리핑 전송</h3>
+                <span style="color: #64748b; font-size: 14px;">고객에게 전송할 프리미엄 요약 이미지를 생성합니다.</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
+        danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
+        rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
+        top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
+        auto_renew_val = success_count if 'success_count' in locals() else 0
+
+        report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
+        
+        st.download_button(
+            label="📸 리포트 다운로드 (PNG)",
+            data=report_image_bytes,
+            file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
+            mime="image/png",
+            type="primary",
+            use_container_width=True
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
         
         if not merged_df.empty:
             st.dataframe(
