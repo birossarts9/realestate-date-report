@@ -546,14 +546,13 @@ try:
     st.markdown("---") # 시각적 구분선
 
     # ==========================================================
-    # 🎯 [핵심] AI 마스터 결론 (최근 3일 평균 등수 기반 성적표)
+    # 🎯 [핵심] AI 마스터 결론 (사용자 설정 기간 기반 성적표)
     # ==========================================================
-    # ⭐ [오류 완벽 해결] 에러 주범이었던 빈집 카운트 변수 무조건 복구!!
     empty_count = len(my_empty)
 
-    # 1. 최근 3일 데이터 필터링 및 평균 순위 계산
-    three_days_ago = end_dt - pd.Timedelta(days=3)
-    recent_my_df = t_df[(t_df['부동산명'].str.contains(filter_realtor_name, na=False)) & (t_df['수집일시'] >= three_days_ago)]
+    # 1. 3일 고정 로직 제거! 사용자가 사이드바에서 설정한 기간(t_df)을 그대로 사용합니다.
+    selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+    recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
     
     if not recent_my_df.empty:
         avg_ranks = recent_my_df.groupby(['단지명', '동/호수', '층/타입', '매물묶음키'])['묶음내순위_숫자'].mean().reset_index()
@@ -666,7 +665,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 - {top3_str}
 
 💡 3. [오늘의 AI 마스터 결론]
-최근 3일 기준 관리 매물 {total_my_bundles}개 중, 상위권 방어 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
+분석 기간({selected_days}일) 기준 관리 매물 {total_my_bundles}개 중, 상위권 방어 매물은 {safe_my_bundles}개({safe_ratio}%)입니다.
 
 🟢 [상위권 (평균 1~5위)] : 📞 고객에게 인기가 많은 매물 (집중)
 {safe_sms_text}
