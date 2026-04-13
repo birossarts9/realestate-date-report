@@ -1032,7 +1032,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [업그레이드] 실시간 작전 지시 포함 카톡 리포트
+        # 🚀 [업그레이드] 실시간 작전 지시 & 카톡 리포트 다운로드
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -1043,44 +1043,50 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         days_val = selected_days if 'selected_days' in locals() else 7
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
-        # 2. [핵심] AI 작전 지시 데이터 생성 (S급 매물 3개 + 타격 시간)
+        # 2. [핵심 수정] 단지별 정확한 수집 횟수로 S급 매물 3개 추출
         ai_recommendations = []
         
-        # 전체 매물 중 '내 매물'이면서 알고리즘 점수가 높은(S급) 매물을 찾기 위해 임시 진단 수행
-        # (이미 전역에서 ms_counts 등을 계산하고 있으므로 활용)
         if not t_df.empty:
             my_all_listings = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].copy()
             if not my_all_listings.empty:
-                # 매물별 생존율 및 평균 순위 계산
-                total_s = t_df['수집일시'].nunique()
                 my_diagnostics = []
-                for b_key, b_grp in my_all_listings.groupby('매물묶음키'):
-                    b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
-                    survival = (len(b_ranks) / total_s) * 100
-                    avg_rank = b_ranks.mean()
-                    my_diagnostics.append({'key': b_key, 'danji': b_grp['단지명'].iloc[0], 'survival': survival, 'avg': avg_rank})
+                
+                # 💡 각 단지별로 나누어서 '해당 단지의 총 수집 횟수'를 정확히 구합니다.
+                for comp_name, comp_grp in t_df.groupby('단지명'):
+                    total_sessions_comp = comp_grp['수집일시'].nunique()
+                    if total_sessions_comp == 0: continue
+                    
+                    my_comp_grp = my_all_listings[my_all_listings['단지명'] == comp_name]
+                    for b_key, b_grp in my_comp_grp.groupby('매물묶음키'):
+                        b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
+                        survival = (len(b_ranks) / total_sessions_comp) * 100
+                        avg_rank = b_ranks.mean()
+                        my_diagnostics.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
                 
                 diag_df = pd.DataFrame(my_diagnostics)
-                # S급 필터링 (생존율 80% 이상 우선, 평균순위 높은 순)
-                s_grade_listings = diag_df[diag_df['survival'] >= 80].sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
-                
-                for _, row in s_grade_listings.iterrows():
-                    b_key = row['key']
-                    # 타격 시간 계산 (경쟁사 최빈값 + 1시간)
-                    b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                    rec_time_str = "오전 10시" # 기본값
-                    if not b_boosted.empty:
-                        peak_h = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                        target_h = (peak_h + 1) % 24
-                        ampm = "오후" if target_h >= 12 else "오전"
-                        disp_h = target_h if target_h <= 12 else target_h - 12
-                        if disp_h == 0: disp_h = 12
-                        rec_time_str = f"{ampm} {disp_h}시"
+                if not diag_df.empty:
+                    # 생존율 80% 이상 중 평균 순위가 높은(숫자가 낮은) Top 3 추출
+                    s_grade_listings = diag_df[diag_df['survival'] >= 80].sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
                     
-                    # 텍스트 가공
-                    parts = b_key.split('|')
-                    detail_spec = f"{parts[0]} {parts[1]}" # 동/호수 및 층/타입
-                    ai_recommendations.append(f"{mask_text(row['danji'])} {mask_text(detail_spec)} {rec_time_str} 광고 추천")
+                    for _, row in s_grade_listings.iterrows():
+                        b_key = row['key']
+                        # 타격 시간 계산 (경쟁사 집중 시간 + 1시간)
+                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                        rec_time_str = "오전 10시" # 기본값
+                        if not b_boosted.empty:
+                            peak_h = int(b_boosted['수집일시'].dt.hour.mode()[0])
+                            target_h = (peak_h + 1) % 24
+                            ampm = "오후" if target_h >= 12 else "오전"
+                            disp_h = target_h if target_h <= 12 else target_h - 12
+                            if disp_h == 0: disp_h = 12
+                            rec_time_str = f"{ampm} {disp_h}시"
+                        
+                        # 텍스트 가공 (대표님 요청 포맷 적용)
+                        parts = b_key.split('|')
+                        detail_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
+                        
+                        # 예: 힐스테이트 104동 84A 오후 2시에 광고 추천
+                        ai_recommendations.append(f"{mask_text(row['danji'])} {mask_text(detail_spec)} {rec_time_str}에 광고 추천")
 
         # 3. [시장 점유율 점수] 데이터 가공
         top_comp_list = []
@@ -1092,7 +1098,21 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
             top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
 
-        # 4. 이미지 생성 및 버튼 렌더링
+        # 🌟 [신규 추가] 대시보드 웹 화면에도 작전 지시 출력하기
+        st.markdown("""
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
+            <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 18px;">🎯 오늘의 AI 마스터 작전 지시</h4>
+        """, unsafe_allow_html=True)
+        
+        if ai_recommendations:
+            for rec in ai_recommendations:
+                st.markdown(f"<div style='font-size: 16px; color: #334155; margin-bottom: 8px; font-weight: 600;'>🔥 {rec}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='font-size: 15px; color: #64748b;'>분석 결과, 현재 집중 관리할 S급 매물이 없습니다.</div>", unsafe_allow_html=True)
+            
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # 4. 이미지 생성 및 버튼 렌더링 (AI 지시 데이터 전달)
         report_image_bytes = generate_kakao_report_image(
             display_realtor, total_bundles_val, safe_bundles_val, safe_ratio_val, days_val, ranks_dict_val, top_comp_list, ai_recommendations
         )
