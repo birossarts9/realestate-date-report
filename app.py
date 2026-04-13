@@ -338,79 +338,83 @@ def load_server_data():
 
 # 함수 괄호 안의 변수들을 대시보드와 똑같이 맞춰줍니다.
 def generate_kakao_report_image(realtor_name, total_bundles, safe_bundles, safe_ratio, selected_days, my_ranks_dict, top_competitors_list, recommendations):
-    # 1. 캔버스 세팅
-    width, height = 800, 1000
+    # 1. 캔버스 세팅 (가로를 1000px로 확장)
+    width, height = 1000, 1000
     img = Image.new('RGB', (width, height), color=(248, 250, 252)) 
     draw = ImageDraw.Draw(img)
     
     try:
         font_title = ImageFont.truetype("NanumGothic.ttf", 46)
-        font_sub = ImageFont.truetype("NanumGothic.ttf", 22)
-        font_body = ImageFont.truetype("NanumGothic.ttf", 20)
-        font_bold = ImageFont.truetype("NanumGothic.ttf", 24)
-        font_large_num = ImageFont.truetype("NanumGothic.ttf", 38)
-        font_small = ImageFont.truetype("NanumGothic.ttf", 16)
+        font_sub = ImageFont.truetype("NanumGothic.ttf", 24)
+        font_body = ImageFont.truetype("NanumGothic.ttf", 22)
+        font_bold = ImageFont.truetype("NanumGothic.ttf", 26)
+        font_large_num = ImageFont.truetype("NanumGothic.ttf", 40)
+        font_small = ImageFont.truetype("NanumGothic.ttf", 18)
     except:
         font_title = font_sub = font_body = font_bold = font_large_num = font_small = ImageFont.load_default()
 
     import textwrap
 
-    # 2. 상단 헤더 영역 
+    # 2. 상단 헤더 (가로 확장 대응 좌표 조정)
     now_str = datetime.now().strftime('%Y.%m.%d')
-    draw.text((40, 50), "AI MARKET INSIGHTS", font=font_title, fill=(15, 23, 42))
-    draw.text((40, 110), f"{realtor_name} 대표님 작전 리포트", font=font_sub, fill=(71, 85, 105))
-    draw.text((560, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
+    draw.text((50, 50), "AI MARKET INSIGHTS", font=font_title, fill=(15, 23, 42))
+    draw.text((50, 110), f"{realtor_name} 대표님 작전 리포트", font=font_sub, fill=(71, 85, 105))
+    draw.text((750, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
 
-    # 3. [1단 카드] 안전 vs 경고 핵심 요약 
-    draw.rounded_rectangle([(40, 160), (760, 280)], radius=20, fill=(255, 255, 255))
-    draw.text((80, 205), "안전 방어 매물", font=font_bold, fill=(71, 85, 105))
-    draw.text((250, 193), f"{safe_bundles}건", font=font_large_num, fill=(5, 150, 105)) 
-    draw.text((400, 205), "/", font=font_bold, fill=(203, 213, 225)) 
+    # 3. [1단 카드] 안전 vs 경고 핵심 요약
+    draw.rounded_rectangle([(50, 160), (950, 280)], radius=20, fill=(255, 255, 255))
+    draw.text((120, 205), "안전 방어 매물", font=font_bold, fill=(71, 85, 105))
+    draw.text((320, 193), f"{safe_bundles}건", font=font_large_num, fill=(5, 150, 105)) 
+    draw.text((500, 205), "/", font=font_bold, fill=(203, 213, 225)) 
     danger_bundles = total_bundles - safe_bundles
-    draw.text((450, 205), "누수 경고 매물", font=font_bold, fill=(71, 85, 105))
-    draw.text((620, 193), f"{danger_bundles}건", font=font_large_num, fill=(225, 29, 72)) 
+    draw.text((580, 205), "누수 경고 매물", font=font_bold, fill=(71, 85, 105))
+    draw.text((780, 193), f"{danger_bundles}건", font=font_large_num, fill=(225, 29, 72)) 
 
-    # 4. [2단 카드 - 좌/우 분할] 내 랭킹 vs 시장 점유율 
-    draw.rounded_rectangle([(40, 310), (390, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((65, 340), "[내 단지별 랭킹]", font=font_bold, fill=(37, 99, 235))
+    # 4. [2단 카드 - 좌/우 분할]
+    # --- [왼쪽] ---
+    draw.rounded_rectangle([(50, 310), (485, 730)], radius=20, fill=(255, 255, 255))
+    draw.text((80, 340), "[내 단지별 랭킹]", font=font_bold, fill=(37, 99, 235))
     y_offset = 410
     if my_ranks_dict:
         for complex_name, rank in list(my_ranks_dict.items())[:6]: 
-            c_display = complex_name[:8] + ".." if len(complex_name) > 8 else complex_name
+            c_display = complex_name[:12] + ".." if len(complex_name) > 12 else complex_name
             rank_str = f"{rank}위" if isinstance(rank, int) else str(rank)
-            draw.text((65, y_offset), c_display, font=font_body, fill=(51, 61, 75))
-            draw.text((315, y_offset), rank_str, font=font_bold, fill=(71, 85, 105))
-            draw.line([(65, y_offset+35), (365, y_offset+35)], fill=(241, 245, 249), width=1)
+            draw.text((80, y_offset), c_display, font=font_body, fill=(51, 61, 75))
+            draw.text((400, y_offset), rank_str, font=font_bold, fill=(71, 85, 105))
+            draw.line([(80, y_offset+35), (450, y_offset+35)], fill=(241, 245, 249), width=1)
             y_offset += 50
 
-    draw.rounded_rectangle([(410, 310), (760, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((435, 340), "[시장 점유율 TOP 6]", font=font_bold, fill=(37, 99, 235))
+    # --- [오른쪽] ---
+    draw.rounded_rectangle([(515, 310), (950, 730)], radius=20, fill=(255, 255, 255))
+    draw.text((545, 340), "[시장 점유율 TOP 6]", font=font_bold, fill=(37, 99, 235))
     y_offset = 410
     if top_competitors_list:
         max_score = max([v for _, v in top_competitors_list]) if top_competitors_list else 1
         for i, (comp_name, score) in enumerate(top_competitors_list[:6]):
-            comp_display = comp_name[:7] + ".." if len(comp_name) > 7 else comp_name
-            draw.text((435, y_offset), f"{i+1}. {comp_display}", font=font_small, fill=(71, 85, 105))
-            bar_len = int((score / max_score) * 140) if max_score > 0 else 0
+            comp_display = comp_name[:10] + ".." if len(comp_name) > 10 else comp_name
+            draw.text((545, y_offset), f"{i+1}. {comp_display}", font=font_small, fill=(71, 85, 105))
+            bar_len = int((score / max_score) * 180) if max_score > 0 else 0
             bar_color = (37, 99, 235) if i == 0 else (226, 232, 240)
-            draw.rounded_rectangle([(555, y_offset+2), (555+bar_len, y_offset+16)], radius=5, fill=bar_color)
-            draw.text((560+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(15, 23, 42))
+            draw.rounded_rectangle([(720, y_offset+2), (720+bar_len, y_offset+16)], radius=5, fill=bar_color)
+            draw.text((725+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(15, 23, 42))
             y_offset += 50
 
-    # 5. [3단 카드] AI 마스터 작전 지시 (강력한 행동 촉구)
-    draw.rounded_rectangle([(40, 760), (760, 950)], radius=20, fill=(232, 243, 255)) # 연한 블루 배경
-    draw.text((70, 790), "[오늘의 AI 마스터 작전 지시]", font=font_bold, fill=(37, 99, 235))
+    # 5. [3단 카드] AI 마스터 작전 지시 (가로 확장 버전)
+    draw.rounded_rectangle([(50, 760), (950, 950)], radius=20, fill=(232, 243, 255))
+    draw.text((80, 790), "[오늘의 AI 마스터 작전 지시]", font=font_bold, fill=(37, 99, 235))
     
     y_rec = 835
     if recommendations:
         for rec in recommendations:
-            draw.text((70, y_rec), f"• {rec}", font=font_body, fill=(30, 41, 59))
+            # 텍스트가 길면 자동 줄바꿈 (가로가 넓어졌으므로 60자 기준)
+            wrapped_rec = textwrap.fill(f"• {rec}", width=60)
+            draw.text((80, y_rec), wrapped_rec, font=font_body, fill=(30, 41, 59))
             y_rec += 35
     else:
-        draw.text((70, 835), "분석 결과, 현재 집중 관리할 S급 매물이 없습니다.", font=font_body, fill=(107, 118, 132))
+        draw.text((80, 835), "현재 분석된 유효 매물이 부족합니다.", font=font_body, fill=(107, 118, 132))
 
     # 6. 최하단 안내 문구 
-    draw.text((230, 970), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(148, 163, 184))
+    draw.text((330, 970), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(148, 163, 184))
 
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
@@ -1032,63 +1036,67 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [업그레이드] 실시간 작전 지시 & 카톡 리포트 다운로드
+        # 🚀 [업그레이드] 단지별 1개씩 선별하는 작전 로직
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 1. 기본 데이터 확보
+        # 기본 데이터
         total_bundles_val = total_my_bundles if 'total_my_bundles' in locals() else 0
         safe_bundles_val = safe_my_bundles if 'safe_my_bundles' in locals() else 0
         safe_ratio_val = safe_ratio if 'safe_ratio' in locals() else 0
         days_val = selected_days if 'selected_days' in locals() else 7
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
-        # 2. [핵심 수정] 단지별 정확한 수집 횟수로 S급 매물 3개 추출
         ai_recommendations = []
-        
         if not t_df.empty:
             my_all_listings = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].copy()
             if not my_all_listings.empty:
-                my_diagnostics = []
+                temp_recs = []
                 
-                # 💡 각 단지별로 나누어서 '해당 단지의 총 수집 횟수'를 정확히 구합니다.
+                # 💡 단지별로 그룹화하여 각 단지에서 1등 매물만 후보로 선정
                 for comp_name, comp_grp in t_df.groupby('단지명'):
                     total_sessions_comp = comp_grp['수집일시'].nunique()
                     if total_sessions_comp == 0: continue
                     
                     my_comp_grp = my_all_listings[my_all_listings['단지명'] == comp_name]
+                    if my_comp_grp.empty: continue
+                    
+                    # 해당 단지 내 매물별 생존율 계산
+                    diag_list = []
                     for b_key, b_grp in my_comp_grp.groupby('매물묶음키'):
                         b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
                         survival = (len(b_ranks) / total_sessions_comp) * 100
                         avg_rank = b_ranks.mean()
-                        my_diagnostics.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
-                
-                diag_df = pd.DataFrame(my_diagnostics)
-                if not diag_df.empty:
-                    # 생존율 80% 이상 중 평균 순위가 높은(숫자가 낮은) Top 3 추출
-                    s_grade_listings = diag_df[diag_df['survival'] >= 80].sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
+                        diag_list.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
                     
-                    for _, row in s_grade_listings.iterrows():
-                        b_key = row['key']
-                        # 타격 시간 계산 (경쟁사 집중 시간 + 1시간)
-                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                        rec_time_str = "오전 10시" # 기본값
-                        if not b_boosted.empty:
-                            peak_h = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                            target_h = (peak_h + 1) % 24
-                            ampm = "오후" if target_h >= 12 else "오전"
-                            disp_h = target_h if target_h <= 12 else target_h - 12
-                            if disp_h == 0: disp_h = 12
-                            rec_time_str = f"{ampm} {disp_h}시"
-                        
-                        # 텍스트 가공 (대표님 요청 포맷 적용)
-                        parts = b_key.split('|')
-                        detail_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
-                        
-                        # 예: 힐스테이트 104동 84A 오후 2시에 광고 추천
-                        ai_recommendations.append(f"{mask_text(row['danji'])} {mask_text(detail_spec)} {rec_time_str}에 광고 추천")
+                    # 단지 내에서 가장 우수한 매물 1개만 추출 (생존율 높고 평균순위 좋은 것)
+                    if diag_list:
+                        top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
+                        temp_recs.append(top_in_comp)
+                
+                # 여러 단지 후보 중 최대 3개 단지만 최종 리포트 채택
+                final_targets = pd.DataFrame(temp_recs).sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
+                
+                for _, row in final_targets.iterrows():
+                    b_key = row['key']
+                    b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                    
+                    # 추천 시간 계산
+                    rec_time_str = "오전 11시" 
+                    if not b_boosted.empty:
+                        peak_h = int(b_boosted['수집일시'].dt.hour.mode()[0])
+                        target_h = (peak_h + 1) % 24
+                        ampm = "오후" if target_h >= 12 else "오전"
+                        disp_h = target_h if target_h <= 12 else target_h - 12
+                        if disp_h == 0: disp_h = 12
+                        rec_time_str = f"{ampm} {disp_h}시"
+                    
+                    # 텍스트 가공
+                    parts = b_key.split('|')
+                    detail_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
+                    ai_recommendations.append(f"{mask_text(row['danji'])} {mask_text(detail_spec)} {rec_time_str} 광고 추천")
 
-        # 3. [시장 점유율 점수] 데이터 가공
+        # 시장 점유율 데이터 가공 (생략 없이 로직 유지)
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
             ms_df = ms_counts.copy()
@@ -1098,21 +1106,15 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
             top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
 
-        # 🌟 [신규 추가] 대시보드 웹 화면에도 작전 지시 출력하기
-        st.markdown("""
+        # 대시보드 웹 화면 출력
+        st.markdown(f"""
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
             <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 18px;">🎯 오늘의 AI 마스터 작전 지시</h4>
+            {"".join([f"<div style='font-size: 16px; color: #334155; margin-bottom: 8px; font-weight: 600;'>🔥 {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else "<div style='font-size: 15px; color: #64748b;'>현재 분석 결과 집중 타격할 매물이 부족합니다.</div>"}
+        </div>
         """, unsafe_allow_html=True)
-        
-        if ai_recommendations:
-            for rec in ai_recommendations:
-                st.markdown(f"<div style='font-size: 16px; color: #334155; margin-bottom: 8px; font-weight: 600;'>🔥 {rec}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<div style='font-size: 15px; color: #64748b;'>분석 결과, 현재 집중 관리할 S급 매물이 없습니다.</div>", unsafe_allow_html=True)
-            
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # 4. 이미지 생성 및 버튼 렌더링 (AI 지시 데이터 전달)
+        # 이미지 생성 및 버튼 렌더링
         report_image_bytes = generate_kakao_report_image(
             display_realtor, total_bundles_val, safe_bundles_val, safe_ratio_val, days_val, ranks_dict_val, top_comp_list, ai_recommendations
         )
@@ -1127,7 +1129,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 type="primary",
                 use_container_width=True
             )
-        # ========================================================
+            
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
     # ==========================================================
