@@ -337,55 +337,70 @@ def load_server_data():
     return df
 
 # [여기에 추가!] 카톡 리포트 이미지 생성 함수
-def generate_kakao_report_image(realtor_name, safe_count, danger_count, red_ocean_count):
-    # 1. 배경 (토스 특유의 아주 연한 회색 배경)
-    width, height = 800, 920
-    img = Image.new('RGB', (width, height), color=(242, 244, 246)) # #F2F4F6
+def generate_kakao_report_image(realtor_name, safe_count, danger_count, rank_summary, top_comp_str, auto_renew_count):
+    # 1. 캔버스 확장 (정보가 많아졌으므로 세로로 길게)
+    width, height = 800, 1150
+    img = Image.new('RGB', (width, height), color=(242, 244, 246)) # 토스 라이트 그레이 배경
     draw = ImageDraw.Draw(img)
     
     try:
-        # 대표님이 넣어두신 나눔고딕 폰트 적용
-        font_title = ImageFont.truetype("NanumGothic.ttf", 42) 
-        font_sub = ImageFont.truetype("NanumGothic.ttf", 26)   
-        font_body = ImageFont.truetype("NanumGothic.ttf", 24)  
-        font_number = ImageFont.truetype("NanumGothic.ttf", 85) # 숫자를 극단적으로 크게
-        font_bold = ImageFont.truetype("NanumGothic.ttf", 30)  
-        font_small = ImageFont.truetype("NanumGothic.ttf", 20) 
+        font_title = ImageFont.truetype("NanumGothic.ttf", 45)
+        font_sub = ImageFont.truetype("NanumGothic.ttf", 26)
+        font_body = ImageFont.truetype("NanumGothic.ttf", 24)
+        font_bold = ImageFont.truetype("NanumGothic.ttf", 28)
+        font_small = ImageFont.truetype("NanumGothic.ttf", 20)
     except:
-        font_title = font_sub = font_body = font_number = font_bold = font_small = ImageFont.load_default()
+        font_title = font_sub = font_body = font_bold = font_small = ImageFont.load_default()
 
-    # 2. 상단 헤더 영역 (여백을 넓게 주어 시원한 느낌)
+    import textwrap
+
+    # 2. 헤더 영역 (이모지 제거, 텍스트로만 깔끔하게)
     now_str = datetime.now().strftime('%m월 %d일')
-    draw.text((50, 60), "TOP RANK AI", font=font_bold, fill=(49, 130, 246)) # 토스 블루 (#3182F6)
-    draw.text((50, 110), f"{realtor_name} 대표님", font=font_title, fill=(25, 31, 40)) # 완전 검은색보다 부드러운 다크그레이
-    draw.text((50, 175), f"오늘의 매물 방어 리포트 ({now_str})", font=font_sub, fill=(139, 149, 161)) # 연한 그레이
+    draw.text((50, 60), "TOP RANK AI", font=font_bold, fill=(49, 130, 246))
+    draw.text((50, 110), f"{realtor_name} 대표님", font=font_title, fill=(25, 31, 40))
+    draw.text((50, 175), f"일간 매물 방어 리포트 ({now_str})", font=font_sub, fill=(139, 149, 161))
 
-    # 3. 메인 데이터 카드 (순백색 박스)
-    draw.rounded_rectangle([(40, 240), (760, 520)], radius=25, fill=(255, 255, 255))
-    
-    # 상위권 방어 (왼쪽 영역)
-    draw.text((90, 290), "🟢 안전 방어 중", font=font_body, fill=(107, 118, 132))
-    draw.text((90, 350), f"{safe_count}건", font=font_number, fill=(25, 31, 40))
-    
-    # 세로 구분선 (중앙)
-    draw.line([(400, 290), (400, 470)], fill=(229, 232, 235), width=2)
-    
-    # 예산 누수 경고 (오른쪽 영역 - 레드 포인트)
-    draw.text((450, 290), "🔴 광고 누수 경고", font=font_body, fill=(107, 118, 132))
-    draw.text((450, 350), f"{danger_count}건", font=font_number, fill=(240, 68, 82)) # 토스 레드 (#F04452)
+    # 3. [카드 1] AI 마스터 결론 & 방어율 현황
+    draw.rounded_rectangle([(40, 230), (760, 500)], radius=25, fill=(255, 255, 255))
+    draw.text((80, 270), "[ AI 마스터 결론 ]", font=font_bold, fill=(49, 130, 246))
+    summary_text = f"현재 {safe_count}건의 매물이 상위권에 안전하게 방어 중이며,\n{danger_count}건의 예산 누수 경고가 감지되었습니다."
+    draw.text((80, 320), summary_text, font=font_body, fill=(51, 61, 75))
 
-    # 4. AI 브리핑 카드 (연한 블루 박스로 신뢰감 부여)
-    draw.rounded_rectangle([(40, 560), (760, 780)], radius=25, fill=(232, 243, 255)) # 연한 파란색 배경
-    draw.text((80, 600), "💡 AI 마스터 결론", font=font_bold, fill=(49, 130, 246))
-    
-    # 문맥에 맞춘 깔끔한 요약 텍스트
-    summary_text = f"현재 상위 1~3위 방어율이 안정적으로 유지 중입니다.\n다만, {danger_count}건의 예산 누수 매물과 {red_ocean_count}건의 격전지가\n감지되었으니 즉시 대시보드를 확인해 주세요."
-    draw.text((80, 660), summary_text, font=font_body, fill=(51, 61, 75)) # 가독성 높은 다크 텍스트
+    draw.line([(80, 400), (720, 400)], fill=(242, 244, 246), width=2)
+    draw.text((120, 430), "안전 방어", font=font_body, fill=(107, 118, 132))
+    draw.text((250, 420), f"{safe_count} 건", font=font_bold, fill=(49, 130, 246)) # 블루 포인트
+    draw.text((450, 430), "누수 경고", font=font_body, fill=(107, 118, 132))
+    draw.text((580, 420), f"{danger_count} 건", font=font_bold, fill=(240, 68, 82)) # 레드 포인트
 
-    # 5. 하단 액션 유도 텍스트
-    draw.text((200, 840), "👇 하단의 전송된 링크를 눌러 상세 내역을 확인하세요", font=font_small, fill=(139, 149, 161))
+    # 4. [카드 2] 랭킹 및 경쟁사 점유율
+    draw.rounded_rectangle([(40, 520), (760, 790)], radius=25, fill=(255, 255, 255))
+    draw.text((80, 560), "[ 내 단지별 랭킹 현황 ]", font=font_bold, fill=(25, 31, 40))
+    wrapped_ranks = textwrap.fill(rank_summary, width=45)
+    draw.text((80, 610), wrapped_ranks, font=font_body, fill=(107, 118, 132), spacing=10)
 
-    # 6. 이미지 파일로 변환
+    draw.line([(80, 690), (720, 690)], fill=(242, 244, 246), width=2)
+    draw.text((80, 720), "[ 타사 점유율 Top 3 ]", font=font_bold, fill=(25, 31, 40))
+    # 텍스트가 너무 길면 줄바꿈 처리
+    wrapped_comp = top_comp_str.split("입니다.")[0].replace("현재 ", "")
+    draw.text((320, 725), wrapped_comp, font=font_small, fill=(240, 68, 82))
+
+    # 5. [카드 3] 자동 갱신 성과 및 업셀링 훅(Hook)
+    draw.rounded_rectangle([(40, 810), (760, 1030)], radius=25, fill=(232, 243, 255)) # 연한 블루 배경
+    draw.text((80, 850), "[ AI 자동화 성과 ]", font=font_bold, fill=(49, 130, 246))
+
+    if auto_renew_count > 0:
+        bot_text = f"오늘 시스템이 자동으로 {auto_renew_count}건의 순위를 탈환했습니다."
+        draw.text((80, 910), bot_text, font=font_body, fill=(51, 61, 75))
+        draw.text((80, 960), "현재 프리미엄 자동화 봇이 가동 중입니다.", font=font_body, fill=(49, 130, 246))
+    else:
+        bot_text = f"오늘 수동으로 순위를 관리하며 낭비된 시간이 감지됩니다."
+        draw.text((80, 910), bot_text, font=font_body, fill=(51, 61, 75))
+        # 안 쓰는 고객을 자극하는 있어 보이는 멘트
+        draw.text((80, 960), "프리미엄 봇 연동 시, 누수 매물을 24시간 자동 방어합니다.", font=font_body, fill=(49, 130, 246))
+
+    # 6. 하단 안내문
+    draw.text((220, 1080), "하단의 링크를 눌러 상세 대시보드를 확인하세요", font=font_small, fill=(139, 149, 161))
+
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     return img_buffer.getvalue()
@@ -540,14 +555,21 @@ try:
         global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
 
-    # [여기에 추가!] 카톡 발송용 다운로드 버튼 UI
+    # [수정할 영역] 기존 카톡 발송용 다운로드 버튼 UI 교체
     safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
     danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
-    red_ocean_val = len(my_red) if 'my_red' in locals() else 0
+    
+    # 텍스트 데이터 안전하게 가져오기
+    rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
+    top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
+    auto_renew_val = success_count if 'success_count' in locals() else 0
 
     st.markdown("### 📱 1초 카톡 브리핑 전송")
     st.caption("고객에게 전송할 요약 이미지를 생성합니다.")
-    report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, red_ocean_val)
+    
+    # 파라미터가 늘어났으므로 호출 부분도 맞춰줍니다
+    report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
+    
     st.download_button(
         label="📸 요약 리포트 저장 (카톡 전송용)",
         data=report_image_bytes,
@@ -555,7 +577,7 @@ try:
         mime="image/png",
         type="primary"
     )
-    st.markdown("---") # 시각적 구분선
+    st.markdown("---")
 
     # ==========================================================
     # 🎯 [핵심] AI 마스터 결론 (사용자 설정 기간 기반 성적표)
