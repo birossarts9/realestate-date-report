@@ -338,9 +338,10 @@ def load_server_data():
 
 # [여기에 추가!] 카톡 리포트 이미지 생성 함수
 def generate_kakao_report_image(realtor_name, safe_count, danger_count, my_ranks_dict, top_competitors_list, auto_renew_count):
-    # 1. 캔버스 세팅 (AI 시안 비율에 맞춘 800x1100 사이즈)
-    width, height = 800, 1100
-    img = Image.new('RGB', (width, height), color=(242, 244, 246)) # 토스 라이트 그레이 배경
+    # 1. 캔버스 세팅 (성과 영역이 빠졌으므로 세로 길이를 980으로 축소)
+    width, height = 800, 980
+    # 기존 탁한 회색 -> 더 밝고 산뜻한 슬레이트 화이트톤 배경으로 변경
+    img = Image.new('RGB', (width, height), color=(248, 250, 252)) 
     draw = ImageDraw.Draw(img)
     
     try:
@@ -348,34 +349,39 @@ def generate_kakao_report_image(realtor_name, safe_count, danger_count, my_ranks
         font_sub = ImageFont.truetype("NanumGothic.ttf", 22)
         font_body = ImageFont.truetype("NanumGothic.ttf", 20)
         font_bold = ImageFont.truetype("NanumGothic.ttf", 24)
-        font_large_num = ImageFont.truetype("NanumGothic.ttf", 36)
+        font_large_num = ImageFont.truetype("NanumGothic.ttf", 38)
         font_small = ImageFont.truetype("NanumGothic.ttf", 16)
     except:
         font_title = font_sub = font_body = font_bold = font_large_num = font_small = ImageFont.load_default()
 
-    # 2. 상단 헤더 영역 (AI 시안의 중앙 정렬 스타일)
+    import textwrap
+
+    # 2. 상단 헤더 영역 (글씨 색상을 좀 더 진하고 선명하게 톤업)
     now_str = datetime.now().strftime('%Y.%m.%d')
-    draw.text((40, 50), "AI MARKET INSIGHTS", font=font_title, fill=(25, 31, 40))
-    draw.text((40, 110), f"{realtor_name} 대표님 일간 리포트", font=font_sub, fill=(107, 118, 132))
-    draw.text((660, 110), f"Date: {now_str}", font=font_sub, fill=(139, 149, 161))
+    draw.text((40, 50), "AI MARKET INSIGHTS", font=font_title, fill=(15, 23, 42))
+    draw.text((40, 110), f"{realtor_name} 대표님 일간 리포트", font=font_sub, fill=(71, 85, 105))
+    
+    # 💡 [수정] 날짜가 잘리지 않도록 X좌표를 660 -> 560으로 안전하게 당김
+    draw.text((560, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
 
     # 3. [1단 카드] 안전 vs 경고 핵심 요약 (Y: 160 ~ 280)
     draw.rounded_rectangle([(40, 160), (760, 280)], radius=20, fill=(255, 255, 255))
     
-    # 안전 매물 텍스트 및 숫자 (그린)
-    draw.text((80, 205), "안전 방어 매물", font=font_bold, fill=(107, 118, 132))
-    draw.text((250, 195), f"{safe_count}건", font=font_large_num, fill=(16, 185, 129)) # #10B981 그린
+    draw.text((80, 205), "안전 방어 매물", font=font_bold, fill=(71, 85, 105))
+    # 💡 [수정] 칙칙한 녹색 -> 비비드한 에메랄드 그린으로 변경
+    draw.text((250, 193), f"{safe_count}건", font=font_large_num, fill=(5, 150, 105)) 
     
-    draw.text((400, 205), "/", font=font_bold, fill=(209, 213, 219)) # 슬래시 구분자
+    draw.text((400, 205), "/", font=font_bold, fill=(203, 213, 225)) 
     
-    # 누수 경고 텍스트 및 숫자 (레드)
-    draw.text((450, 205), "누수 경고 매물", font=font_bold, fill=(107, 118, 132))
-    draw.text((620, 195), f"{danger_count}건", font=font_large_num, fill=(239, 68, 68)) # #EF4444 레드
+    draw.text((450, 205), "누수 경고 매물", font=font_bold, fill=(71, 85, 105))
+    # 💡 [수정] 탁한 빨강 -> 에너제틱한 로즈 레드로 변경
+    draw.text((620, 193), f"{danger_count}건", font=font_large_num, fill=(225, 29, 72)) 
 
     # 4. [2단 카드 - 좌/우 분할] 내 랭킹 vs 시장 점유율 (Y: 310 ~ 730)
-    # --- [왼쪽 카드] 내 단지별 랭킹 ---
+    # --- [왼쪽 카드] ---
     draw.rounded_rectangle([(40, 310), (390, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((65, 340), "[내 단지별 랭킹]", font=font_bold, fill=(49, 130, 246))
+    # 💡 [수정] 타이틀 색상을 코발트 블루로 변경하여 생동감 부여
+    draw.text((65, 340), "[내 단지별 랭킹]", font=font_bold, fill=(37, 99, 235))
     
     y_offset = 410
     if my_ranks_dict:
@@ -383,53 +389,50 @@ def generate_kakao_report_image(realtor_name, safe_count, danger_count, my_ranks
             c_display = complex_name[:8] + ".." if len(complex_name) > 8 else complex_name
             rank_str = f"{rank}위" if isinstance(rank, int) else str(rank)
             draw.text((65, y_offset), c_display, font=font_body, fill=(51, 61, 75))
-            draw.text((315, y_offset), rank_str, font=font_bold, fill=(107, 118, 132))
-            draw.line([(65, y_offset+35), (365, y_offset+35)], fill=(242, 244, 246), width=1)
+            draw.text((315, y_offset), rank_str, font=font_bold, fill=(71, 85, 105))
+            draw.line([(65, y_offset+35), (365, y_offset+35)], fill=(241, 245, 249), width=1)
             y_offset += 50
     else:
-        draw.text((65, 410), "데이터 없음", font=font_body, fill=(139, 149, 161))
+        draw.text((65, 410), "데이터 없음", font=font_body, fill=(148, 163, 184))
 
-    # --- [오른쪽 카드] 시장 점유율 TOP 6 ---
+    # --- [오른쪽 카드] ---
     draw.rounded_rectangle([(410, 310), (760, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((435, 340), "[시장 점유율 TOP 6]", font=font_bold, fill=(49, 130, 246))
+    draw.text((435, 340), "[시장 점유율 TOP 6]", font=font_bold, fill=(37, 99, 235))
 
     y_offset = 410
     if top_competitors_list:
         max_score = max([v for _, v in top_competitors_list]) if top_competitors_list else 1
         for i, (comp_name, score) in enumerate(top_competitors_list[:6]):
             comp_display = comp_name[:7] + ".." if len(comp_name) > 7 else comp_name
-            draw.text((435, y_offset), f"{i+1}. {comp_display}", font=font_small, fill=(107, 118, 132))
+            draw.text((435, y_offset), f"{i+1}. {comp_display}", font=font_small, fill=(71, 85, 105))
             
             bar_len = int((score / max_score) * 140) if max_score > 0 else 0
-            bar_color = (49, 130, 246) if i == 0 else (229, 232, 235)
+            # 💡 [수정] 1등 바 색상을 선명한 코발트 블루로 변경
+            bar_color = (37, 99, 235) if i == 0 else (226, 232, 240)
             draw.rounded_rectangle([(555, y_offset+2), (555+bar_len, y_offset+16)], radius=5, fill=bar_color)
-            draw.text((560+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(25, 31, 40))
+            draw.text((560+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(15, 23, 42))
             y_offset += 50
     else:
-        draw.text((435, 410), "경쟁사 데이터 부족", font=font_body, fill=(139, 149, 161))
+        draw.text((435, 410), "경쟁사 데이터 부족", font=font_body, fill=(148, 163, 184))
 
-    # 5. [3단 카드] AI 결론 및 자동화 성과 (Y: 760 ~ 1000)
-    draw.rounded_rectangle([(40, 760), (760, 1000)], radius=20, fill=(255, 255, 255))
+    # 5. [3단 카드] AI 마스터 결론 (Y: 760 ~ 910)
+    # 💡 [수정] 하단 갱신 성과를 날리고 결론 카드만 콤팩트하게 유지
+    draw.rounded_rectangle([(40, 760), (760, 910)], radius=20, fill=(255, 255, 255))
     
-    # 결론 파트
-    draw.text((70, 790), "[오늘의 AI 마스터 결론]", font=font_bold, fill=(25, 31, 40))
+    # 💡 [수정] 결론 타이틀에 색상(코발트 블루) 부여
+    draw.text((70, 790), "[오늘의 AI 마스터 결론]", font=font_bold, fill=(37, 99, 235))
+    
     top_1_name = top_competitors_list[0][0] if top_competitors_list else "경쟁사"
-    summary_text = f"총 {safe_count+danger_count}건 중 {safe_count}건 안전 방어, {danger_count}건 누수 경고.\n점유율 1위인 '{top_1_name}'의 갱신 패턴을 주의 깊게 모니터링하세요."
-    draw.text((70, 835), summary_text, font=font_body, fill=(107, 118, 132))
-
-    draw.line([(70, 895), (730, 895)], fill=(242, 244, 246), width=2)
+    summary_text = f"총 {safe_count+danger_count}건 중 {safe_count}건 안전 방어, {danger_count}건 누수 경고. 점유율 1위인 '{top_1_name}'의 갱신 패턴을 주의 깊게 모니터링하세요."
     
-    # 성과 파트
-    draw.text((70, 920), "AI 자동 갱신 성과 :", font=font_bold, fill=(25, 31, 40))
-    if auto_renew_count > 0:
-        perf_text = f"오늘 {auto_renew_count}건 순위 방어 성공. (자동화 봇 가동 중)"
-        draw.text((270, 923), perf_text, font=font_body, fill=(16, 185, 129)) # 그린
-    else:
-        perf_text = f"수동 관리 중. 봇 연동 시 24시간 순위 자동 방어 가능."
-        draw.text((270, 923), perf_text, font=font_body, fill=(239, 68, 68)) # 레드
+    # 💡 [수정] 텍스트가 카드를 넘어가지 않도록 42글자 단위로 자동 줄바꿈 처리!
+    wrapped_summary = textwrap.fill(summary_text, width=42)
+    
+    # spacing 옵션을 주어 줄 간격을 예쁘게 띄움
+    draw.text((70, 835), wrapped_summary, font=font_body, fill=(71, 85, 105), spacing=8)
 
-    # 6. 최하단 안내 문구
-    draw.text((230, 1050), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(139, 149, 161))
+    # 6. 최하단 안내 문구 (위로 살짝 당김)
+    draw.text((230, 940), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(148, 163, 184))
 
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
