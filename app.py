@@ -554,18 +554,6 @@ try:
         top_spender = f"{masked_ts_name} ({stat_df.iloc[0]['총횟수']}회)"
         global_peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
         peak_hour_str = f"평균적으로 {global_peak_hour}시 부근에 갱신이 집중됩니다."
-    
-    # 파라미터가 늘어났으므로 호출 부분도 맞춰줍니다
-    report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
-    
-    st.download_button(
-        label="📸 요약 리포트 저장 (카톡 전송용)",
-        data=report_image_bytes,
-        file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
-        mime="image/png",
-        type="primary"
-    )
-    st.markdown("---")
 
     # ==========================================================
     # 🎯 [핵심] AI 마스터 결론 (사용자 설정 기간 기반 성적표)
