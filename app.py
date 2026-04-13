@@ -344,10 +344,10 @@ def generate_kakao_report_image(realtor_name, safe_count, danger_count, red_ocea
     
     try:
         # 서버/로컬에 나눔고딕 등 폰트 파일이 있다면 이름을 맞춰주세요.
-        font_title = ImageFont.truetype("malgun.ttf", 32)
-        font_sub = ImageFont.truetype("malgun.ttf", 22)
-        font_body = ImageFont.truetype("malgun.ttf", 18)
-        font_large = ImageFont.truetype("malgunbd.ttf", 60) 
+        font_title = ImageFont.truetype("NanumGothic.ttf", 32)
+        font_sub = ImageFont.truetype("NanumGothic.ttf", 22)
+        font_body = ImageFont.truetype("NanumGothic.ttf", 18)
+        font_large = ImageFont.truetype("NanumGothic.ttf", 60) 
     except:
         font_title = font_sub = font_body = font_large = ImageFont.load_default()
 
@@ -605,7 +605,8 @@ try:
     danger_sms_text = build_sms_text(danger_df)
 
     # ⭐ 3. 화면 UI 렌더링 (대시보드에서도 클릭 전부터 설명이 바로 보이도록 제목에 고정!)
-    master_conclusion = f"최근 3일간 대표님이 관리 중인 활동 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(평균 5위 이내)에 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
+    # [수정 완료] "최근 3일간" -> "선택하신 기간({selected_days}일) 동안" 으로 변경했습니다.
+    master_conclusion = f"선택하신 기간(<b style='color:#8b5cf6;'>{selected_days}일</b>) 동안 대표님이 관리 중인 활동 매물 <b style='color:#8b5cf6;'>{total_my_bundles}개</b> 중, 상위권(평균 5위 이내)에 방어 중인 매물은 <b style='color:#3182f6;'>{safe_my_bundles}개({safe_ratio}%)</b>입니다.<br><br>"
 
     master_conclusion += f"<details style='background-color:#eff6ff; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 5px solid #3b82f6; outline: none;'><summary style='font-size: 16px; color: #1e3a8a; font-weight: bold; cursor: pointer; outline: none; list-style: none;'>▶ 🟢 상위권 (평균 1~5위) : 📞 고객에게 인기가 많은 매물 (예산 집중) - 총 {safe_my_bundles}개</summary><div style='margin-top: 15px; font-size: 14px; color: #334155; line-height: 1.6;'>{safe_ui_html}</div></details>"
 
