@@ -338,45 +338,57 @@ def load_server_data():
 
 # [여기에 추가!] 카톡 리포트 이미지 생성 함수
 def generate_kakao_report_image(realtor_name, safe_count, danger_count, red_ocean_count):
-    width, height = 600, 650
-    img = Image.new('RGB', (width, height), color=(30, 58, 138)) 
+    # 1. 배경 (토스 특유의 아주 연한 회색 배경)
+    width, height = 800, 920
+    img = Image.new('RGB', (width, height), color=(242, 244, 246)) # #F2F4F6
     draw = ImageDraw.Draw(img)
     
     try:
-        # 서버/로컬에 나눔고딕 등 폰트 파일이 있다면 이름을 맞춰주세요.
-        font_title = ImageFont.truetype("NanumGothic.ttf", 32)
-        font_sub = ImageFont.truetype("NanumGothic.ttf", 22)
-        font_body = ImageFont.truetype("NanumGothic.ttf", 18)
-        font_large = ImageFont.truetype("NanumGothic.ttf", 60) 
+        # 대표님이 넣어두신 나눔고딕 폰트 적용
+        font_title = ImageFont.truetype("NanumGothic.ttf", 42) 
+        font_sub = ImageFont.truetype("NanumGothic.ttf", 26)   
+        font_body = ImageFont.truetype("NanumGothic.ttf", 24)  
+        font_number = ImageFont.truetype("NanumGothic.ttf", 85) # 숫자를 극단적으로 크게
+        font_bold = ImageFont.truetype("NanumGothic.ttf", 30)  
+        font_small = ImageFont.truetype("NanumGothic.ttf", 20) 
     except:
-        font_title = font_sub = font_body = font_large = ImageFont.load_default()
+        font_title = font_sub = font_body = font_number = font_bold = font_small = ImageFont.load_default()
 
-    now_str = datetime.now().strftime('%Y.%m.%d')
-    draw.text((40, 40), "TOP RANK AI", font=font_title, fill=(255, 255, 255))
-    draw.text((40, 90), "📊 오늘의 시장 동향 리포트", font=font_sub, fill=(200, 212, 230))
-    draw.text((40, 125), f"🏢 {realtor_name} 대표님 ({now_str})", font=font_body, fill=(200, 212, 230))
-    
-    draw.rounded_rectangle([(30, 170), (570, 550)], radius=20, fill=(255, 255, 255))
-    
-    draw.text((50, 200), "🛡️ 현재 내 매물 방어율", font=font_sub, fill=(50, 65, 85))
-    draw.text((90, 260), "🟢 상위권 안전", font=font_body, fill=(34, 197, 94))
-    draw.text((105, 300), f"{safe_count}건", font=font_large, fill=(30, 58, 138))
-    
-    draw.text((360, 260), "🔴 누수 경고", font=font_body, fill=(239, 68, 68))
-    draw.text((375, 300), f"{danger_count}건", font=font_large, fill=(239, 68, 68))
+    # 2. 상단 헤더 영역 (여백을 넓게 주어 시원한 느낌)
+    now_str = datetime.now().strftime('%m월 %d일')
+    draw.text((50, 60), "TOP RANK AI", font=font_bold, fill=(49, 130, 246)) # 토스 블루 (#3182F6)
+    draw.text((50, 110), f"{realtor_name} 대표님", font=font_title, fill=(25, 31, 40)) # 완전 검은색보다 부드러운 다크그레이
+    draw.text((50, 175), f"오늘의 매물 방어 리포트 ({now_str})", font=font_sub, fill=(139, 149, 161)) # 연한 그레이
 
-    draw.line([(50, 400), (550, 400)], fill=(226, 232, 240), width=2)
+    # 3. 메인 데이터 카드 (순백색 박스)
+    draw.rounded_rectangle([(40, 240), (760, 520)], radius=25, fill=(255, 255, 255))
     
-    draw.text((50, 430), "🎯 AI 마스터 브리핑", font=font_sub, fill=(49, 130, 246))
-    summary_text = f"상위권 1~3위 방어율이 매우 우수합니다.\n다만 {danger_count}건의 예산 누수 매물과 {red_ocean_count}건의 과열 단지가\n감지되었으니 즉시 대시보드를 확인해 주세요."
-    draw.text((50, 470), summary_text, font=font_body, fill=(71, 85, 105))
+    # 상위권 방어 (왼쪽 영역)
+    draw.text((90, 290), "🟢 안전 방어 중", font=font_body, fill=(107, 118, 132))
+    draw.text((90, 350), f"{safe_count}건", font=font_number, fill=(25, 31, 40))
+    
+    # 세로 구분선 (중앙)
+    draw.line([(400, 290), (400, 470)], fill=(229, 232, 235), width=2)
+    
+    # 예산 누수 경고 (오른쪽 영역 - 레드 포인트)
+    draw.text((450, 290), "🔴 광고 누수 경고", font=font_body, fill=(107, 118, 132))
+    draw.text((450, 350), f"{danger_count}건", font=font_number, fill=(240, 68, 82)) # 토스 레드 (#F04452)
 
-    draw.text((40, 580), "👇 전송된 링크를 눌러 상세 전략과 갱신 시간을 확인하세요", font=font_body, fill=(255, 255, 255))
+    # 4. AI 브리핑 카드 (연한 블루 박스로 신뢰감 부여)
+    draw.rounded_rectangle([(40, 560), (760, 780)], radius=25, fill=(232, 243, 255)) # 연한 파란색 배경
+    draw.text((80, 600), "💡 AI 마스터 결론", font=font_bold, fill=(49, 130, 246))
+    
+    # 문맥에 맞춘 깔끔한 요약 텍스트
+    summary_text = f"현재 상위 1~3위 방어율이 안정적으로 유지 중입니다.\n다만, {danger_count}건의 예산 누수 매물과 {red_ocean_count}건의 격전지가\n감지되었으니 즉시 대시보드를 확인해 주세요."
+    draw.text((80, 660), summary_text, font=font_body, fill=(51, 61, 75)) # 가독성 높은 다크 텍스트
 
+    # 5. 하단 액션 유도 텍스트
+    draw.text((200, 840), "👇 하단의 전송된 링크를 눌러 상세 내역을 확인하세요", font=font_small, fill=(139, 149, 161))
+
+    # 6. 이미지 파일로 변환
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     return img_buffer.getvalue()
-
 # 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
 splash_placeholder = st.empty()
 
