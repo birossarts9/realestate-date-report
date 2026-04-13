@@ -970,15 +970,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {total_time_str}**")
         st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 갱신하여 상위권을 탈환하고 방어한 내역입니다.")
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
-            <div>
-                <h3 style="margin: 0 0 5px 0; color: #1e3a8a; font-weight: bold;">📱 1초 카톡 브리핑 전송</h3>
-                <span style="color: #64748b; font-size: 14px;">고객에게 전송할 프리미엄 요약 이미지를 생성합니다.</span>
-            </div>
-        """, unsafe_allow_html=True)
-
         safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
         danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
         rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
@@ -1020,25 +1011,40 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown("<br><br>", unsafe_allow_html=True)
         pricing_card = """
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
-            <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
-            <h2 style="color: #1e3a8a; margin-bottom: 15px; font-weight: 800; font-size: 28px;">TOP RANK 광고 자동화 솔루션</h2>
-            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">
-                월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로<br>상위 노출 스트레스에서 완벽하게 해방되세요!
-            </p>
-            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 24시간 무인 순위 방어</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ AI 시장 분석 리포트</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 불량 매물 누수 진단</span>
-            </div>
-            <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0;">
-                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">
-                    🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>
-                    📞 <b>가입 문의:</b> 010-8416-2806
-                </p>
-            </div>
+            ... (중략) ...
         </div>
         """
         st.markdown(pricing_card, unsafe_allow_html=True)
+
+        # ========================================================
+        # 👇 [여기에 붙여넣기!] 맨 아래로 이사 온 카톡 리포트 다운로드 버튼
+        # ========================================================
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 30px; max-width: 800px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
+            <div>
+                <h3 style="margin: 0 0 8px 0; color: #1e3a8a; font-weight: 800; font-size: 22px;">📱 1초 카톡 브리핑 전송</h3>
+                <span style="color: #64748b; font-size: 15px;">고객에게 전송할 프리미엄 요약 이미지를 생성합니다.</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
+        danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
+        rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
+        top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
+        auto_renew_val = success_count if 'success_count' in locals() else 0
+
+        report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
+        
+        st.download_button(
+            label="📸 리포트 다운로드 (PNG)",
+            data=report_image_bytes,
+            file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
+            mime="image/png",
+            type="primary"
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+        # ========================================================
 
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
