@@ -975,18 +975,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
         top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
         auto_renew_val = success_count if 'success_count' in locals() else 0
-
-        report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
-        
-        st.download_button(
-            label="📸 리포트 다운로드 (PNG)",
-            data=report_image_bytes,
-            file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
-            mime="image/png",
-            type="primary",
-            use_container_width=True
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
         
         if not merged_df.empty:
             st.dataframe(
@@ -1015,36 +1003,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </div>
         """
         st.markdown(pricing_card, unsafe_allow_html=True)
-
-        # ========================================================
-        # 👇 [여기에 붙여넣기!] 맨 아래로 이사 온 카톡 리포트 다운로드 버튼
-        # ========================================================
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display: flex; align-items: center; justify-content: space-between; background-color: #f8fafc; padding: 25px; border-radius: 20px; border: 1px solid #e2e8f0; margin-bottom: 30px; max-width: 800px; margin-left: auto; margin-right: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.02);">
-            <div>
-                <h3 style="margin: 0 0 8px 0; color: #1e3a8a; font-weight: 800; font-size: 22px;">📱 1초 카톡 브리핑 전송</h3>
-                <span style="color: #64748b; font-size: 15px;">고객에게 전송할 프리미엄 요약 이미지를 생성합니다.</span>
-            </div>
-        """, unsafe_allow_html=True)
-
-        safe_count_val = len(my_ls) - len(danger_ls) if 'my_ls' in locals() and 'danger_ls' in locals() else 0
-        danger_count_val = len(danger_ls) if 'danger_ls' in locals() else 0
-        rank_summary_val = rank_summary if 'rank_summary' in locals() and rank_summary else "단지별 랭킹 데이터 없음"
-        top_comp_val = top3_str if 'top3_str' in locals() and top3_str else "경쟁사 데이터 부족"
-        auto_renew_val = success_count if 'success_count' in locals() else 0
-
-        report_image_bytes = generate_kakao_report_image(display_realtor, safe_count_val, danger_count_val, rank_summary_val, top_comp_val, auto_renew_val)
-        
-        st.download_button(
-            label="📸 리포트 다운로드 (PNG)",
-            data=report_image_bytes,
-            file_name=f"AI리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
-            mime="image/png",
-            type="primary"
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-        # ========================================================
 
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
