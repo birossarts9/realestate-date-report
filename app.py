@@ -1036,11 +1036,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [업그레이드] 단지별 1개씩 선별하는 작전 로직
+        # 🚀 [수정완료] 단지명 중복 제거 및 가로 최적화 작전 로직
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 기본 데이터
+        # 기본 데이터 확보
         total_bundles_val = total_my_bundles if 'total_my_bundles' in locals() else 0
         safe_bundles_val = safe_my_bundles if 'safe_my_bundles' in locals() else 0
         safe_ratio_val = safe_ratio if 'safe_ratio' in locals() else 0
@@ -1052,16 +1052,12 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             my_all_listings = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)].copy()
             if not my_all_listings.empty:
                 temp_recs = []
-                
-                # 💡 단지별로 그룹화하여 각 단지에서 1등 매물만 후보로 선정
                 for comp_name, comp_grp in t_df.groupby('단지명'):
                     total_sessions_comp = comp_grp['수집일시'].nunique()
                     if total_sessions_comp == 0: continue
-                    
                     my_comp_grp = my_all_listings[my_all_listings['단지명'] == comp_name]
                     if my_comp_grp.empty: continue
                     
-                    # 해당 단지 내 매물별 생존율 계산
                     diag_list = []
                     for b_key, b_grp in my_comp_grp.groupby('매물묶음키'):
                         b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
@@ -1069,12 +1065,10 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         avg_rank = b_ranks.mean()
                         diag_list.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
                     
-                    # 단지 내에서 가장 우수한 매물 1개만 추출 (생존율 높고 평균순위 좋은 것)
                     if diag_list:
                         top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
                         temp_recs.append(top_in_comp)
                 
-                # 여러 단지 후보 중 최대 3개 단지만 최종 리포트 채택
                 final_targets = pd.DataFrame(temp_recs).sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
                 
                 for _, row in final_targets.iterrows():
@@ -1091,12 +1085,21 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         if disp_h == 0: disp_h = 12
                         rec_time_str = f"{ampm} {disp_h}시"
                     
-                    # 텍스트 가공
+                    # 💡 [중복 해결] detail_spec에서 단지명 중복 제거
                     parts = b_key.split('|')
-                    detail_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
-                    ai_recommendations.append(f"{mask_text(row['danji'])} {mask_text(detail_spec)} {rec_time_str} 광고 추천")
+                    raw_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
+                    danji_name = row['danji'].strip()
+                    
+                    # 만약 스펙 정보가 단지명으로 시작하면 해당 부분 삭제
+                    if raw_spec.startswith(danji_name):
+                        clean_spec = raw_spec[len(danji_name):].strip()
+                    else:
+                        clean_spec = raw_spec
+                    
+                    # 최종 텍스트 조립
+                    ai_recommendations.append(f"{mask_text(danji_name)} {mask_text(clean_spec)} - {rec_time_str} 광고 권장")
 
-        # 시장 점유율 데이터 가공 (생략 없이 로직 유지)
+        # 시장 점유율 데이터 가공 (생략 없이 유지)
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
             ms_df = ms_counts.copy()
@@ -1109,8 +1112,8 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         # 대시보드 웹 화면 출력
         st.markdown(f"""
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
-            <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 18px;">🎯 오늘의 AI 마스터 작전 지시</h4>
-            {"".join([f"<div style='font-size: 16px; color: #334155; margin-bottom: 8px; font-weight: 600;'>🔥 {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else "<div style='font-size: 15px; color: #64748b;'>현재 분석 결과 집중 타격할 매물이 부족합니다.</div>"}
+            <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 20px;">🎯 오늘의 AI 마스터 작전 지시</h4>
+            {"".join([f"<div style='font-size: 17px; color: #334155; margin-bottom: 10px; font-weight: 600;'>⚡ {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else "<div>현재 집중 타격할 매물이 분석 중입니다.</div>"}
         </div>
         """, unsafe_allow_html=True)
 
