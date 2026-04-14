@@ -779,97 +779,146 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🚀 원본 디자인 복구 완료
+    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🌟 대통합 리빌딩 버전
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
-        # 1. [오전 브리핑 복사 버튼]
+        # ------------------------------------------------------
+        # 1. 데이터 전처리 (3구간 분리 및 평균 계산)
+        # ------------------------------------------------------
+        selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+        recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
+        
+        if not recent_my_df.empty:
+            avg_ranks = recent_my_df.groupby(['단지명', '동/호수', '층/타입', '매물묶음키'])['묶음내순위_숫자'].mean().reset_index()
+            # 💡 [구간 기준 통일] 1~3위(최상위), 4~7위(중위), 8위~(하위)
+            safe_df = avg_ranks[avg_ranks['묶음내순위_숫자'] <= 3.0].sort_values('묶음내순위_숫자')
+            mid_df = avg_ranks[(avg_ranks['묶음내순위_숫자'] > 3.0) & (avg_ranks['묶음내순위_숫자'] <= 7.0)].sort_values('묶음내순위_숫자')
+            danger_df = avg_ranks[avg_ranks['묶음내순위_숫자'] > 7.0].sort_values('묶음내순위_숫자')
+        else:
+            safe_df = mid_df = danger_df = pd.DataFrame()
+            
+        total_my_bundles = len(avg_ranks) if not recent_my_df.empty else 0
+        safe_count = len(safe_df)
+        mid_count = len(mid_df)
+        danger_count = len(danger_df)
+        
+        safe_avg = round(safe_df['묶음내순위_숫자'].mean(), 1) if safe_count > 0 else 0.0
+        mid_avg = round(mid_df['묶음내순위_숫자'].mean(), 1) if mid_count > 0 else 0.0
+        danger_avg = round(danger_df['묶음내순위_숫자'].mean(), 1) if danger_count > 0 else 0.0
+        
+        safe_ratio = int((safe_count / total_my_bundles) * 100) if total_my_bundles > 0 else 0
+
+        # ------------------------------------------------------
+        # 2. UI 렌더링용 HTML 리스트 생성 함수
+        # ------------------------------------------------------
+        def build_ui_html(df):
+            if df.empty: return "<div style='color:#94a3b8; padding: 10px 0;'>해당 매물이 없습니다.</div>"
+            html_str = ""
+            for danji, grp in df.groupby('단지명'):
+                danji_masked = mask_text(danji)
+                html_str += f"<div style='margin-bottom: 8px;'><b style='color:#334155; font-size: 14px;'>🏢 {danji_masked}</b><br>"
+                for _, row in grp.iterrows():
+                    spec_masked = mask_text(row['매물묶음키'])
+                    html_str += f"<div style='padding-left: 15px; color:#475569; font-size: 13px; line-height: 1.5;'>🔹 {spec_masked} <span style='color:#94a3b8;'>(평균 {row['묶음내순위_숫자']:.1f}위)</span></div>"
+                html_str += "</div>"
+            return html_str
+
+        safe_ui_html = build_ui_html(safe_df)
+        mid_ui_html = build_ui_html(mid_df)
+        danger_ui_html = build_ui_html(danger_df)
+
+        # ------------------------------------------------------
+        # 3. 최상단: 영웅 지표 (1줄 브리핑)
+        # ------------------------------------------------------
+        # 브리핑 텍스트 생성
+        briefing_date = end_dt.strftime('%Y-%m-%d')
+        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 활동 매물 {total_my_bundles}개 중, 상위권(1~3위)에 안정적으로 노출 중인 매물은 {safe_count}개({safe_ratio}%)입니다."
+        
+        if not boosted_df.empty:
+            peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
+            master_briefing += f" <b>오늘의 추천 타격 시간은 {(peak_hour + 1) % 24:02d}시입니다.</b>"
+        
         components.html(f"""
-        <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px;">
+        <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px; margin-bottom: 10px;">
             <span style="font-size: 32px; margin-right: 15px;">💡</span>
             <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
-            <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="아침 브리핑 복사">
+            <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="브리핑 복사">
                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 105.656 5.656l-1.102 1.101"></path></svg>
                 <span id="copyMsgAm" style="font-size: 15px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
             </button>
         </div>
         <script>
-        document.getElementById('copyBtnAm').onclick = function() {{
-            navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
-                const msg = document.getElementById('copyMsgAm');
-                msg.innerText = '✅ 오전 브리핑 복사완료';
-                msg.style.opacity = '1';
-                setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
-            }});
-        }};
+            document.getElementById('copyBtnAm').onclick = function() {{
+                navigator.clipboard.writeText(`{master_briefing.replace('<b>','').replace('</b>','')}`).then(function() {{
+                    const msg = document.getElementById('copyMsgAm');
+                    msg.innerText = '✅ 브리핑 복사완료';
+                    msg.style.opacity = '1';
+                    setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
+                }});
+            }};
         </script>
         """, height=60)
 
-        # 2. [결론 텍스트 블록]
         st.markdown(f"""
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px;">
-            <div style="font-size: 22px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
-                {master_conclusion}
+            <div style="font-size: 20px; line-height: 1.6; color: #0f172a; font-weight: 600; word-break: keep-all;">
+                {master_briefing}
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-
-        # ========================================================
-        # 3. [기존 예쁜 디자인] 3구간 요약 및 작전 지시 (원복)
-        # ========================================================
-        days_val = selected_days if 'selected_days' in locals() else 7
-        ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
-
-        top_tier_count, top_tier_sum = 0, 0
-        mid_tier_count, mid_tier_sum = 0, 0
-        low_tier_count, low_tier_sum = 0, 0
+        # ------------------------------------------------------
+        # 4. 중앙: 대통합 3단 랭킹 카드 (요약수치 + 상세내역)
+        # ------------------------------------------------------
+        c1, c2, c3 = st.columns(3)
         
-        if not t_df.empty:
-            my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
-            if not my_all.empty:
-                for b_key, b_grp in my_all.groupby('매물묶음키'):
-                    avg_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
-                    if avg_rank <= 3.0:
-                        top_tier_count += 1
-                        top_tier_sum += avg_rank
-                    elif avg_rank <= 7.0:
-                        mid_tier_count += 1
-                        mid_tier_sum += avg_rank
-                    else:
-                        low_tier_count += 1
-                        low_tier_sum += avg_rank
-        
-        top_tier_avg = round(top_tier_sum / top_tier_count, 1) if top_tier_count > 0 else 0.0
-        mid_tier_avg = round(mid_tier_sum / mid_tier_count, 1) if mid_tier_count > 0 else 0.0
-        low_tier_avg = round(low_tier_sum / low_tier_count, 1) if low_tier_count > 0 else 0.0
+        with c1:
+            st.markdown(f"""
+            <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-top: 5px solid #3b82f6; border-radius: 10px; padding: 20px; text-align: center;">
+                <div style="color: #1e3a8a; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🏆 최상위 방어 (1~3위)</div>
+                <div style="font-size: 32px; font-weight: 900; color: #3b82f6; margin-bottom: 5px;">{safe_count}<span style="font-size:18px;">건</span></div>
+                <div style="color: #64748b; font-size: 14px;">평균 {safe_avg}위</div>
+            </div>
+            """, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False):
+                st.markdown(safe_ui_html, unsafe_allow_html=True)
 
-        st.markdown(f"""
-        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px; background-color: #f8fafc;">
-            <h4 style="color: #1e293b; margin-top: 0; margin-bottom: 15px; font-weight: 800;">💡 오늘의 AI 마스터 결론</h4>
-            <p style="color: #475569; font-size: 15px; margin-bottom: 15px;">
-                선택하신 기간({days_val}일) 동안 활동한 매물 <b>{top_tier_count + mid_tier_count + low_tier_count}개</b>의 종합 성적입니다.
-            </p>
-            <div style="border-left: 4px solid #3b82f6; padding-left: 12px; margin-bottom: 10px;">
-                <span style="color: #3b82f6; font-weight: 700;">상위권 (1~3위)</span> : 총 {top_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {top_tier_avg}위)</span>
+        with c2:
+            st.markdown(f"""
+            <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-top: 5px solid #10b981; border-radius: 10px; padding: 20px; text-align: center;">
+                <div style="color: #064e3b; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🚀 중위권 도약 (4~7위)</div>
+                <div style="font-size: 32px; font-weight: 900; color: #10b981; margin-bottom: 5px;">{mid_count}<span style="font-size:18px;">건</span></div>
+                <div style="color: #64748b; font-size: 14px;">평균 {mid_avg}위</div>
             </div>
-            <div style="border-left: 4px solid #10b981; padding-left: 12px; margin-bottom: 10px;">
-                <span style="color: #10b981; font-weight: 700;">중위권 (4~7위)</span> : 총 {mid_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {mid_tier_avg}위)</span>
-            </div>
-            <div style="border-left: 4px solid #ef4444; padding-left: 12px;">
-                <span style="color: #ef4444; font-weight: 700;">하위권 (8위~)</span> : 총 {low_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {low_tier_avg}위)</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False):
+                st.markdown(mid_ui_html, unsafe_allow_html=True)
 
-        # 작전 지시 로직
+        with c3:
+            st.markdown(f"""
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-top: 5px solid #ef4444; border-radius: 10px; padding: 20px; text-align: center;">
+                <div style="color: #7f1d1d; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🚨 하위권 경고 (8위 밖)</div>
+                <div style="font-size: 32px; font-weight: 900; color: #ef4444; margin-bottom: 5px;">{danger_count}<span style="font-size:18px;">건</span></div>
+                <div style="color: #64748b; font-size: 14px;">평균 {danger_avg}위</div>
+            </div>
+            """, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False):
+                st.markdown(danger_ui_html, unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+
+        # ------------------------------------------------------
+        # 5. 하단: AI 작전 지시 (원래 있던 완벽한 로직 유지)
+        # ------------------------------------------------------
         ai_recommendations = []
-        if not t_df.empty and not my_all.empty:
+        if not t_df.empty and not recent_my_df.empty:
             temp_recs = []
             for comp_name, comp_grp in t_df.groupby('단지명'):
                 total_sessions_comp = comp_grp['수집일시'].nunique()
                 if total_sessions_comp == 0: continue
-                my_comp_grp = my_all[my_all['단지명'] == comp_name]
+                my_comp_grp = recent_my_df[recent_my_df['단지명'] == comp_name]
                 if my_comp_grp.empty: continue
                 
                 diag_list = []
@@ -895,14 +944,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 
                 if diag_list:
                     top_in_comp = pd.DataFrame(diag_list).sort_values(
-                        by=['priority', 'survival', 'avg'], 
-                        ascending=[False, False, True]
+                        by=['priority', 'survival', 'avg'], ascending=[False, False, True]
                     ).iloc[0]
                     temp_recs.append(top_in_comp)
             
             final_targets = pd.DataFrame(temp_recs).sort_values(
-                by=['priority', 'survival', 'avg'], 
-                ascending=[False, False, True]
+                by=['priority', 'survival', 'avg'], ascending=[False, False, True]
             ).head(3) if temp_recs else pd.DataFrame()
             
             for _, row in final_targets.iterrows():
@@ -935,8 +982,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             effective_gap = 0
                             for h in range(strike_hour, strike_hour + raw_gap):
                                 real_h = h % 24
-                                if 8 <= real_h <= 23:
-                                    effective_gap += 1
+                                if 8 <= real_h <= 23: effective_gap += 1
                             
                             if effective_gap > max_effective_gap:
                                 max_effective_gap = effective_gap
@@ -957,15 +1003,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 
                 ai_recommendations.append(f"{mask_text(danji_name)} {mask_text(clean_spec)} - {rec_time_str}")
 
-        top_comp_list = []
-        if 'ms_counts' in locals() and not ms_counts.empty:
-            ms_df = ms_counts.copy()
-            ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
-            agg_ms = ms_df.groupby('부동산명_축약')['총점수'].sum().reset_index()
-            agg_ms = agg_ms[~agg_ms['부동산명_축약'].str.contains(display_realtor)]
-            top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
-            top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
-
         fallback_msg = "<div style='font-size: 15px; color: #059669;'>현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.<br>편하신 시간에 자유롭게 갱신하셔도 1위 노출이 보장됩니다.</div>"
         
         st.markdown(f"""
@@ -975,38 +1012,19 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         </div>
         """, unsafe_allow_html=True)
 
-        # 카카오톡 이미지 생성 및 다운로드 버튼
-        report_image_bytes = generate_kakao_report_image(
-            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, days_val, ranks_dict_val, top_comp_list, ai_recommendations
-        )
-        
-        c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
-        with c_btn2:
-            st.download_button(
-                label="📸 실시간 작전 리포트 저장 (카톡 전송)",
-                data=report_image_bytes,
-                file_name=f"TOP_RANK_리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
-                mime="image/png",
-                type="primary",
-                use_container_width=True
-            )
 
-
-        # ========================================================
-        # 🤖 4. [자동 갱신 성과 데이터 로직] 봇 방어 궤적 및 표
-        # ========================================================
+        # ------------------------------------------------------
+        # 6. 자동 갱신 성과 데이터 로직 (기존 봇 방어 표 유지)
+        # ------------------------------------------------------
         st.markdown("<br><hr>", unsafe_allow_html=True)
-        total_defense_seconds = 0 
+        total_defense_seconds = 0  
         
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
                 {"갱신시간": (now_kst - timedelta(minutes=18)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "14위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 1위)", "상위(3위) 방어시간": "1시간 20분", "순위 궤적": [20, 20, 19, 20, 19], "성과 요약": "🚀 13계단 상승"},
                 {"갱신시간": (now_kst - timedelta(hours=1, minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "9위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 2위 (현재 4위)", "상위(3위) 방어시간": "45분", "순위 궤적": [19, 19, 18, 15, 17, 16], "성과 요약": "🚀 7계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=3, minutes=20)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "힐스테이트다산", "매물상세": "5**9동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "18위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 3위 (현재 11위)", "상위(3위) 방어시간": "15분", "순위 궤적": [18, 15, 13, 11, 10, 10], "성과 요약": "🚀 15계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=6, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "6위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 2위)", "상위(3위) 방어시간": "2시간 10분", "순위 궤적": [20, 20, 19, 18, 19, 19], "성과 요약": "🚀 5계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=11, minutes=40)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산e편한세상자이", "매물상세": "1**2동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "20위 밖(권외)", "갱신 후 최고순위": "🏆 최고 2위 (현재 6위)", "상위(3위) 방어시간": "-", "순위 궤적": [19, 18, 19, 15, 16, 15, 15], "성과 요약": "🚀 1페이지 진입 방어"},
-                {"갱신시간": (now_kst - timedelta(hours=22, minutes=15)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산펜테리움리버테라스I", "매물상세": "7**5동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "12위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 14위)", "상위(3위) 방어시간": "-", "순위 궤적": [20, 18, 15, 12, 9, 8, 7], "성과 요약": "🚀 11계단 상승"}
+                {"갱신시간": (now_kst - timedelta(hours=6, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "6위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 2위)", "상위(3위) 방어시간": "2시간 10분", "순위 궤적": [20, 20, 19, 18, 19, 19], "성과 요약": "🚀 5계단 상승"}
             ]
             merged_df = pd.DataFrame(dummy_logs)
             success_count = len(merged_df)
@@ -1017,8 +1035,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             merged_df = pd.DataFrame()
             if not df_exec.empty and len(df_exec) > 1:
                 try:
-                    df_exec.columns = df_exec.iloc[0]
-                    df_exec = df_exec[1:].copy()
+                    df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
                     merged_df = df_exec.astype(str)
         
                     time_col = '일시' if '일시' in merged_df.columns else '갱신시간' if '갱신시간' in merged_df.columns else merged_df.columns[0]
@@ -1094,7 +1111,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                                 h = int(item_defense_seconds // 3600)
                                 m = int((item_defense_seconds % 3600) // 60)
                                 time_str = f"{h}시간 {m}분" if h > 0 else f"{m}분" if m > 0 else "-"
-        
                             else:
                                 a_str, res, trend, time_str = "⏳ 수집 대기 중", "인덱싱 대기 중", [], "-"
         
@@ -1111,7 +1127,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
                         success_count = len(merged_df)
                         up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
-                        
                 except Exception as e:
                     st.error(f"데이터 표시 중 오류: {e}")
                     success_count, up_defense_count = 0, 0
@@ -1120,32 +1135,15 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 success_count, up_defense_count = 0, 0
                 total_defense_seconds = 0
 
-        # 오후 브리핑 생성
-        pm_briefing_text = f"""🌙 [{end_dt.strftime('%Y-%m-%d')} 성과 브리핑] 자동 갱신 결과 보고\n\n오늘 하루도 중개하시느라 고생 많으셨습니다, {display_realtor} 대표님.\n시스템이 자동으로 갱신한 광고 현황 보고드립니다.\n\n🚀 1. 자동 갱신 처리 결과\n- 오늘 시스템이 자동으로 갱신 처리한 매물: 총 {success_count}건\n\n📈 2. 순위 방어 및 상승 성과\n- 갱신 직후 상위권 방어 및 탈환 성공: 총 {up_defense_count}건 \n- 타사에 밀려났던 매물들을 최적의 타이밍에 복구하였습니다.\n\n👉 오늘 자동 갱신된 매물 목록 확인하기\nhttps://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
-
-        components.html(f"""
-        <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
-            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
-            <button id="copyBtnPm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="오후 브리핑 복사">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 24px; height: 24px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101"></path></svg>
-                <span id="copyMsgPm" style="font-size: 14px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
-            </button>
-        </div>
-        <script>
-        document.getElementById('copyBtnPm').onclick = function() {{
-            navigator.clipboard.writeText(`{pm_briefing_text}`).then(function() {{
-                const msg = document.getElementById('copyMsgPm');
-                msg.innerText = '✅ 복사완료';
-                msg.style.opacity = '1';
-                setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
-            }});
-        }};
-        </script>
-        """, height=80)
-
         total_h = int(total_defense_seconds // 3600)
         total_m = int((total_defense_seconds % 3600) // 60)
         total_time_str = f"{total_h}시간 {total_m}분" if total_h > 0 else f"{total_m}분"
+        
+        components.html(f"""
+        <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
+            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
+        </div>
+        """, height=60)
         
         st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {total_time_str}**")
         st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 갱신하여 상위권을 탈환하고 방어한 내역입니다.")
