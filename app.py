@@ -779,61 +779,108 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약)
+    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🚀 UI 대통합 개편
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
-        # 1. [오전 브리핑 복사 버튼]
+        
+        # [준비 단계] AI 진단 및 브리핑 데이터 사전 계산
+        diag_data = {"money_leak": [], "battle": [], "ocean": [], "unknown": []}
+        total_count = 0
+        safe_count = 0
+        
+        if 't_df' in locals() and not t_df.empty:
+            my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
+            if not my_all.empty:
+                for b_key, b_grp in my_all.groupby('매물묶음키'):
+                    total_count += 1
+                    danji_name = b_grp['단지명'].iloc[0]
+                    short_name = f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}"
+                    
+                    # Y축: 🏢 [단지 노출 순위] (D열 전체순위 활용)
+                    try:
+                        b_grp_numeric = b_grp.copy()
+                        b_grp_numeric['전체순위_숫자'] = pd.to_numeric(b_grp_numeric['전체순위'], errors='coerce')
+                        avg_total_rank = b_grp_numeric.groupby('수집일시')['전체순위_숫자'].min().mean()
+                    except:
+                        avg_total_rank = 20
+                        
+                    # Z축: 🥇 [내 부동산 랭킹] (묶음내 순위)
+                    avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
+                    comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
+                    
+                    # 분류 로직 및 리스트화
+                    if avg_total_rank <= 10.0: safe_count += 1 # 1페이지 노출 중
+
+                    if avg_total_rank > 10.0 and comp_renews >= 3:
+                        diag_data["money_leak"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 내 랭킹: {avg_my_rank:.1f}위)")
+                    elif avg_total_rank <= 10.0 and comp_renews >= 3:
+                        diag_data["battle"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 내 랭킹: {avg_my_rank:.1f}위)")
+                    elif avg_total_rank <= 10.0 and comp_renews < 3:
+                        diag_data["ocean"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 내 랭킹: {avg_my_rank:.1f}위)")
+                    else:
+                        diag_data["unknown"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위)")
+
+        # 브리핑 텍스트 생성
+        safe_ratio = round((safe_count / total_count * 100), 1) if total_count > 0 else 0
+        briefing_text = f"현재 관리 매물 {total_count}개 중 {safe_ratio}%가 상위권(1페이지)에 안착했습니다. "
+        if diag_data["money_leak"]:
+            briefing_text += f"다만 {len(diag_data['money_leak'])}개의 매물에서 광고비 누수가 감지되었습니다. "
+        if not boosted_df.empty:
+            briefing_text += f"오늘의 타격 권장 시간은 {(global_peak_hour + 1) % 24:02d}시입니다."
+
+        # 1. 상단 타이틀 및 복사 버튼
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px;">
             <span style="font-size: 32px; margin-right: 15px;">💡</span>
-            <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
-            <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="아침 브리핑 복사">
+            <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 브리핑</h3>
+            <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="브리핑 복사">
                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 105.656 5.656l-1.102 1.101"></path></svg>
                 <span id="copyMsgAm" style="font-size: 15px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
             </button>
         </div>
         <script>
-        document.getElementById('copyBtnAm').onclick = function() {{
-            navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
-                const msg = document.getElementById('copyMsgAm');
-                msg.innerText = '✅ 오전 브리핑 복사완료';
-                msg.style.opacity = '1';
-                setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
-            }});
-        }};
+            document.getElementById('copyBtnAm').onclick = function() {{
+                navigator.clipboard.writeText(`{briefing_text}`).then(function() {{
+                    const msg = document.getElementById('copyMsgAm');
+                    msg.innerText = '✅ 브리핑 복사완료';
+                    msg.style.opacity = '1';
+                    setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
+                }});
+            }};
         </script>
         """, height=60)
 
-        # 2. [결론 텍스트 블록]
+        # 2. [대통합] 핵심 결론 박스
         st.markdown(f"""
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px;">
-            <div style="font-size: 22px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
-                {master_conclusion}
+            <div style="font-size: 20px; line-height: 1.8; color: #0f172a; font-weight: 600; word-break: keep-all;">
+                {briefing_text}
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # 3. [신규 UX] 실시간 AI 진단 처방 (아코디언 형태)
+        st.markdown("<h4 style='color: #1e293b; margin-bottom: 15px;'>📋 매물별 상세 진단 및 처방</h4>", unsafe_allow_html=True)
         
-        # 3. [전략 카드 3종]
-        st.markdown(f"""
-        <div class="strategy-grid" style="margin-top: 5px;">
-            <div class="briefing-strategy-card">
-                <span class="strategy-tag" style="background-color:#3182f6;">🛡️ 시장 방어전</span>
-                <div class="briefing-content">현재 대표님의 단지별 랭킹은<br><span style="color:#3182f6;">[{rank_summary}]</span> 입니다.</div>
-            </div>
-            <div class="briefing-strategy-card">
-                <span class="strategy-tag" style="background-color:#ef4444;">⚔️ 상위권 탈환 필요</span>
-                <div class="briefing-content">상위 노출에서 밀려난 위험 매물이 <span style="color:#ef4444;">{danger_count}건</span> 발견되었습니다.</div>
-            </div>
-            <div class="briefing-strategy-card">
-                <span class="strategy-tag" style="background-color:#10b981;">🎯 경쟁이 적은 매물</span>
-                <div class="briefing-content">D+2일(48시간) 이상 타사가 방치한 매물이 <span style="color:#10b981;">{empty_count}건</span> 입니다.</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        if diag_data["money_leak"]:
+            with st.expander(f"🚨 광고비 누수 위험 (밑 빠진 독) - {len(diag_data['money_leak'])}건", expanded=True):
+                st.error("🏢 [단지 노출]이 하위권인데 갱신만 반복되고 있습니다. 즉시 광고를 멈추고 가격이나 사진을 점검하세요.")
+                for item in diag_data["money_leak"]: st.markdown(f"- {item}")
+        
+        if diag_data["battle"]:
+            with st.expander(f"⚔️ 상위권 방어 필수 (격전지) - {len(diag_data['battle'])}건", expanded=False):
+                st.info("단지 상위권 노출 중이며 경쟁이 치열합니다. AI가 추천하는 타격 시간에 맞춰 🥇 [내 부동산 랭킹]을 사수하세요.")
+                for item in diag_data["battle"]: st.markdown(f"- {item}")
+        
+        if diag_data["ocean"]:
+            with st.expander(f"🎯 가성비 최고 (블루오션) - {len(diag_data['ocean'])}건", expanded=False):
+                st.success("경쟁 없이 단지 상위권을 장악 중입니다. 최소한의 갱신으로 효율을 극대화할 수 있는 꿀매물입니다.")
+                for item in diag_data["ocean"]: st.markdown(f"- {item}")
 
-        # 4. [자동 갱신 성과 데이터 로직]
-        total_defense_seconds = 0  # ⭐ [문제 해결] 데이터가 0건일 때를 대비한 기본값 사전 선언
-
+        # 4. [자동 갱신 성과 데이터 로직] (여기서부터 대표님의 기존 코드를 이어 붙이세요!)
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        total_defense_seconds = 0 
+        
         if IS_DEMO_MODE:
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
