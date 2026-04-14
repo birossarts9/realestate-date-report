@@ -336,8 +336,7 @@ def load_server_data():
     
     return df
 
-def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, low_count, selected_days, my_ranks_dict, top_competitors_list, recommendations):
-    # 1. 캔버스 세팅
+def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid_avg, low_count, low_avg, selected_days, my_ranks_dict, top_competitors_list, recommendations):
     width, height = 1000, 1000
     img = Image.new('RGB', (width, height), color=(248, 250, 252)) 
     draw = ImageDraw.Draw(img)
@@ -348,40 +347,41 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, low
         font_body = ImageFont.truetype("NanumGothic.ttf", 22)
         font_bold = ImageFont.truetype("NanumGothic.ttf", 26)
         font_large_num = ImageFont.truetype("NanumGothic.ttf", 36)
-        font_small = ImageFont.truetype("NanumGothic.ttf", 18)
+        font_small = ImageFont.truetype("NanumGothic.ttf", 16) # 평균 순위용 조금 작은 폰트
     except:
         font_title = font_sub = font_body = font_bold = font_large_num = font_small = ImageFont.load_default()
 
     import textwrap
 
-    # 2. 상단 헤더 (타이틀 변경)
+    # 1. 상단 헤더
     now_str = datetime.now().strftime('%Y.%m.%d')
     draw.text((50, 50), "TOP RANK AI REPORT", font=font_title, fill=(15, 23, 42))
     draw.text((50, 110), f"{realtor_name} 대표님 작전 리포트", font=font_sub, fill=(71, 85, 105))
     draw.text((750, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
 
-    # 3. [1단 카드] 3구간 등수 직관형 요약
+    # 2. [1단 카드] 3구간 등수 직관형 요약 (이모지 제거, 모든 평균 추가)
     draw.rounded_rectangle([(50, 160), (950, 280)], radius=20, fill=(255, 255, 255))
     
     # [1~3위 장악]
-    draw.text((80, 190), "🏆 최상위 장악 (1~3위)", font=font_bold, fill=(37, 99, 235))
+    draw.text((70, 190), "[최상위 장악 1~3위]", font=font_bold, fill=(37, 99, 235))
     draw.text((120, 230), f"{top_count}건", font=font_large_num, fill=(37, 99, 235))
-    if top_count > 0:
-        draw.text((190, 245), f"(평균 {top_avg}위)", font=font_small, fill=(107, 118, 132))
+    if top_count > 0: draw.text((190, 245), f"(평균 {top_avg}위)", font=font_small, fill=(107, 118, 132))
         
-    draw.line([(380, 190), (380, 250)], fill=(226, 232, 240), width=2) # 구분선
+    draw.line([(380, 190), (380, 250)], fill=(226, 232, 240), width=2)
     
     # [4~7위 안정권]
-    draw.text((420, 190), "🛡️ 안정권 방어 (4~7위)", font=font_bold, fill=(5, 150, 105))
-    draw.text((470, 230), f"{mid_count}건", font=font_large_num, fill=(5, 150, 105))
+    draw.text((400, 190), "[안정권 방어 4~7위]", font=font_bold, fill=(5, 150, 105))
+    draw.text((450, 230), f"{mid_count}건", font=font_large_num, fill=(5, 150, 105))
+    if mid_count > 0: draw.text((520, 245), f"(평균 {mid_avg}위)", font=font_small, fill=(107, 118, 132))
     
-    draw.line([(700, 190), (700, 250)], fill=(226, 232, 240), width=2) # 구분선
+    draw.line([(710, 190), (710, 250)], fill=(226, 232, 240), width=2)
     
     # [8위 밖 누수]
-    draw.text((740, 190), "🚨 노출 누수 (8위~)", font=font_bold, fill=(225, 29, 72))
+    draw.text((750, 190), "[노출 누수 8위~]", font=font_bold, fill=(225, 29, 72))
     draw.text((780, 230), f"{low_count}건", font=font_large_num, fill=(225, 29, 72))
+    if low_count > 0: draw.text((850, 245), f"(평균 {low_avg}위)", font=font_small, fill=(107, 118, 132))
 
-    # 4. [2단 카드 - 좌/우 분할]
+    # 3. [2단 카드 - 좌/우 분할]
     draw.rounded_rectangle([(50, 310), (485, 730)], radius=20, fill=(255, 255, 255))
     draw.text((80, 340), "[내 단지별 랭킹]", font=font_bold, fill=(37, 99, 235))
     y_offset = 410
@@ -408,7 +408,7 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, low
             draw.text((725+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(15, 23, 42))
             y_offset += 50
 
-    # 5. [3단 카드] AI 마스터 작전 지시 
+    # 4. [3단 카드] AI 마스터 작전 지시 
     draw.rounded_rectangle([(50, 760), (950, 950)], radius=20, fill=(232, 243, 255))
     draw.text((80, 790), "[오늘의 AI 마스터 작전 지시]", font=font_bold, fill=(37, 99, 235))
     
@@ -419,11 +419,9 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, low
             draw.text((80, y_rec), wrapped_rec, font=font_body, fill=(30, 41, 59))
             y_rec += 35
     else:
-        # [수정] 빈집(블루오션)일 경우의 짧은 컨설팅 멘트
-        draw.text((80, 835), "현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.", font=font_body, fill=(5, 150, 105)) # 초록색 강조
+        draw.text((80, 835), "현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.", font=font_body, fill=(5, 150, 105)) 
         draw.text((80, 865), "편하신 시간에 자유롭게 갱신하셔도 상위 노출이 유리합니다.", font=font_body, fill=(71, 85, 105))
 
-    # 6. 최하단 안내 문구 
     draw.text((330, 970), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(148, 163, 184))
 
     img_buffer = io.BytesIO()
@@ -1046,16 +1044,17 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [최종 완결판] 3구간 지표 + 타격 시간 우선 정렬 로직
+        # 🚀 [용어 통일 + 우선순위 정렬 + 웹UI 통합] 최종 완결판
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
         days_val = selected_days if 'selected_days' in locals() else 7
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
-        # 1. [상단 지표 묘수] 3구간 데이터 & 평균 순위 계산
+        # 1. 3구간 데이터 & 모든 평균 순위 계산
         top_tier_count, top_tier_sum = 0, 0
-        mid_tier_count, low_tier_count = 0, 0
+        mid_tier_count, mid_tier_sum = 0, 0
+        low_tier_count, low_tier_sum = 0, 0
         
         if not t_df.empty:
             my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
@@ -1067,12 +1066,35 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         top_tier_sum += avg_rank
                     elif avg_rank <= 7.0:
                         mid_tier_count += 1
+                        mid_tier_sum += avg_rank
                     else:
                         low_tier_count += 1
+                        low_tier_sum += avg_rank
         
         top_tier_avg = round(top_tier_sum / top_tier_count, 1) if top_tier_count > 0 else 0.0
+        mid_tier_avg = round(mid_tier_sum / mid_tier_count, 1) if mid_tier_count > 0 else 0.0
+        low_tier_avg = round(low_tier_sum / low_tier_count, 1) if low_tier_count > 0 else 0.0
 
-        # 2. [작전 지시] 시간 계산 가능 매물 '우선 배치' 로직
+        # 🎯 [신규 통합] 대시보드 웹 화면용 '오늘의 AI 마스터 결론' 자동 출력
+        st.markdown(f"""
+        <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px; background-color: #f8fafc;">
+            <h4 style="color: #1e293b; margin-top: 0; margin-bottom: 15px; font-weight: 800;">💡 오늘의 AI 마스터 결론</h4>
+            <p style="color: #475569; font-size: 15px; margin-bottom: 15px;">
+                선택하신 기간({days_val}일) 동안 활동한 매물 <b>{top_tier_count + mid_tier_count + low_tier_count}개</b>의 종합 성적입니다.
+            </p>
+            <div style="border-left: 4px solid #3b82f6; padding-left: 12px; margin-bottom: 10px;">
+                <span style="color: #3b82f6; font-weight: 700;">최상위 장악 (1~3위)</span> : 총 {top_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {top_tier_avg}위)</span>
+            </div>
+            <div style="border-left: 4px solid #10b981; padding-left: 12px; margin-bottom: 10px;">
+                <span style="color: #10b981; font-weight: 700;">안정권 방어 (4~7위)</span> : 총 {mid_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {mid_tier_avg}위)</span>
+            </div>
+            <div style="border-left: 4px solid #ef4444; padding-left: 12px;">
+                <span style="color: #ef4444; font-weight: 700;">노출 누수 (8위~)</span> : 총 {low_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {low_tier_avg}위)</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 2. 작전 지시 (빈집 분리 및 시간 확보 매물 최우선 정렬)
         ai_recommendations = []
         if not t_df.empty and not my_all.empty:
             temp_recs = []
@@ -1087,43 +1109,47 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
                     appearances = len(b_ranks)
                     
-                    # 깡통 매물 필터 통과
                     if appearances >= max(3, total_sessions_comp * 0.1):
                         survival = (appearances / total_sessions_comp) * 100
                         avg_rank = b_ranks.mean()
                         
-                        # ⭐ [핵심] 경쟁사 데이터가 3개 이상 있어서 '명확한 시간'이 나오는지 판별
                         b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                        has_clear_time = len(b_boosted) >= 3 
+                        total_renews = len(b_boosted)
                         
+                        # ⭐ [핵심] 우선순위 점수 부여 (3점: 완벽, 2점: 누적중, 1점: 빈집)
+                        if total_renews >= 3:
+                            priority_score = 3
+                        elif total_renews > 0:
+                            priority_score = 2
+                        else:
+                            priority_score = 1
+                            
                         diag_list.append({
                             'key': b_key, 'danji': comp_name, 'survival': survival, 
-                            'avg': avg_rank, 'has_time': has_clear_time
+                            'avg': avg_rank, 'priority': priority_score, 'renews': total_renews
                         })
                 
                 if diag_list:
-                    # 단지 내 최고 매물 1개 선발
                     top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
                     temp_recs.append(top_in_comp)
             
-            # ⭐ [우선순위 정렬] 1. 시간명확(True) 우선 -> 2. 생존율 높음 -> 3. 평균순위 좋음
-            if temp_recs:
-                final_targets = pd.DataFrame(temp_recs).sort_values(
-                    by=['has_time', 'survival', 'avg'], 
-                    ascending=[False, False, True]
-                ).head(3)
-            else:
-                final_targets = pd.DataFrame()
+            # ⭐ [우선순위 정렬] 1. Priority(시간 도출 여부) -> 2. 생존율 -> 3. 평균순위
+            final_targets = pd.DataFrame(temp_recs).sort_values(
+                by=['priority', 'survival', 'avg'], 
+                ascending=[False, False, True]
+            ).head(3) if temp_recs else pd.DataFrame()
             
             for _, row in final_targets.iterrows():
                 b_key = row['key']
-                b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                total_renews = len(b_boosted)
+                total_renews = row['renews']
                 
-                if total_renews < 3:
+                # 빈집과 데이터 부족 명확히 분리
+                if total_renews == 0:
                     rec_time_str = "자유 갱신 (경쟁 없는 빈집)"
+                elif total_renews < 3:
+                    rec_time_str = "데이터 누적 중 (분석 대기)"
                 else:
-                    # 시간 계산 로직 (기존과 동일)
+                    b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                     active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
                     if len(active_hours) <= 1:
                         best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
@@ -1176,7 +1202,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
             top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
 
-        # 4. 웹 화면 출력
+        # 4. 작전 지시 웹 화면 출력
         fallback_msg = "<div style='font-size: 15px; color: #059669;'>현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.<br>편하신 시간에 자유롭게 갱신하셔도 1위 노출이 보장됩니다.</div>"
         
         st.markdown(f"""
@@ -1186,9 +1212,9 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </div>
         """, unsafe_allow_html=True)
 
-        # 5. 이미지 생성 호출 (이전 답변의 상단 이미지 변경 코드가 적용되어 있어야 합니다!)
+        # 5. 이미지 생성 호출
         report_image_bytes = generate_kakao_report_image(
-            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, low_tier_count, days_val, ranks_dict_val, top_comp_list, ai_recommendations
+            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, days_val, ranks_dict_val, top_comp_list, ai_recommendations
         )
         
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
