@@ -784,19 +784,15 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
         # ------------------------------------------------------
-        # 1. 데이터 가공 (단지 전체 노출 순위 기준 3구간 분리)
+        # 1. 데이터 가공 (단지 전체 노출 순위 1~5, 6~15, 16~ 기준)
         # ------------------------------------------------------
         selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
         recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)] if 't_df' in locals() else pd.DataFrame()
 
-        top_tier_count, top_tier_sum = 0, 0
-        mid_tier_count, mid_tier_sum = 0, 0
-        low_tier_count, low_tier_sum = 0, 0
-
-        # 진단 결과를 담을 딕셔너리 (상위권 누수 모순 제거)
+        bundle_stats = []
         diag_dict = {
-            "top_battle": [], "top_ocean": [],
-            "mid_general": [],
+            "top_battle": [], "top_ocean": [], "top_slip": [],
+            "mid_battle": [], "mid_ocean": [],
             "low_leak": [], "low_stock": []
         }
 
@@ -805,56 +801,85 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 danji_name = b_grp['단지명'].iloc[0]
                 short_name = f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}"
 
-                # 💡 [핵심 교정] 단지 전체 노출 순위 (네이버 겉면 랭킹) -> 카드를 나누는 절대 기준
+                # 단지 전체 노출 순위 (Y축)
                 try:
                     b_grp_numeric = b_grp.copy()
                     b_grp_numeric['전체순위_숫자'] = pd.to_numeric(b_grp_numeric['전체순위'], errors='coerce')
                     avg_total_rank = b_grp_numeric.groupby('수집일시')['전체순위_숫자'].min().mean()
                 except:
-                    avg_total_rank = 20
+                    avg_total_rank = 20.0
 
-                # 내 부동산 순위 (묶음 내 순위) -> 디테일 정보용
+                # 내 묶음 내 순위 (Z축)
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
 
-                # 타사 갱신 빈도 (경쟁 강도)
+                # 타사 갱신 빈도 (X축)
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
+
+                bundle_stats.append({
+                    'b_key': b_key, 'short_name': short_name, 'danji_name': danji_name,
+                    'avg_total_rank': avg_total_rank, 'avg_my_rank': avg_my_rank, 'comp_renews': comp_renews
+                })
 
                 item_desc = f"{short_name} (내 순위: {avg_my_rank:.1f}등 / 갱신: {comp_renews}회)"
 
-                # 🚀 1. 상위권 (단지 노출 1~3위) -> 잘 노출되고 있으니 누수는 없음!
-                if avg_total_rank <= 3.0:
-                    top_tier_count += 1; top_tier_sum += avg_total_rank
-                    if comp_renews >= 3:
-                        diag_dict["top_battle"].append(item_desc) # 갱신 많음 = 격전지 방어
+                # 🚀 1. 상위권 (단지 노출 1~5위)
+                if avg_total_rank <= 5.0:
+                    if avg_my_rank > 3.0:
+                        diag_dict["top_slip"].append(item_desc) # 노출은 좋은데 내 순위가 밀림
+                    elif comp_renews >= 3:
+                        diag_dict["top_battle"].append(item_desc) # 1등 방어 중 + 경쟁 치열
                     else:
-                        diag_dict["top_ocean"].append(item_desc)  # 갱신 적음 = 가성비 꿀매물
+                        diag_dict["top_ocean"].append(item_desc) # 1등 방어 중 + 경쟁 없음
 
-                # 🚀 2. 중위권 (단지 노출 4~7위)
-                elif avg_total_rank <= 7.0:
-                    mid_tier_count += 1; mid_tier_sum += avg_total_rank
-                    diag_dict["mid_general"].append(item_desc)
+                # 🚀 2. 중위권 (단지 노출 6~15위)
+                elif avg_total_rank <= 15.0:
+                    if comp_renews >= 3:
+                        diag_dict["mid_battle"].append(item_desc)
+                    else:
+                        diag_dict["mid_ocean"].append(item_desc)
 
-                # 🚀 3. 하위권 (단지 노출 8위 밖) -> 노출이 안 되는데 돈을 쓰면 누수!
+                # 🚀 3. 하위권 (단지 노출 16위 밖)
                 else:
-                    low_tier_count += 1; low_tier_sum += avg_total_rank
-                    if comp_renews >= 3:
-                        diag_dict["low_leak"].append(item_desc)   # 갱신 많음 = 돈 낭비(밑 빠진 독)
+                    if comp_renews >= 2:
+                        diag_dict["low_leak"].append(item_desc) # 밑 빠진 독
                     else:
-                        diag_dict["low_stock"].append(item_desc)  # 갱신 없음 = 악성 재고
+                        diag_dict["low_stock"].append(item_desc)
 
-        total_my_bundles = top_tier_count + mid_tier_count + low_tier_count
-        top_tier_avg = round(top_tier_sum / top_tier_count, 1) if top_tier_count > 0 else 0.0
-        mid_tier_avg = round(mid_tier_sum / mid_tier_count, 1) if mid_tier_count > 0 else 0.0
-        low_tier_avg = round(low_tier_sum / low_tier_count, 1) if low_tier_count > 0 else 0.0
+        df_stats = pd.DataFrame(bundle_stats)
+        
+        if not df_stats.empty:
+            safe_df = df_stats[df_stats['avg_total_rank'] <= 5.0]
+            mid_df = df_stats[(df_stats['avg_total_rank'] > 5.0) & (df_stats['avg_total_rank'] <= 15.0)]
+            danger_df = df_stats[df_stats['avg_total_rank'] > 15.0]
+            
+            top_tier_count = len(safe_df); top_tier_avg = round(safe_df['avg_total_rank'].mean(), 1) if top_tier_count > 0 else 0.0
+            mid_tier_count = len(mid_df); mid_tier_avg = round(mid_df['avg_total_rank'].mean(), 1) if mid_tier_count > 0 else 0.0
+            low_tier_count = len(danger_df); low_tier_avg = round(danger_df['avg_total_rank'].mean(), 1) if low_tier_count > 0 else 0.0
+            total_my_bundles = len(df_stats)
+        else:
+            safe_df = mid_df = danger_df = pd.DataFrame()
+            top_tier_count = mid_tier_count = low_tier_count = total_my_bundles = 0
+            top_tier_avg = mid_tier_avg = low_tier_avg = 0.0
+
         safe_ratio = int((top_tier_count / total_my_bundles) * 100) if total_my_bundles > 0 else 0
         total_money_leaks = len(diag_dict["low_leak"])
+
+        def build_ui_html_from_stats(df):
+            if df.empty: return "<div style='color:#94a3b8; padding: 10px 0;'>해당 매물이 없습니다.</div>"
+            html_str = ""
+            for danji, grp in df.groupby('danji_name'):
+                html_str += f"<div style='margin-bottom: 8px;'><b style='color:#334155; font-size: 14px;'>🏢 {mask_text(danji)}</b><br>"
+                for _, row in grp.iterrows():
+                    html_str += f"<div style='padding-left: 15px; color:#475569; font-size: 13px; line-height: 1.5;'>🔹 {row['short_name'].replace(mask_text(danji), '').strip()} <span style='color:#94a3b8;'>(단지 {row['avg_total_rank']:.1f}위 / 내 순위 {row['avg_my_rank']:.1f}등)</span></div>"
+                html_str += "</div>"
+            return html_str
 
         # ------------------------------------------------------
         # 2. 최상단: 영웅 지표 (1줄 브리핑)
         # ------------------------------------------------------
-        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 활동 매물 {total_my_bundles}개 중, 단지 노출 상위권(1~3위)에 진입한 매물은 {top_tier_count}개({safe_ratio}%)입니다."
+        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 매물 {total_my_bundles}개 중, 단지 첫 화면(1~5위) 노출에 성공한 매물은 {top_tier_count}개({safe_ratio}%)입니다."
         if total_money_leaks > 0:
-            master_briefing += f" 🚨 현재 하위권에서 <b style='color:#ef4444;'>{total_money_leaks}개</b>의 매물이 의미 없이 갱신되며 광고비가 누수되고 있습니다."
+            master_briefing += f" 🚨 단지 16위 밖으로 밀려나 <b style='color:#ef4444;'>광고비 누수가 발생 중인 매물이 {total_money_leaks}개</b> 있습니다."
         
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px; margin-bottom: 10px;">
@@ -862,31 +887,23 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             <h3 style="margin: 0; color: #1e3a8a; font-weight: 800; font-size: 28px;">오늘의 AI 마스터 결론</h3>
             <button id="copyBtnAm" style="background: none; border: none; padding: 0; margin-left: 15px; cursor: pointer; color: #94a3b8; outline: none;" title="브리핑 복사">
                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="width: 28px; height: 28px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.823a4 4 0 015.656 0l4 4a4 4 0 105.656 5.656l-1.102 1.101"></path></svg>
-                <span id="copyMsgAm" style="font-size: 15px; margin-left: 8px; font-weight: 600; opacity: 0; transition: opacity 0.3s; color: #10b981;"></span>
             </button>
         </div>
         <script>
             document.getElementById('copyBtnAm').onclick = function() {{
-                navigator.clipboard.writeText(`{master_briefing.replace('<b>','').replace('</b>','')}`).then(function() {{
-                    const msg = document.getElementById('copyMsgAm');
-                    msg.innerText = '✅ 브리핑 복사완료';
-                    msg.style.opacity = '1';
-                    setTimeout(() => {{ msg.style.opacity = '0'; }}, 2000);
-                }});
+                navigator.clipboard.writeText(`{master_briefing.replace('<b>','').replace('</b>','')}`).then(function() {{ alert('✅ 브리핑 복사완료'); }});
             }};
         </script>
         """, height=60)
 
         st.markdown(f"""
         <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-left: 6px solid #3182f6; padding: 20px 30px; border-radius: 12px; margin-bottom: 25px;">
-            <div style="font-size: 20px; line-height: 1.6; color: #0f172a; font-weight: 600; word-break: keep-all;">
-                {master_briefing}
-            </div>
+            <div style="font-size: 20px; line-height: 1.6; color: #0f172a; font-weight: 600; word-break: keep-all;">{master_briefing}</div>
         </div>
         """, unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # ⭐ 3. 랭킹 카드 + 진단 처방 완벽 결합
+        # 3. 중앙: 대통합 3단 랭킹 카드
         # ------------------------------------------------------
         st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 10px;'>※ 상/중/하위권 기준: 네이버 단지 내 전체 매물 노출 순위 (고객 가시성)</p>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
@@ -894,176 +911,146 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         with c1:
             st.markdown(f"""
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-top: 5px solid #3b82f6; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #1e3a8a; font-weight: 800; font-size: 18px; margin-bottom: 10px;">상위권 (1~3위)</div>
+                <div style="color: #1e3a8a; font-weight: 800; font-size: 18px; margin-bottom: 10px;">상위권 (1~5위)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #3b82f6; margin-bottom: 5px;">{top_tier_count}<span style="font-size:18px;">건</span></div>
-                <div style="color: #64748b; font-size: 14px;">평균 {top_tier_avg}위</div>
+                <div style="color: #64748b; font-size: 14px;">단지 평균 {top_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
             with st.expander("▼ AI 진단 처방 보기", expanded=(top_tier_count > 0)):
+                if diag_dict["top_slip"]:
+                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>🚀 [순위 탈환] 단지 노출은 최상이나 내 순위가 밀려있습니다! 타격 권장!</span>", unsafe_allow_html=True)
+                    for item in diag_dict["top_slip"]: st.caption(f"- {item}")
+                    st.markdown("---")
                 if diag_dict["top_battle"]:
-                    st.markdown("<span style='color:#f59e0b; font-weight:bold;'>🔥 [격전지] 고객 노출도 잘 되고 경쟁도 치열한 방어 필수 매물입니다.</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#f59e0b; font-weight:bold;'>🔥 [격전지 방어] 1등 방어 중이나 타사 갱신이 치열합니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["top_battle"]: st.caption(f"- {item}")
                     st.markdown("---")
                 if diag_dict["top_ocean"]:
-                    st.markdown("<span style='color:#10b981; font-weight:bold;'>🎯 [블루오션] 고객 노출은 잘 되는데 경쟁사는 갱신을 안 하는 꿀매물입니다.</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#10b981; font-weight:bold;'>🎯 [블루오션] 경쟁사 갱신 없이 1등을 유지하는 꿀매물입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["top_ocean"]: st.caption(f"- {item}")
-                if not any([diag_dict["top_battle"], diag_dict["top_ocean"]]):
-                    st.caption("해당 매물이 없습니다.")
+                st.markdown("<br><b>[상세 매물 목록]</b>", unsafe_allow_html=True)
+                st.markdown(build_ui_html_from_stats(safe_df), unsafe_allow_html=True)
 
         with c2:
             st.markdown(f"""
             <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-top: 5px solid #10b981; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #064e3b; font-weight: 800; font-size: 18px; margin-bottom: 10px;">중위권 (4~7위)</div>
+                <div style="color: #064e3b; font-weight: 800; font-size: 18px; margin-bottom: 10px;">중위권 (6~15위)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #10b981; margin-bottom: 5px;">{mid_tier_count}<span style="font-size:18px;">건</span></div>
-                <div style="color: #64748b; font-size: 14px;">평균 {mid_tier_avg}위</div>
+                <div style="color: #64748b; font-size: 14px;">단지 평균 {mid_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
             with st.expander("▼ AI 진단 처방 보기", expanded=False):
-                if diag_dict["mid_general"]:
-                    st.markdown("<span style='color:#3b82f6; font-weight:bold;'>🚀 순위 도약이 필요한 매물들입니다.</span>", unsafe_allow_html=True)
-                    for item in diag_dict["mid_general"]: st.caption(f"- {item}")
-                else:
-                    st.caption("해당 매물이 없습니다.")
+                if diag_dict["mid_battle"]:
+                    st.markdown("<span style='color:#f59e0b; font-weight:bold;'>⚔️ [도약 필요] 경쟁이 치열하여 상위권 진입이 요구됩니다.</span>", unsafe_allow_html=True)
+                    for item in diag_dict["mid_battle"]: st.caption(f"- {item}")
+                if diag_dict["mid_ocean"]:
+                    st.markdown("<span style='color:#10b981; font-weight:bold;'>🚶 [유지] 경쟁이 적어 현 상태 유지가 무난합니다.</span>", unsafe_allow_html=True)
+                    for item in diag_dict["mid_ocean"]: st.caption(f"- {item}")
+                st.markdown("<br><b>[상세 매물 목록]</b>", unsafe_allow_html=True)
+                st.markdown(build_ui_html_from_stats(mid_df), unsafe_allow_html=True)
 
         with c3:
             st.markdown(f"""
             <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-top: 5px solid #ef4444; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #7f1d1d; font-weight: 800; font-size: 18px; margin-bottom: 10px;">하위권 (8위~)</div>
+                <div style="color: #7f1d1d; font-weight: 800; font-size: 18px; margin-bottom: 10px;">하위권 (16위 밖)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #ef4444; margin-bottom: 5px;">{low_tier_count}<span style="font-size:18px;">건</span></div>
-                <div style="color: #64748b; font-size: 14px;">평균 {low_tier_avg}위</div>
+                <div style="color: #64748b; font-size: 14px;">단지 평균 {low_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
             with st.expander("▼ AI 진단 처방 보기", expanded=(len(diag_dict["low_leak"]) > 0)):
                 if diag_dict["low_leak"]:
-                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>💸 [돈 낭비] 타사 갱신 경쟁만 치열하고 정작 상단에 노출되지 않습니다. 갱신 중단!</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>💸 [밑 빠진 독] 돈을 써도 15위 밖입니다. 갱신을 즉시 멈추세요!</span>", unsafe_allow_html=True)
                     for item in diag_dict["low_leak"]: st.caption(f"- {item}")
                     st.markdown("---")
                 if diag_dict["low_stock"]:
-                    st.markdown("<span style='color:#94a3b8; font-weight:bold;'>🧊 [악성 재고] 노출도 안 되고 타사 갱신도 없는 죽은 매물입니다.</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#94a3b8; font-weight:bold;'>🧊 [악성 재고] 노출도 안 되고 타사 갱신도 없는 방치 매물입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["low_stock"]: st.caption(f"- {item}")
-                if not any([diag_dict["low_leak"], diag_dict["low_stock"]]):
-                    st.caption("해당 매물이 없습니다.")
+                st.markdown("<br><b>[상세 매물 목록]</b>", unsafe_allow_html=True)
+                st.markdown(build_ui_html_from_stats(danger_df), unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 4. 전체 단지 점유율 (M/S)
+        # 4. 전체 단지 점유율 (M/S) - Top 10 + 역순 정렬(1위 상단)
         # ------------------------------------------------------
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
             ms_df = ms_counts.copy()
             ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
             agg_ms = ms_df.groupby('부동산명_축약')['총점수'].sum().reset_index()
-            agg_ms = agg_ms[~agg_ms['부동산명_축약'].str.contains(display_realtor)]
-            top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
+            # 1위가 맨 위로 오도록 내림차순 후 상위 10개 추출
+            top_df = agg_ms.sort_values('총점수', ascending=False).head(10)
             top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
 
-            st.markdown("<h4 style='color: #1e293b; margin-bottom: 10px;'>🏆 관리 단지별 시장 점유율 (Top 6)</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #1e293b; margin-bottom: 10px;'>🏆 관리 단지별 시장 점유율 (Top 10)</h4>", unsafe_allow_html=True)
             import plotly.express as px
             fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', color_discrete_sequence=['#3182f6'], text='총점수')
-            fig_ms.update_layout(height=250, margin=dict(t=0, b=0, l=0, r=0), xaxis_title="종합 파워 점수", yaxis_title="")
+            fig_ms.update_yaxes(autorange="reversed") # 💡 1등이 맨 위로 오도록 Y축 뒤집기
+            fig_ms.update_layout(height=400, margin=dict(t=0, b=0, l=0, r=0), xaxis_title="종합 파워 점수", yaxis_title="")
             st.plotly_chart(fig_ms, use_container_width=True)
 
         # ------------------------------------------------------
-        # 5. 하단: AI 작전 지시
+        # ⭐ 5. 하단: AI 작전 지시 (믹스 데이터 기반 고도화)
         # ------------------------------------------------------
         ai_recommendations = []
-        if not t_df.empty and not recent_my_df.empty:
-            temp_recs = []
-            for comp_name, comp_grp in t_df.groupby('단지명'):
-                total_sessions_comp = comp_grp['수집일시'].nunique()
-                if total_sessions_comp == 0: continue
-                my_comp_grp = recent_my_df[recent_my_df['단지명'] == comp_name]
-                if my_comp_grp.empty: continue
-                
-                diag_list = []
-                for b_key, b_grp in my_comp_grp.groupby('매물묶음키'):
-                    b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
-                    appearances = len(b_ranks)
-                    
-                    if appearances >= max(3, total_sessions_comp * 0.1):
-                        survival = (appearances / total_sessions_comp) * 100
-                        avg_rank = b_ranks.mean()
-                        
-                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key] if 'boosted_df' in locals() else pd.DataFrame()
-                        total_renews = len(b_boosted)
-                        
-                        if total_renews >= 3: priority_score = 3
-                        elif total_renews > 0: priority_score = 2
-                        else: priority_score = 1
-                            
-                        diag_list.append({
-                            'key': b_key, 'danji': comp_name, 'survival': survival, 
-                            'avg': avg_rank, 'priority': priority_score, 'renews': total_renews
-                        })
-                
-                if diag_list:
-                    top_in_comp = pd.DataFrame(diag_list).sort_values(
-                        by=['priority', 'survival', 'avg'], ascending=[False, False, True]
-                    ).iloc[0]
-                    temp_recs.append(top_in_comp)
+        if not df_stats.empty:
+            # 갱신이 필요한 우선순위 기준 정렬 (단지 노출 상위권이면서, 내 순위가 밀린 것 우선)
+            action_targets = df_stats.sort_values(by=['avg_total_rank', 'avg_my_rank'], ascending=[True, False])
+            count = 0
             
-            final_targets = pd.DataFrame(temp_recs).sort_values(
-                by=['priority', 'survival', 'avg'], ascending=[False, False, True]
-            ).head(3) if temp_recs else pd.DataFrame()
-            
-            for _, row in final_targets.iterrows():
-                b_key = row['key']
-                total_renews = row['renews']
+            for _, row in action_targets.iterrows():
+                if count >= 4: break # 최대 4개까지만 추천
                 
-                if total_renews == 0:
-                    rec_time_str = "자유 갱신 (경쟁 없는 빈집)"
-                elif total_renews < 3:
-                    rec_time_str = "데이터 누적 중 (분석 대기)"
+                b_key = row['b_key']
+                comp_renews = row['comp_renews']
+                avg_tot = row['avg_total_rank']
+                avg_my = row['avg_my_rank']
+                
+                if avg_tot > 15.0 and comp_renews >= 2:
+                    continue # 밑빠진 독은 타격 지시에서 제외 (끄라고 해야함)
+                
+                # 시간대 계산 로직 (기존 완벽한 시간 계산식 유지)
+                b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key] if 'boosted_df' in locals() else pd.DataFrame()
+                if b_boosted.empty:
+                    rec_time_str = "자유 갱신 (경쟁 없음)"
                 else:
-                    b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                     active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
                     if len(active_hours) <= 1:
                         best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
-                        ampm = "오후" if best_hour >= 12 else "오전"
-                        disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                        if disp_h == 0: disp_h = 12
-                        rec_time_str = f"{ampm} {disp_h}시 권장"
+                        rec_time_str = f"{'오후' if best_hour>=12 else '오전'} {best_hour if best_hour<=12 else best_hour-12 or 12}시 권장"
                     else:
-                        max_effective_gap = -1
-                        best_hour = 12
+                        max_gap = -1; best_hour = 12
                         for i in range(len(active_hours)):
-                            curr_h = active_hours[i]
-                            next_h = active_hours[(i + 1) % len(active_hours)]
-                            raw_gap = (next_h - curr_h) % 24
-                            if raw_gap == 0: raw_gap = 24
-                            
+                            curr_h = active_hours[i]; next_h = active_hours[(i + 1) % len(active_hours)]
+                            raw_gap = (next_h - curr_h) % 24 or 24
                             strike_hour = (curr_h + 1) % 24
-                            effective_gap = 0
-                            for h in range(strike_hour, strike_hour + raw_gap):
-                                real_h = h % 24
-                                if 8 <= real_h <= 23: effective_gap += 1
-                            
-                            if effective_gap > max_effective_gap:
-                                max_effective_gap = effective_gap
-                                best_hour = strike_hour
+                            eff_gap = sum(1 for h in range(strike_hour, strike_hour + raw_gap) if 8 <= (h % 24) <= 23)
+                            if eff_gap > max_gap: max_gap = eff_gap; best_hour = strike_hour
                         
-                        if max_effective_gap >= 3:
-                            ampm = "오후" if best_hour >= 12 else "오전"
-                            disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                            if disp_h == 0: disp_h = 12
-                            rec_time_str = f"{ampm} {disp_h}시 권장"
+                        if max_gap >= 3:
+                            rec_time_str = f"{'오후' if best_hour>=12 else '오전'} {best_hour if best_hour<=12 else best_hour-12 or 12}시 권장"
                         else:
                             rec_time_str = "분산 타격(수시) 권장"
-                
-                parts = b_key.split('|')
-                raw_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
-                danji_name = row['danji'].strip()
-                clean_spec = raw_spec[len(danji_name):].strip() if raw_spec.startswith(danji_name) else raw_spec
-                
-                ai_recommendations.append(f"{mask_text(danji_name)} {mask_text(clean_spec)} - {rec_time_str}")
 
-        fallback_msg = "<div style='font-size: 15px; color: #059669;'>현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.<br>편하신 시간에 자유롭게 갱신하셔도 1위 노출이 보장됩니다.</div>"
+                # 💡 [핵심] 풍성해진 추천 사유(명분) 결합
+                if avg_tot <= 5.0 and avg_my > 2.0:
+                    reason = f"<span style='color:#ef4444; font-size:14px;'>(단지 노출 {avg_tot:.1f}위 우수매물 ➔ 내 순위 {avg_my:.1f}위 탈환 목적)</span>"
+                elif avg_tot <= 15.0 and comp_renews >= 3:
+                    reason = f"<span style='color:#f59e0b; font-size:14px;'>(단지 노출 {avg_tot:.1f}위 ➔ 타사 갱신 치열로 1순위 방어 목적)</span>"
+                elif avg_tot > 5.0 and avg_my > 3.0:
+                    reason = f"<span style='color:#3b82f6; font-size:14px;'>(중위권 매물 ➔ 묶음 내 상단 도약 목적)</span>"
+                else:
+                    reason = ""
+                    
+                ai_recommendations.append(f"{row['short_name']} ➔ <b>{rec_time_str}</b><br>{reason}")
+                count += 1
+
+        fallback_msg = "<div style='font-size: 15px; color: #059669;'>현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.<br>편하신 시간에 자유롭게 갱신하셔도 노출이 보장됩니다.</div>"
         
         st.markdown(f"""
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
             <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 20px;">🎯 오늘의 AI 마스터 작전 지시</h4>
-            {"".join([f"<div style='font-size: 17px; color: #334155; margin-bottom: 10px; font-weight: 600;'>⚡ {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else fallback_msg}
+            {"".join([f"<div style='font-size: 17px; color: #334155; margin-bottom: 15px; font-weight: 600;'>⚡ {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else fallback_msg}
         </div>
         """, unsafe_allow_html=True)
 
@@ -1071,7 +1058,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
         report_image_bytes = generate_kakao_report_image(
-            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, days_val, ranks_dict_val, top_comp_list, ai_recommendations
+            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, days_val, ranks_dict_val, top_comp_list, []
         )
         
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
@@ -1095,8 +1082,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             now_kst = datetime.now(timezone(timedelta(hours=9)))
             dummy_logs = [
                 {"갱신시간": (now_kst - timedelta(minutes=18)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산자이아이비플레이스", "매물상세": "1**동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "14위 (🔴하위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 1위)", "상위(3위) 방어시간": "1시간 20분", "순위 궤적": [20, 20, 19, 20, 19], "성과 요약": "🚀 13계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=1, minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "9위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 2위 (현재 4위)", "상위(3위) 방어시간": "45분", "순위 궤적": [19, 19, 18, 15, 17, 16], "성과 요약": "🚀 7계단 상승"},
-                {"갱신시간": (now_kst - timedelta(hours=6, minutes=5)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산유승한내들센트럴", "매물상세": "2**4동 (*4A)", "상태": "✅ 성공", "갱신 전 순위": "6위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 1위 (현재 2위)", "상위(3위) 방어시간": "2시간 10분", "순위 궤적": [20, 20, 19, 18, 19, 19], "성과 요약": "🚀 5계단 상승"}
+                {"갱신시간": (now_kst - timedelta(hours=1, minutes=45)).strftime("%Y-%m-%d %H:%M:%S"), "단지명": "다산한양수자인리버팰리스", "매물상세": "1**3동 (*4B)", "상태": "✅ 성공", "갱신 전 순위": "9위 (🟡중위권)", "갱신 후 최고순위": "🏆 최고 2위 (현재 4위)", "상위(3위) 방어시간": "45분", "순위 궤적": [19, 19, 18, 15, 17, 16], "성과 요약": "🚀 7계단 상승"}
             ]
             merged_df = pd.DataFrame(dummy_logs)
             success_count = len(merged_df)
@@ -1109,58 +1095,42 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 try:
                     df_exec.columns = df_exec.iloc[0]; df_exec = df_exec[1:].copy()
                     merged_df = df_exec.astype(str)
-        
                     time_col = '일시' if '일시' in merged_df.columns else '갱신시간' if '갱신시간' in merged_df.columns else merged_df.columns[0]
                     merged_df['갱신시간'] = pd.to_datetime(merged_df[time_col], errors='coerce')
-        
                     merged_df = merged_df[merged_df['상태'].astype(str).str.contains('성공|완료', na=False)]
                     realtor_col = '부동산명' if '부동산명' in merged_df.columns else '부동산' if '부동산' in merged_df.columns else merged_df.columns[1]
                     merged_df = merged_df[merged_df[realtor_col].astype(str).str.contains(filter_realtor_name, na=False)].copy()
         
-                    if merged_df.empty:
-                        success_count, up_defense_count = 0, 0
-                    else:
+                    if not merged_df.empty:
                         spec_col = '매물스펙' if '매물스펙' in merged_df.columns else '매물상세'
-                        merged_df = merged_df.sort_values('갱신시간', ascending=False)
-                        merged_df = merged_df.drop_duplicates(subset=[spec_col], keep='first')
-        
+                        merged_df = merged_df.sort_values('갱신시간', ascending=False).drop_duplicates(subset=[spec_col], keep='first')
                         tracking_results, trend_data, display_danji, display_detail = [], [], [], []
                         total_defense_seconds = 0 
         
                         for idx, row in merged_df.iterrows():
                             t0 = row['갱신시간']
                             raw_key = str(row.get(spec_col, '')).strip()
-        
                             parts = [p.strip() for p in raw_key.split('|')]
-                            if len(parts) >= 5:
-                                target_bundle_key = f"{parts[1]} | {parts[2]} | {parts[3]} | {parts[4]}"
-                                danji_cond = (df['단지명'] == parts[0])
-                            else:
-                                target_bundle_key = raw_key
-                                danji_cond = True
-        
+                            
+                            target_bundle_key = f"{parts[1]} | {parts[2]} | {parts[3]} | {parts[4]}" if len(parts) >= 5 else raw_key
+                            danji_cond = (df['단지명'] == parts[0]) if len(parts) >= 5 else True
                             m_history = df[danji_cond & (df['매물묶음키'] == target_bundle_key) & (df['부동산명'].astype(str).str.contains(filter_realtor_name, na=False))].sort_values('수집일시')
         
                             if m_history.empty:
-                                tracking_results.append(("기록 없음", "기록 없음", "추적 불가", "-"))
-                                trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
+                                tracking_results.append(("기록 없음", "기록 없음", "추적 불가", "-")); trend_data.append([]); display_danji.append("정보 없음"); display_detail.append("-")
                                 continue
         
                             display_danji.append(m_history.iloc[-1]['단지명'])
                             display_detail.append(f"{m_history.iloc[-1]['동/호수']} ({m_history.iloc[-1]['층/타입']})")
         
                             before_df, after_df = m_history[m_history['수집일시'] <= t0], m_history[m_history['수집일시'] > t0]
-                            
                             before_rank = int(before_df.iloc[-1]['묶음내순위_숫자']) if not before_df.empty else None
-                            b_str = f"{before_rank}위" if pd.notna(before_rank) else "30위 밖(권외)"
+                            b_str = f"{before_rank}위" if pd.notna(before_rank) else "30위 밖"
         
                             if not after_df.empty:
                                 best_rank, current_rank = int(after_df['묶음내순위_숫자'].min()), int(after_df.iloc[-1]['묶음내순위_숫자'])
-                                trend = [31 - min(int(r), 31) for r in after_df['묶음내순위_숫자'].tolist()]
-                                
                                 base_rank = before_rank if before_rank is not None else int(after_df['묶음내순위_숫자'].max())
                                 trend = [(base_rank - int(r)) for r in after_df['묶음내순위_숫자'].tolist()]
-                                
                                 a_str = f"🏆 최고 {best_rank}위 (현재 {current_rank}위)"
         
                                 if current_rank > best_rank: res = "🔄 네이버 롤링 중"
@@ -1169,25 +1139,19 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                                 else: res = "➖ 순위 유지"
         
                                 item_defense_seconds = 0
-                                sorted_after = after_df.sort_values('수집일시')
-                                prev_time = pd.to_datetime(t0)
-        
+                                sorted_after = after_df.sort_values('수집일시'); prev_time = pd.to_datetime(t0)
                                 for _, r in sorted_after.iterrows():
                                     curr_time = pd.to_datetime(r['수집일시'])
-                                    if int(r['묶음내순위_숫자']) <= 3:  
-                                        item_defense_seconds += (curr_time - prev_time).total_seconds()
+                                    if int(r['묶음내순위_숫자']) <= 3: item_defense_seconds += (curr_time - prev_time).total_seconds()
                                     prev_time = curr_time
-        
                                 total_defense_seconds += item_defense_seconds
         
-                                h = int(item_defense_seconds // 3600)
-                                m = int((item_defense_seconds % 3600) // 60)
+                                h = int(item_defense_seconds // 3600); m = int((item_defense_seconds % 3600) // 60)
                                 time_str = f"{h}시간 {m}분" if h > 0 else f"{m}분" if m > 0 else "-"
                             else:
-                                a_str, res, trend, time_str = "⏳ 수집 대기 중", "인덱싱 대기 중", [], "-"
+                                a_str, res, trend, time_str = "⏳ 대기 중", "대기 중", [], "-"
         
-                            tracking_results.append((b_str, a_str, res, time_str))
-                            trend_data.append(trend)
+                            tracking_results.append((b_str, a_str, res, time_str)); trend_data.append(trend)
         
                         merged_df['단지명'], merged_df['매물상세'] = display_danji, display_detail
                         merged_df['갱신 전 순위'] = [x[0] for x in tracking_results]
@@ -1197,36 +1161,24 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         merged_df['순위 궤적'] = trend_data
         
                         merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
-                        success_count = len(merged_df)
-                        up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
+                        success_count = len(merged_df); up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
+                    else: success_count, up_defense_count = 0, 0
                 except Exception as e:
                     success_count, up_defense_count, total_defense_seconds = 0, 0, 0
-            else:
-                success_count, up_defense_count, total_defense_seconds = 0, 0, 0
+            else: success_count, up_defense_count, total_defense_seconds = 0, 0, 0
 
         total_h = int(total_defense_seconds // 3600)
         total_m = int((total_defense_seconds % 3600) // 60)
-        total_time_str = f"{total_h}시간 {total_m}분" if total_h > 0 else f"{total_m}분"
         
-        components.html(f"""
-        <div style="display: flex; align-items: center; font-family: sans-serif; padding: 15px 0;">
-            <h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3>
-        </div>
-        """, height=60)
-        
-        st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {total_time_str}**")
+        components.html(f"<div style='padding: 15px 0;'><h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3></div>", height=60)
+        st.success(f"🛡️ **오늘 상위 노출(3위 이내) 총 방어 시간: {f'{total_h}시간 {total_m}분' if total_h > 0 else f'{total_m}분'}**")
         st.info("💡 **자동화 엔진 성과:** 시스템이 자동으로 갱신하여 상위권을 탈환하고 방어한 내역입니다.")
 
         if not merged_df.empty:
             st.dataframe(
                 merged_df[['갱신시간', '단지명', '매물상세', '상태', '갱신 전 순위', '갱신 후 최고순위', '순위 궤적', '성과 요약']],
                 use_container_width=True,
-                column_config={
-                    "순위 궤적": st.column_config.LineChartColumn(
-                        "순위 흐름 (갱신 이후)", y_min=0, y_max=31,
-                        help="그래프가 위로 솟구칠수록 1위에 가까운 안전한 상태를 의미하며, 아래로 꺾이면 경쟁자에 의해 밀려나고 있음을 뜻합니다."
-                    )
-                }
+                column_config={"순위 궤적": st.column_config.LineChartColumn("순위 흐름", y_min=0, y_max=31)}
             )
         else:
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
@@ -1234,29 +1186,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         # ------------------------------------------------------
         # 8. [하단 서비스 결제 안내 배너]
         # ------------------------------------------------------
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        pricing_card = """
+        st.markdown("<br><hr><br><br>", unsafe_allow_html=True)
+        st.markdown("""
         <div style="background: linear-gradient(135deg, #ffffff 0%, #f0f7ff 100%); border: 2px solid #3182f6; border-radius: 20px; padding: 40px 20px; text-align: center; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.12); max-width: 800px; margin: 0 auto;">
             <div style="display: inline-block; background-color: #ef4444; color: white; padding: 6px 15px; border-radius: 20px; font-weight: 800; font-size: 14px; margin-bottom: 15px;">🚀 한정 특가 오픈</div>
             <h2 style="color: #1e3a8a; margin-bottom: 15px; font-weight: 800; font-size: 28px;">TOP RANK 광고 자동화 솔루션</h2>
-            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">
-                월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로<br>상위 노출 스트레스에서 완벽하게 해방되세요!
-            </p>
-            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; flex-wrap: wrap;">
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 24시간 무인 순위 방어</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ AI 시장 분석 리포트</span>
-                <span style="background-color: white; padding: 10px 20px; border-radius: 12px; border: 1px solid #dbeafe; color: #1e3a8a; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">✔️ 불량 매물 누수 진단</span>
-            </div>
+            <p style="font-size: 22px; color: #334155; margin-bottom: 25px; font-weight: 700;">월 <span style="font-size: 32px; color: #3182f6;">90,000원</span>, 하루 단 <span style="font-size: 32px; color: #3182f6;">3,000원</span>으로 상위 노출 스트레스에서 해방되세요!</p>
             <div style="background-color: #f8fafc; padding: 20px; border-radius: 15px; max-width: 500px; margin: 0 auto; border: 1px solid #e2e8f0;">
-                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">
-                    🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>
-                    📞 <b>가입 문의:</b> 010-8416-2806
-                </p>
+                <p style="font-size: 16px; color: #475569; margin: 0; line-height: 1.6;">🏦 <b>결제 계좌:</b> 기업은행 174-117603-01-012 (예금주: 신성우)<br>📞 <b>가입 문의:</b> 010-8416-2806</p>
             </div>
         </div>
-        """
-        st.markdown(pricing_card, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
             
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
