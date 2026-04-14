@@ -1790,91 +1790,91 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
     components.html(log_script, height=0)
 
 # ==========================================================
-    # 탭 5. 🎯 AI 매물 정밀 진단 (Beta)
-    # ==========================================================
-    elif selected_menu == "🎯 AI 매물 정밀 진단 (Beta)":
-        st.info("💡 **전략 매트릭스:** 내 매물의 노출 순위와 타사 경쟁 강도를 2x2 평면에 배치하여 광고 효율을 진단합니다.")
+# 탭 5. 🎯 AI 매물 정밀 진단 (Beta)
+# ==========================================================
+elif selected_menu == "🎯 AI 매물 정밀 진단 (Beta)":
+    st.info("💡 **전략 매트릭스:** 내 매물의 노출 순위와 타사 경쟁 강도를 2x2 평면에 배치하여 광고 효율을 진단합니다.")
 
-        if 't_df' in locals() and not t_df.empty:
-            my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
-            if not my_all.empty:
-                # 1. 데이터 가공 (2x2 매트릭스용)
-                matrix_data = []
-                for b_key, b_grp in my_all.groupby('매물묶음키'):
-                    danji_name = b_grp['단지명'].iloc[0]
-                    # Y축: 내 매물 평균 순위 (작을수록 좋음)
-                    avg_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
-                    # X축: 타사 갱신 빈도 (경쟁 강도)
-                    comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
-                    
-                    # 💡 구간 분류 (기준: 3.5위 / 갱신 3회)
-                    if avg_rank <= 3.5 and comp_renews < 3:
-                        cat, action, color = "🏆 상위권 - 블루오션", "자유 갱신으로 상위 유지 권장", "#10b981"
-                    elif avg_rank <= 3.5 and comp_renews >= 3:
-                        cat, action, color = "🔥 상위권 - 격전지", "AI 추천 타격 시간에 정밀 방어 필요", "#3b82f6"
-                    elif avg_rank > 3.5 and comp_renews >= 3:
-                        cat, action, color = "💸 하위권 - 밑 빠진 독", "갱신 대비 효율 저하. 즉시 광고 중단 고려", "#ef4444"
+    if 't_df' in locals() and not t_df.empty:
+        my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
+        if not my_all.empty:
+            # 1. 데이터 가공 (2x2 매트릭스용)
+            matrix_data = []
+            for b_key, b_grp in my_all.groupby('매물묶음키'):
+                danji_name = b_grp['단지명'].iloc[0]
+                # Y축: 내 매물 평균 순위 (작을수록 좋음)
+                avg_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
+                # X축: 타사 갱신 빈도 (경쟁 강도)
+                comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
+                
+                # 💡 구간 분류 (기준: 3.5위 / 갱신 3회)
+                if avg_rank <= 3.5 and comp_renews < 3:
+                    cat, action, color = "🏆 상위권 - 블루오션", "자유 갱신으로 상위 유지 권장", "#10b981"
+                elif avg_rank <= 3.5 and comp_renews >= 3:
+                    cat, action, color = "🔥 상위권 - 격전지", "AI 추천 타격 시간에 정밀 방어 필요", "#3b82f6"
+                elif avg_rank > 3.5 and comp_renews >= 3:
+                    cat, action, color = "💸 하위권 - 밑 빠진 독", "갱신 대비 효율 저하. 즉시 광고 중단 고려", "#ef4444"
+                else:
+                    cat, action, color = "🧊 하위권 - 데이터 부족", "경쟁이 적으나 노출 안됨. 가격/사진 점검", "#94a3b8"
+
+                matrix_data.append({
+                    "매물명": f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}",
+                    "평균순위": round(avg_rank, 1),
+                    "타사갱신": comp_renews,
+                    "분류": cat,
+                    "AI처방": action
+                })
+
+            df_mx = pd.DataFrame(matrix_data)
+
+            # 2. 시각화 차트 (Plotly)
+            fig_mx = px.scatter(
+                df_mx, x="타사갱신", y="평균순위", color="분류",
+                hover_name="매물명", hover_data=["AI처방", "평균순위", "타사갱신"],
+                color_discrete_map={
+                    "🏆 상위권 - 블루오션": "#10b981", "🔥 상위권 - 격전지": "#3b82f6",
+                    "💸 하위권 - 밑 빠진 독": "#ef4444", "🧊 하위권 - 데이터 부족": "#94a3b8"
+                }
+            )
+            fig_mx.update_yaxes(autorange="reversed", title="내 평균 순위 (상단일수록 1등 ☝️)")
+            fig_mx.update_xaxes(title="타사 갱신 빈도 (우측일수록 경쟁 치열 👉)")
+            fig_mx.add_hline(y=3.5, line_dash="dot", line_color="#cbd5e1", annotation_text="상위권 기준선")
+            fig_mx.add_vline(x=2.5, line_dash="dot", line_color="#cbd5e1", annotation_text="격전지 기준선")
+            st.plotly_chart(fig_mx, use_container_width=True)
+
+            # 3. 처방 리스트 (우선순위 정렬: 밑빠진 독 -> 격전지 -> 블루오션)
+            st.markdown("### 📋 AI 실시간 진단 처방")
+            df_mx['score'] = df_mx['분류'].map({"💸 하위권 - 밑 빠진 독": 3, "🔥 상위권 - 격전지": 2, "🏆 상위권 - 블루오션": 1, "🧊 하위권 - 데이터 부족": 0})
+            df_sorted = df_mx.sort_values('score', ascending=False)
+
+            c1, c2 = st.columns(2)
+            for i, row in enumerate(df_sorted.itertuples()):
+                target_col = c1 if i % 2 == 0 else c2
+                with target_col:
+                    if row.score == 3:
+                        st.error(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
+                    elif row.score == 2:
+                        st.info(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
                     else:
-                        cat, action, color = "🧊 하위권 - 데이터 부족", "경쟁이 적으나 노출 안됨. 가격/사진 점검", "#94a3b8"
+                        st.success(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
+        else:
+            st.warning("분석할 내 매물 데이터가 없습니다.")
 
-                    matrix_data.append({
-                        "매물명": f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}",
-                        "평균순위": round(avg_rank, 1),
-                        "타사갱신": comp_renews,
-                        "분류": cat,
-                        "AI처방": action
-                    })
+# ----------------------------------------------------------
+# 💡 모든 메뉴(if/elif)가 끝난 뒤 공통 실행되는 코드 (이 자리에 두세요!)
+# ----------------------------------------------------------
+st.session_state['is_initialized'] = True
 
-                df_mx = pd.DataFrame(matrix_data)
-
-                # 2. 시각화 차트 (Plotly)
-                fig_mx = px.scatter(
-                    df_mx, x="타사갱신", y="평균순위", color="분류",
-                    hover_name="매물명", hover_data=["AI처방", "평균순위", "타사갱신"],
-                    color_discrete_map={
-                        "🏆 상위권 - 블루오션": "#10b981", "🔥 상위권 - 격전지": "#3b82f6",
-                        "💸 하위권 - 밑 빠진 독": "#ef4444", "🧊 하위권 - 데이터 부족": "#94a3b8"
-                    }
-                )
-                fig_mx.update_yaxes(autorange="reversed", title="내 평균 순위 (상단일수록 1등 ☝️)")
-                fig_mx.update_xaxes(title="타사 갱신 빈도 (우측일수록 경쟁 치열 👉)")
-                fig_mx.add_hline(y=3.5, line_dash="dot", line_color="#cbd5e1", annotation_text="상위권 기준선")
-                fig_mx.add_vline(x=2.5, line_dash="dot", line_color="#cbd5e1", annotation_text="격전지 기준선")
-                st.plotly_chart(fig_mx, use_container_width=True)
-
-                # 3. 처방 리스트 (우선순위 정렬: 밑빠진 독 -> 격전지 -> 블루오션)
-                st.markdown("### 📋 AI 실시간 진단 처방")
-                df_mx['score'] = df_mx['분류'].map({"💸 하위권 - 밑 빠진 독": 3, "🔥 상위권 - 격전지": 2, "🏆 상위권 - 블루오션": 1, "🧊 하위권 - 데이터 부족": 0})
-                df_sorted = df_mx.sort_values('score', ascending=False)
-
-                c1, c2 = st.columns(2)
-                for i, row in enumerate(df_sorted.itertuples()):
-                    target_col = c1 if i % 2 == 0 else c2
-                    with target_col:
-                        if row.score == 3:
-                            st.error(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
-                        elif row.score == 2:
-                            st.info(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
-                        else:
-                            st.success(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
-            else:
-                st.warning("분석할 내 매물 데이터가 없습니다.")
-
-    # ----------------------------------------------------------
-    # 💡 모든 메뉴(if/elif)가 끝난 뒤 공통 실행되는 코드 (이 자리에 두세요!)
-    # ----------------------------------------------------------
-    st.session_state['is_initialized'] = True
-
-    WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
-    log_script = f"""
-    <script>
-    window.addEventListener('beforeunload', function (event) {{
-        const exitUrl = "{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=퇴장";
-        navigator.sendBeacon(exitUrl);
-    }});
-    </script>
-    """
-    components.html(log_script, height=0)
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyUN2nh5rtcH8_ZznFhO7fee9FkjbmkOFlR4j3g4FJ356DvgOIgjPWQY6oF7aQoobx-sg/exec"
+log_script = f"""
+<script>
+window.addEventListener('beforeunload', function (event) {{
+    const exitUrl = "{WEB_APP_URL}?timestamp=" + new Date().toLocaleString() + "&user_id={tracking_id}&action=퇴장";
+    navigator.sendBeacon(exitUrl);
+}});
+</script>
+"""
+components.html(log_script, height=0)
 
 except Exception as e:
     st.error(f"🚨 데이터 처리 중 치명적 오류 발생: {e}")
