@@ -779,12 +779,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🚀 랭킹 카드 + 진단 처방 완벽 결합
+    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🌟 완벽한 3D 매트릭스 동기화 버전
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
         # ------------------------------------------------------
-        # 1. 데이터 가공 (3구간 분리 및 매물별 AI 진단 결합)
+        # 1. 데이터 가공 (단지 전체 노출 순위 기준 3구간 분리)
         # ------------------------------------------------------
         selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
         recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)] if 't_df' in locals() else pd.DataFrame()
@@ -793,9 +793,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         mid_tier_count, mid_tier_sum = 0, 0
         low_tier_count, low_tier_sum = 0, 0
 
-        # 진단 결과를 담을 딕셔너리
+        # 진단 결과를 담을 딕셔너리 (상위권 누수 모순 제거)
         diag_dict = {
-            "top_leak": [], "top_battle": [], "top_ocean": [],
+            "top_battle": [], "top_ocean": [],
             "mid_general": [],
             "low_leak": [], "low_stock": []
         }
@@ -805,10 +805,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 danji_name = b_grp['단지명'].iloc[0]
                 short_name = f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}"
 
-                # 내 묶음내 순위 (1~3위, 4~7위, 8위 밖 결정)
-                avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
-
-                # 단지 전체 노출 순위 (1페이지 10위 이내 여부)
+                # 💡 [핵심 교정] 단지 전체 노출 순위 (네이버 겉면 랭킹) -> 카드를 나누는 절대 기준
                 try:
                     b_grp_numeric = b_grp.copy()
                     b_grp_numeric['전체순위_숫자'] = pd.to_numeric(b_grp_numeric['전체순위'], errors='coerce')
@@ -816,41 +813,48 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 except:
                     avg_total_rank = 20
 
+                # 내 부동산 순위 (묶음 내 순위) -> 디테일 정보용
+                avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
+
                 # 타사 갱신 빈도 (경쟁 강도)
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                # 💡 [핵심] 3구간 카운트 및 진단 논리 결합
-                if avg_my_rank <= 3.0:
-                    top_tier_count += 1; top_tier_sum += avg_my_rank
-                    if avg_total_rank > 10.0 and comp_renews >= 3:
-                        diag_dict["top_leak"].append(f"{short_name} (내 순위: {avg_my_rank:.1f}등 / 단지: {avg_total_rank:.1f}위)")
-                    elif comp_renews >= 3:
-                        diag_dict["top_battle"].append(f"{short_name} (단지: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
-                    else:
-                        diag_dict["top_ocean"].append(f"{short_name} (단지: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
-                elif avg_my_rank <= 7.0:
-                    mid_tier_count += 1; mid_tier_sum += avg_my_rank
-                    diag_dict["mid_general"].append(f"{short_name} (단지: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
-                else:
-                    low_tier_count += 1; low_tier_sum += avg_my_rank
+                item_desc = f"{short_name} (내 순위: {avg_my_rank:.1f}등 / 갱신: {comp_renews}회)"
+
+                # 🚀 1. 상위권 (단지 노출 1~3위) -> 잘 노출되고 있으니 누수는 없음!
+                if avg_total_rank <= 3.0:
+                    top_tier_count += 1; top_tier_sum += avg_total_rank
                     if comp_renews >= 3:
-                        diag_dict["low_leak"].append(f"{short_name} (단지: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
+                        diag_dict["top_battle"].append(item_desc) # 갱신 많음 = 격전지 방어
                     else:
-                        diag_dict["low_stock"].append(f"{short_name} (단지: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
+                        diag_dict["top_ocean"].append(item_desc)  # 갱신 적음 = 가성비 꿀매물
+
+                # 🚀 2. 중위권 (단지 노출 4~7위)
+                elif avg_total_rank <= 7.0:
+                    mid_tier_count += 1; mid_tier_sum += avg_total_rank
+                    diag_dict["mid_general"].append(item_desc)
+
+                # 🚀 3. 하위권 (단지 노출 8위 밖) -> 노출이 안 되는데 돈을 쓰면 누수!
+                else:
+                    low_tier_count += 1; low_tier_sum += avg_total_rank
+                    if comp_renews >= 3:
+                        diag_dict["low_leak"].append(item_desc)   # 갱신 많음 = 돈 낭비(밑 빠진 독)
+                    else:
+                        diag_dict["low_stock"].append(item_desc)  # 갱신 없음 = 악성 재고
 
         total_my_bundles = top_tier_count + mid_tier_count + low_tier_count
         top_tier_avg = round(top_tier_sum / top_tier_count, 1) if top_tier_count > 0 else 0.0
         mid_tier_avg = round(mid_tier_sum / mid_tier_count, 1) if mid_tier_count > 0 else 0.0
         low_tier_avg = round(low_tier_sum / low_tier_count, 1) if low_tier_count > 0 else 0.0
         safe_ratio = int((top_tier_count / total_my_bundles) * 100) if total_my_bundles > 0 else 0
-        total_money_leaks = len(diag_dict["top_leak"]) + len(diag_dict["low_leak"])
+        total_money_leaks = len(diag_dict["low_leak"])
 
         # ------------------------------------------------------
         # 2. 최상단: 영웅 지표 (1줄 브리핑)
         # ------------------------------------------------------
-        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 활동 매물 {total_my_bundles}개 중, 상위권(1~3위)에 방어 중인 매물은 {top_tier_count}개({safe_ratio}%)입니다."
+        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 활동 매물 {total_my_bundles}개 중, 단지 노출 상위권(1~3위)에 진입한 매물은 {top_tier_count}개({safe_ratio}%)입니다."
         if total_money_leaks > 0:
-            master_briefing += f" 🚨 현재 <b style='color:#ef4444;'>{total_money_leaks}개</b>의 매물에서 광고비 누수가 감지되었습니다."
+            master_briefing += f" 🚨 현재 하위권에서 <b style='color:#ef4444;'>{total_money_leaks}개</b>의 매물이 의미 없이 갱신되며 광고비가 누수되고 있습니다."
         
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px; margin-bottom: 10px;">
@@ -884,42 +888,39 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         # ------------------------------------------------------
         # ⭐ 3. 랭킹 카드 + 진단 처방 완벽 결합
         # ------------------------------------------------------
+        st.markdown("<p style='color: #64748b; font-size: 14px; margin-bottom: 10px;'>※ 상/중/하위권 기준: 네이버 단지 내 전체 매물 노출 순위 (고객 가시성)</p>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         
         with c1:
             st.markdown(f"""
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-top: 5px solid #3b82f6; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #1e3a8a; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🏆 최상위 방어 (1~3위)</div>
+                <div style="color: #1e3a8a; font-weight: 800; font-size: 18px; margin-bottom: 10px;">상위권 (1~3위)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #3b82f6; margin-bottom: 5px;">{top_tier_count}<span style="font-size:18px;">건</span></div>
                 <div style="color: #64748b; font-size: 14px;">평균 {top_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
             with st.expander("▼ AI 진단 처방 보기", expanded=(top_tier_count > 0)):
-                if diag_dict["top_leak"]:
-                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>💸 [광고비 누수] 1등인데 고객 노출 안됨</span>", unsafe_allow_html=True)
-                    for item in diag_dict["top_leak"]: st.caption(f"- {item}")
-                    st.markdown("---")
                 if diag_dict["top_battle"]:
-                    st.markdown("<span style='color:#f59e0b; font-weight:bold;'>🔥 [격전지] 방어 필수 주력 매물</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#f59e0b; font-weight:bold;'>🔥 [격전지] 고객 노출도 잘 되고 경쟁도 치열한 방어 필수 매물입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["top_battle"]: st.caption(f"- {item}")
                     st.markdown("---")
                 if diag_dict["top_ocean"]:
-                    st.markdown("<span style='color:#10b981; font-weight:bold;'>🎯 [블루오션] 가성비 우수 매물</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#10b981; font-weight:bold;'>🎯 [블루오션] 고객 노출은 잘 되는데 경쟁사는 갱신을 안 하는 꿀매물입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["top_ocean"]: st.caption(f"- {item}")
-                if not any([diag_dict["top_leak"], diag_dict["top_battle"], diag_dict["top_ocean"]]):
+                if not any([diag_dict["top_battle"], diag_dict["top_ocean"]]):
                     st.caption("해당 매물이 없습니다.")
 
         with c2:
             st.markdown(f"""
             <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-top: 5px solid #10b981; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #064e3b; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🚀 중위권 도약 (4~7위)</div>
+                <div style="color: #064e3b; font-weight: 800; font-size: 18px; margin-bottom: 10px;">중위권 (4~7위)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #10b981; margin-bottom: 5px;">{mid_tier_count}<span style="font-size:18px;">건</span></div>
                 <div style="color: #64748b; font-size: 14px;">평균 {mid_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
             with st.expander("▼ AI 진단 처방 보기", expanded=False):
                 if diag_dict["mid_general"]:
-                    st.markdown("<span style='color:#3b82f6; font-weight:bold;'>🚀 순위 도약 필요</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#3b82f6; font-weight:bold;'>🚀 순위 도약이 필요한 매물들입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["mid_general"]: st.caption(f"- {item}")
                 else:
                     st.caption("해당 매물이 없습니다.")
@@ -927,18 +928,18 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         with c3:
             st.markdown(f"""
             <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-top: 5px solid #ef4444; border-radius: 10px; padding: 20px; text-align: center;">
-                <div style="color: #7f1d1d; font-weight: 800; font-size: 18px; margin-bottom: 10px;">🚨 하위권 경고 (8위 밖)</div>
+                <div style="color: #7f1d1d; font-weight: 800; font-size: 18px; margin-bottom: 10px;">하위권 (8위~)</div>
                 <div style="font-size: 32px; font-weight: 900; color: #ef4444; margin-bottom: 5px;">{low_tier_count}<span style="font-size:18px;">건</span></div>
                 <div style="color: #64748b; font-size: 14px;">평균 {low_tier_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
-            with st.expander("▼ AI 진단 처방 보기", expanded=False):
+            with st.expander("▼ AI 진단 처방 보기", expanded=(len(diag_dict["low_leak"]) > 0)):
                 if diag_dict["low_leak"]:
-                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>💸 [밑 빠진 독] 돈 써도 안 오름. 갱신 중단!</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#ef4444; font-weight:bold;'>💸 [돈 낭비] 타사 갱신 경쟁만 치열하고 정작 상단에 노출되지 않습니다. 갱신 중단!</span>", unsafe_allow_html=True)
                     for item in diag_dict["low_leak"]: st.caption(f"- {item}")
                     st.markdown("---")
                 if diag_dict["low_stock"]:
-                    st.markdown("<span style='color:#94a3b8; font-weight:bold;'>🧊 [악성 재고] 노출 안되고 방치됨</span>", unsafe_allow_html=True)
+                    st.markdown("<span style='color:#94a3b8; font-weight:bold;'>🧊 [악성 재고] 노출도 안 되고 타사 갱신도 없는 죽은 매물입니다.</span>", unsafe_allow_html=True)
                     for item in diag_dict["low_stock"]: st.caption(f"- {item}")
                 if not any([diag_dict["low_leak"], diag_dict["low_stock"]]):
                     st.caption("해당 매물이 없습니다.")
@@ -946,7 +947,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown("<br>", unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 4. 전체 단지 점유율 (M/S) 및 차트
+        # 4. 전체 단지 점유율 (M/S)
         # ------------------------------------------------------
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
@@ -964,7 +965,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.plotly_chart(fig_ms, use_container_width=True)
 
         # ------------------------------------------------------
-        # 5. 하단: AI 작전 지시 (원래 로직 완벽 유지)
+        # 5. 하단: AI 작전 지시
         # ------------------------------------------------------
         ai_recommendations = []
         if not t_df.empty and not recent_my_df.empty:
@@ -1069,7 +1070,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         days_val = selected_days
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
-        # 카톡 전송 이미지 로직
         report_image_bytes = generate_kakao_report_image(
             display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, days_val, ranks_dict_val, top_comp_list, ai_recommendations
         )
