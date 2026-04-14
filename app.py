@@ -779,15 +779,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🌟 대통합 리빌딩 버전
+    # 탭 1. 📊 오늘의 AI 성과 (핵심 요약) - 🌟 대통합 완결판 (점유율+진단 포함)
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
         # ------------------------------------------------------
-        # 1. 데이터 전처리 (3구간 분리 및 평균 계산)
+        # 1. 데이터 전처리 (3구간 분리 및 AI 진단 데이터 계산)
         # ------------------------------------------------------
         selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
-        recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
+        recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)] if 't_df' in locals() else pd.DataFrame()
+        
+        diag_data = {"money_leak": [], "battle": [], "ocean": []}
         
         if not recent_my_df.empty:
             avg_ranks = recent_my_df.groupby(['단지명', '동/호수', '층/타입', '매물묶음키'])['묶음내순위_숫자'].mean().reset_index()
@@ -795,6 +797,27 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             safe_df = avg_ranks[avg_ranks['묶음내순위_숫자'] <= 3.0].sort_values('묶음내순위_숫자')
             mid_df = avg_ranks[(avg_ranks['묶음내순위_숫자'] > 3.0) & (avg_ranks['묶음내순위_숫자'] <= 7.0)].sort_values('묶음내순위_숫자')
             danger_df = avg_ranks[avg_ranks['묶음내순위_숫자'] > 7.0].sort_values('묶음내순위_숫자')
+            
+            # [추가] AI 진단 처방 데이터 가공
+            for b_key, b_grp in recent_my_df.groupby('매물묶음키'):
+                danji_name = b_grp['단지명'].iloc[0]
+                short_name = f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}"
+                
+                try:
+                    b_grp_numeric = b_grp.copy()
+                    b_grp_numeric['전체순위_숫자'] = pd.to_numeric(b_grp_numeric['전체순위'], errors='coerce')
+                    avg_total_rank = b_grp_numeric.groupby('수집일시')['전체순위_숫자'].min().mean()
+                except:
+                    avg_total_rank = 20
+                    
+                comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
+                
+                if avg_total_rank > 10.0 and comp_renews >= 3:
+                    diag_data["money_leak"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
+                elif avg_total_rank <= 10.0 and comp_renews >= 3:
+                    diag_data["battle"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 갱신: {comp_renews}회)")
+                elif avg_total_rank <= 10.0 and comp_renews < 3:
+                    diag_data["ocean"].append(f"**{short_name}** (단지 노출: {avg_total_rank:.1f}위 / 가성비 우수)")
         else:
             safe_df = mid_df = danger_df = pd.DataFrame()
             
@@ -809,9 +832,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         
         safe_ratio = int((safe_count / total_my_bundles) * 100) if total_my_bundles > 0 else 0
 
-        # ------------------------------------------------------
-        # 2. UI 렌더링용 HTML 리스트 생성 함수
-        # ------------------------------------------------------
         def build_ui_html(df):
             if df.empty: return "<div style='color:#94a3b8; padding: 10px 0;'>해당 매물이 없습니다.</div>"
             html_str = ""
@@ -829,15 +849,16 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         danger_ui_html = build_ui_html(danger_df)
 
         # ------------------------------------------------------
-        # 3. 최상단: 영웅 지표 (1줄 브리핑)
+        # 2. 최상단: 영웅 지표 (1줄 브리핑)
         # ------------------------------------------------------
-        # 브리핑 텍스트 생성
         briefing_date = end_dt.strftime('%Y-%m-%d')
-        master_briefing = f"선택하신 기간({selected_days}일) 동안 대표님이 관리 중인 활동 매물 {total_my_bundles}개 중, 상위권(1~3위)에 안정적으로 노출 중인 매물은 {safe_count}개({safe_ratio}%)입니다."
+        master_briefing = f"선택하신 기간({selected_days}일) 동안 관리 매물 {total_my_bundles}개 중, 1~3위 방어에 성공한 매물은 {safe_count}개({safe_ratio}%)입니다."
         
-        if not boosted_df.empty:
+        if diag_data["money_leak"]:
+            master_briefing += f" 🚨 현재 <b style='color:#ef4444;'>{len(diag_data['money_leak'])}개</b>의 매물에서 광고비 누수가 감지되었습니다."
+        if 'boosted_df' in locals() and not boosted_df.empty:
             peak_hour = int(boosted_df['수집일시'].dt.hour.mode()[0])
-            master_briefing += f" <b>오늘의 추천 타격 시간은 {(peak_hour + 1) % 24:02d}시입니다.</b>"
+            master_briefing += f" 오늘의 추천 타격 시간은 <b style='color:#3b82f6;'>{(peak_hour + 1) % 24:02d}시</b>입니다."
         
         components.html(f"""
         <div style="display: flex; align-items: center; font-family: sans-serif; padding-top: 10px; margin-bottom: 10px;">
@@ -869,10 +890,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         """, unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 4. 중앙: 대통합 3단 랭킹 카드 (요약수치 + 상세내역)
+        # 3. 중앙: 대통합 3단 랭킹 카드 (요약수치 + 상세내역)
         # ------------------------------------------------------
         c1, c2, c3 = st.columns(3)
-        
         with c1:
             st.markdown(f"""
             <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-top: 5px solid #3b82f6; border-radius: 10px; padding: 20px; text-align: center;">
@@ -881,8 +901,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 <div style="color: #64748b; font-size: 14px;">평균 {safe_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
-            with st.expander("▼ 상세 매물 보기", expanded=False):
-                st.markdown(safe_ui_html, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False): st.markdown(safe_ui_html, unsafe_allow_html=True)
 
         with c2:
             st.markdown(f"""
@@ -892,8 +911,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 <div style="color: #64748b; font-size: 14px;">평균 {mid_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
-            with st.expander("▼ 상세 매물 보기", expanded=False):
-                st.markdown(mid_ui_html, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False): st.markdown(mid_ui_html, unsafe_allow_html=True)
 
         with c3:
             st.markdown(f"""
@@ -903,14 +921,52 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 <div style="color: #64748b; font-size: 14px;">평균 {danger_avg}위</div>
             </div>
             """, unsafe_allow_html=True)
-            with st.expander("▼ 상세 매물 보기", expanded=False):
-                st.markdown(danger_ui_html, unsafe_allow_html=True)
+            with st.expander("▼ 상세 매물 보기", expanded=False): st.markdown(danger_ui_html, unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
 
+        # ------------------------------------------------------
+        # [NEW] 4. AI 실시간 진단 처방 요약
+        # ------------------------------------------------------
+        st.markdown("<h4 style='color: #1e293b; margin-bottom: 15px;'>📋 AI 실시간 진단 및 처방 요약</h4>", unsafe_allow_html=True)
+        col_d1, col_d2 = st.columns(2)
+        with col_d1:
+            if diag_data["money_leak"]:
+                with st.container():
+                    st.error(f"🚨 **광고비 누수 위험 ({len(diag_data['money_leak'])}건)**\n\n단지 내 노출 순위가 낮아 갱신 효율이 떨어지는 매물입니다. 광고 중단 및 재점검을 권고합니다.")
+                    for item in diag_data["money_leak"]: st.markdown(f"- {item}")
+            else:
+                st.success("🚨 **광고비 누수 위험 (0건)**\n\n현재 불필요하게 예산이 낭비되는 매물이 없습니다.")
+                
+        with col_d2:
+            if diag_data["battle"]:
+                with st.container():
+                    st.info(f"⚔️ **상위권 격전지 ({len(diag_data['battle'])}건)**\n\n경쟁이 치열하지만 노출도가 좋은 주력 매물입니다. 추천 타격 시간에 방어를 집중하세요.")
+                    for item in diag_data["battle"]: st.markdown(f"- {item}")
+            else:
+                if diag_data["ocean"]:
+                    with st.container():
+                        st.success(f"🎯 **블루오션 꿀매물 ({len(diag_data['ocean'])}건)**\n\n경쟁사 갱신 없이 상위권을 장악 중인 고효율 매물입니다.")
+                        for item in diag_data["ocean"]: st.markdown(f"- {item}")
+
+        st.markdown("<br>", unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 5. 하단: AI 작전 지시 (원래 있던 완벽한 로직 유지)
+        # [NEW] 5. 전체 단지 점유율 (M/S)
+        # ------------------------------------------------------
+        st.markdown("<h4 style='color: #1e293b; margin-bottom: 10px;'>🏆 관리 단지별 시장 점유율 (Top 5)</h4>", unsafe_allow_html=True)
+        if 'ms_counts' in locals() and not ms_counts.empty:
+            import plotly.express as px
+            ms_sum = ms_counts.groupby('부동산명')['총점수'].sum().reset_index().sort_values('총점수', ascending=False).head(5)
+            ms_sum['부동산명'] = ms_sum['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
+            fig_ms = px.bar(ms_sum, x='총점수', y='부동산명', orientation='h', color_discrete_sequence=['#3182f6'], text='총점수')
+            fig_ms.update_layout(height=300, margin=dict(t=0, b=0, l=0, r=0), xaxis_title="종합 파워 점수", yaxis_title="")
+            st.plotly_chart(fig_ms, use_container_width=True)
+        else:
+            st.info("아직 시장 점유율 데이터가 충분히 수집되지 않았습니다.")
+
+        # ------------------------------------------------------
+        # 6. 하단: AI 작전 지시 (원래 완벽했던 추천 로직 유지)
         # ------------------------------------------------------
         ai_recommendations = []
         if not t_df.empty and not recent_my_df.empty:
@@ -930,7 +986,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         survival = (appearances / total_sessions_comp) * 100
                         avg_rank = b_ranks.mean()
                         
-                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key] if 'boosted_df' in locals() else pd.DataFrame()
                         total_renews = len(b_boosted)
                         
                         if total_renews >= 3: priority_score = 3
@@ -1014,7 +1070,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
 
         # ------------------------------------------------------
-        # 6. 자동 갱신 성과 데이터 로직 (기존 봇 방어 표 유지)
+        # 7. 자동 갱신 성과 데이터 로직 (봇 방어 궤적)
         # ------------------------------------------------------
         st.markdown("<br><hr>", unsafe_allow_html=True)
         total_defense_seconds = 0  
@@ -1128,12 +1184,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         success_count = len(merged_df)
                         up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
                 except Exception as e:
-                    st.error(f"데이터 표시 중 오류: {e}")
-                    success_count, up_defense_count = 0, 0
-                    total_defense_seconds = 0
+                    success_count, up_defense_count, total_defense_seconds = 0, 0, 0
             else:
-                success_count, up_defense_count = 0, 0
-                total_defense_seconds = 0
+                success_count, up_defense_count, total_defense_seconds = 0, 0, 0
 
         total_h = int(total_defense_seconds // 3600)
         total_m = int((total_defense_seconds % 3600) // 60)
@@ -1162,9 +1215,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         else:
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
-        # ========================================================
-        # 💳 5. [하단 서비스 결제 안내 배너]
-        # ========================================================
+        # ------------------------------------------------------
+        # 8. [하단 서비스 결제 안내 배너]
+        # ------------------------------------------------------
         st.markdown("<br><hr>", unsafe_allow_html=True)
         st.markdown("<br><br>", unsafe_allow_html=True)
         pricing_card = """
