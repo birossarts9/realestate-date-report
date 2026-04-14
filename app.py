@@ -1036,11 +1036,11 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [수정완료] 단지명 중복 제거 및 가로 최적화 작전 로직
+        # 🚀 [완벽 동기화] 대시보드 로직 100% 일치 작전 리포트
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # 기본 데이터 확보
+        # 1. 기본 데이터 확보
         total_bundles_val = total_my_bundles if 'total_my_bundles' in locals() else 0
         safe_bundles_val = safe_my_bundles if 'safe_my_bundles' in locals() else 0
         safe_ratio_val = safe_ratio if 'safe_ratio' in locals() else 0
@@ -1061,45 +1061,76 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     diag_list = []
                     for b_key, b_grp in my_comp_grp.groupby('매물묶음키'):
                         b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
-                        survival = (len(b_ranks) / total_sessions_comp) * 100
-                        avg_rank = b_ranks.mean()
-                        diag_list.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
+                        appearances = len(b_ranks)
+                        
+                        # 💡 [핵심 1] 깡통 매물 방지 필터: 최소 3회 이상 노출되거나, 전체 세션의 10% 이상 생존한 데이터만 진짜로 취급
+                        if appearances >= max(3, total_sessions_comp * 0.1):
+                            survival = (appearances / total_sessions_comp) * 100
+                            avg_rank = b_ranks.mean()
+                            diag_list.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
                     
                     if diag_list:
                         top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
                         temp_recs.append(top_in_comp)
                 
-                final_targets = pd.DataFrame(temp_recs).sort_values(['survival', 'avg'], ascending=[False, True]).head(3)
+                # 단지별 1등 중 최고 존엄 3개 추출
+                final_targets = pd.DataFrame(temp_recs).sort_values(['survival', 'avg'], ascending=[False, True]).head(3) if temp_recs else pd.DataFrame()
                 
                 for _, row in final_targets.iterrows():
                     b_key = row['key']
+                    
+                    # 💡 [핵심 2] 대시보드(탭2)와 100% 동일한 타격 시간 계산 알고리즘 Import
                     b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                    total_renews = len(b_boosted)
                     
-                    # 추천 시간 계산
-                    rec_time_str = "오전 11시" 
-                    if not b_boosted.empty:
-                        peak_h = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                        target_h = (peak_h + 1) % 24
-                        ampm = "오후" if target_h >= 12 else "오전"
-                        disp_h = target_h if target_h <= 12 else target_h - 12
-                        if disp_h == 0: disp_h = 12
-                        rec_time_str = f"{ampm} {disp_h}시"
+                    rec_time_str = "데이터 누적 중" 
+                    if total_renews >= 3:
+                        active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
+                        if len(active_hours) <= 1:
+                            best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
+                            ampm = "오후" if best_hour >= 12 else "오전"
+                            disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                            if disp_h == 0: disp_h = 12
+                            rec_time_str = f"{ampm} {disp_h}시"
+                        else:
+                            max_effective_gap = -1
+                            best_hour = 12
+                            
+                            for i in range(len(active_hours)):
+                                curr_h = active_hours[i]
+                                next_h = active_hours[(i + 1) % len(active_hours)]
+                                raw_gap = (next_h - curr_h) % 24
+                                if raw_gap == 0: raw_gap = 24
+                                
+                                strike_hour = (curr_h + 1) % 24
+                                effective_gap = 0
+                                for h in range(strike_hour, strike_hour + raw_gap):
+                                    real_h = h % 24
+                                    # 심야 시간(0~7시) 제외 로직
+                                    if 8 <= real_h <= 23:
+                                        effective_gap += 1
+                                
+                                if effective_gap > max_effective_gap:
+                                    max_effective_gap = effective_gap
+                                    best_hour = strike_hour
+                            
+                            if max_effective_gap >= 3:
+                                ampm = "오후" if best_hour >= 12 else "오전"
+                                disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                                if disp_h == 0: disp_h = 12
+                                rec_time_str = f"{ampm} {disp_h}시"
+                            else:
+                                rec_time_str = "분산 타격(수시)"
                     
-                    # 💡 [중복 해결] detail_spec에서 단지명 중복 제거
+                    # 텍스트 단지명 중복 제거 가공
                     parts = b_key.split('|')
                     raw_spec = f"{parts[0].strip()} {parts[1].strip()}" if len(parts) >= 2 else b_key
                     danji_name = row['danji'].strip()
+                    clean_spec = raw_spec[len(danji_name):].strip() if raw_spec.startswith(danji_name) else raw_spec
                     
-                    # 만약 스펙 정보가 단지명으로 시작하면 해당 부분 삭제
-                    if raw_spec.startswith(danji_name):
-                        clean_spec = raw_spec[len(danji_name):].strip()
-                    else:
-                        clean_spec = raw_spec
-                    
-                    # 최종 텍스트 조립
                     ai_recommendations.append(f"{mask_text(danji_name)} {mask_text(clean_spec)} - {rec_time_str} 광고 권장")
 
-        # 시장 점유율 데이터 가공 (생략 없이 유지)
+        # 시장 점유율 데이터 가공
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
             ms_df = ms_counts.copy()
@@ -1113,7 +1144,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(f"""
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 25px;">
             <h4 style="color: #1e3a8a; margin-top: 0; margin-bottom: 15px; font-weight: 800; font-size: 20px;">🎯 오늘의 AI 마스터 작전 지시</h4>
-            {"".join([f"<div style='font-size: 17px; color: #334155; margin-bottom: 10px; font-weight: 600;'>⚡ {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else "<div>현재 집중 타격할 매물이 분석 중입니다.</div>"}
+            {"".join([f"<div style='font-size: 17px; color: #334155; margin-bottom: 10px; font-weight: 600;'>⚡ {rec}</div>" for rec in ai_recommendations]) if ai_recommendations else "<div>현재 집중 타격할 매물이 분석 중입니다. (충분한 데이터가 누적되어야 작전이 지시됩니다.)</div>"}
         </div>
         """, unsafe_allow_html=True)
 
@@ -1132,6 +1163,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 type="primary",
                 use_container_width=True
             )
+        # ========================================================
             
     # ==========================================================
     # 탭 2. 🔍 통합 매물 검색 (심층 분석)
