@@ -1780,70 +1780,96 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
     # 탭 5. 🎯 AI 매물 정밀 진단 (Beta)
     # ==========================================================
     elif selected_menu == "🎯 AI 매물 정밀 진단 (Beta)":
-        st.info("💡 **전략 매트릭스:** 내 매물의 노출 순위와 타사 경쟁 강도를 2x2 평면에 배치하여 광고 효율을 진단합니다.")
+        st.info("💡 **3D 전략 매트릭스:** 매물의 단지 내 전체 순위(Y축)와 타사 경쟁 강도(X축)를 분석합니다. (점의 크기는 내 매물의 묶음 내 순위 방어력을 의미합니다)")
 
         if 't_df' in locals() and not t_df.empty:
             my_all = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             if not my_all.empty:
-                # 1. 데이터 가공 (2x2 매트릭스용)
                 matrix_data = []
                 for b_key, b_grp in my_all.groupby('매물묶음키'):
                     danji_name = b_grp['단지명'].iloc[0]
-                    # Y축: 내 매물 평균 순위 (작을수록 좋음)
-                    avg_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
+                    
+                    # ⭐ Y축: 엑셀 D열 '전체순위' (매물 자체의 단지 내 노출도)
+                    # 데이터에 '전체순위' 컬럼이 문자열일 수 있으므로 숫자로 변환
+                    try:
+                        b_grp_numeric = b_grp.copy()
+                        b_grp_numeric['전체순위_숫자'] = pd.to_numeric(b_grp_numeric['전체순위'], errors='coerce')
+                        avg_total_rank = b_grp_numeric.groupby('수집일시')['전체순위_숫자'].min().mean()
+                    except:
+                        avg_total_rank = 20 # 에러 시 기본값 처리
+                        
+                    # ⭐ Z축: '묶음내순위_숫자' (내 부동산이 이 묶음 안에서 몇 등인지)
+                    avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
+                    
                     # X축: 타사 갱신 빈도 (경쟁 강도)
                     comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
                     
-                    # 💡 구간 분류 (기준: 3.5위 / 갱신 3회)
-                    if avg_rank <= 3.5 and comp_renews < 3:
-                        cat, action, color = "🏆 상위권 - 블루오션", "자유 갱신으로 상위 유지 권장", "#10b981"
-                    elif avg_rank <= 3.5 and comp_renews >= 3:
-                        cat, action, color = "🔥 상위권 - 격전지", "AI 추천 타격 시간에 정밀 방어 필요", "#3b82f6"
-                    elif avg_rank > 3.5 and comp_renews >= 3:
-                        cat, action, color = "💸 하위권 - 밑 빠진 독", "갱신 대비 효율 저하. 즉시 광고 중단 고려", "#ef4444"
+                    # 💡 구간 분류 (기준: 전체노출 10위 / 갱신 3회)
+                    if avg_total_rank <= 10.0 and comp_renews < 3:
+                        cat, action = "🏆 상위권 - 블루오션", "매물 노출 훌륭함. 자유 갱신으로 상단 유지 권장"
+                    elif avg_total_rank <= 10.0 and comp_renews >= 3:
+                        cat, action = "🔥 상위권 - 격전지", "노출도 높고 경쟁 치열. AI 추천 시간에 방어 필수"
+                    elif avg_total_rank > 10.0 and comp_renews >= 3:
+                        cat, action = "💸 하위권 - 밑 빠진 독", "🚨 갱신해도 단지 하위권. 즉시 광고 중단 및 퀄리티 재점검!"
                     else:
-                        cat, action, color = "🧊 하위권 - 데이터 부족", "경쟁이 적으나 노출 안됨. 가격/사진 점검", "#94a3b8"
+                        cat, action = "🧊 하위권 - 악성 재고", "노출 안됨 + 경쟁 없음. 집주인 연락 및 조건 변경 요망"
+
+                    # 버블 크기 계산 (1등일수록 50으로 가장 큼, 5등 밖이면 10으로 작음)
+                    bubble_size = max(10, 60 - (avg_my_rank * 10))
 
                     matrix_data.append({
                         "매물명": f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}",
-                        "평균순위": round(avg_rank, 1),
-                        "타사갱신": comp_renews,
+                        "전체순위": round(avg_total_rank, 1), # Y축
+                        "타사갱신": comp_renews, # X축
+                        "내_묶음내순위": round(avg_my_rank, 1), # Z축 툴팁용
+                        "버블크기": bubble_size, # Z축 시각화용
                         "분류": cat,
                         "AI처방": action
                     })
 
                 df_mx = pd.DataFrame(matrix_data)
 
-                # 2. 시각화 차트 (Plotly)
+                # 2. 시각화 (3D 버블 차트)
+                import plotly.express as px
                 fig_mx = px.scatter(
-                    df_mx, x="타사갱신", y="평균순위", color="분류",
-                    hover_name="매물명", hover_data=["AI처방", "평균순위", "타사갱신"],
+                    df_mx, x="타사갱신", y="전체순위", size="버블크기", color="분류",
+                    hover_name="매물명", 
+                    hover_data={"분류": False, "버블크기": False, "AI처방": True, "전체순위": True, "내_묶음내순위": True, "타사갱신": True},
                     color_discrete_map={
                         "🏆 상위권 - 블루오션": "#10b981", "🔥 상위권 - 격전지": "#3b82f6",
-                        "💸 하위권 - 밑 빠진 독": "#ef4444", "🧊 하위권 - 데이터 부족": "#94a3b8"
-                    }
+                        "💸 하위권 - 밑 빠진 독": "#ef4444", "🧊 하위권 - 악성 재고": "#94a3b8"
+                    },
+                    size_max=25
                 )
-                fig_mx.update_yaxes(autorange="reversed", title="내 평균 순위 (상단일수록 1등 ☝️)")
+                
+                # Y축 뒤집기 (1위가 맨 위로)
+                max_rank = max(20, df_mx['전체순위'].max() + 2)
+                fig_mx.update_yaxes(autorange="reversed", title="매물 전체 노출 순위 (상단일수록 1등 ☝️)", range=[max_rank, 0])
                 fig_mx.update_xaxes(title="타사 갱신 빈도 (우측일수록 경쟁 치열 👉)")
-                fig_mx.add_hline(y=3.5, line_dash="dot", line_color="#cbd5e1", annotation_text="상위권 기준선")
-                fig_mx.add_vline(x=2.5, line_dash="dot", line_color="#cbd5e1", annotation_text="격전지 기준선")
+                
+                fig_mx.add_hline(y=10.5, line_dash="dot", line_color="#cbd5e1", annotation_text="1페이지 노출 기준선 (10위)", annotation_position="bottom right")
+                fig_mx.add_vline(x=2.5, line_dash="dot", line_color="#cbd5e1", annotation_text="경쟁 과열선 (3회)", annotation_position="top left")
+                
+                fig_mx.update_layout(height=550, margin=dict(t=20, b=20), legend_title_text="매물 효율 등급")
                 st.plotly_chart(fig_mx, use_container_width=True)
 
-                # 3. 처방 리스트 (우선순위 정렬: 밑빠진 독 -> 격전지 -> 블루오션)
-                st.markdown("### 📋 AI 실시간 진단 처방")
-                df_mx['score'] = df_mx['분류'].map({"💸 하위권 - 밑 빠진 독": 3, "🔥 상위권 - 격전지": 2, "🏆 상위권 - 블루오션": 1, "🧊 하위권 - 데이터 부족": 0})
-                df_sorted = df_mx.sort_values('score', ascending=False)
+                # 3. 처방 리스트 아코디언 정리
+                st.markdown("### 📋 AI 실시간 진단 처방 요약")
+                
+                categories = [
+                    ("💸 하위권 - 밑 빠진 독", "🚨 [광고 중단 권고] 돈을 써도 1페이지 밖입니다. 네이버 알고리즘 점수가 낮으니 즉시 광고를 멈추세요.", True),
+                    ("🔥 상위권 - 격전지", "⚔️ [정밀 방어] 1페이지 노출 중이며 타사 갱신도 치열합니다. 주력 방어 매물입니다.", False),
+                    ("🏆 상위권 - 블루오션", "🎯 [비용 절감] 1페이지 노출 중인데 타사 경쟁도 없습니다. 가성비 최고 매물입니다.", False),
+                    ("🧊 하위권 - 악성 재고", "🔍 [점검 필요] 노출도 안 되고 경쟁도 없습니다. 조건 변경이 필요합니다.", False)
+                ]
 
-                c1, c2 = st.columns(2)
-                for i, row in enumerate(df_sorted.itertuples()):
-                    target_col = c1 if i % 2 == 0 else c2
-                    with target_col:
-                        if row.score == 3:
-                            st.error(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
-                        elif row.score == 2:
-                            st.info(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
-                        else:
-                            st.success(f"**{row.매물명}**\n\n**[{row.분류}]**\n{row.AI처방}")
+                for cat_name, desc, is_expanded in categories:
+                    cat_df = df_mx[df_mx['분류'] == cat_name].sort_values('전체순위')
+                    if not cat_df.empty:
+                        with st.expander(f"{cat_name} ({len(cat_df)}건)", expanded=is_expanded):
+                            st.caption(desc)
+                            for _, row in cat_df.iterrows():
+                                st.markdown(f"- **{row['매물명']}**: {row['AI처방']} (내 순위: {row['내_묶음내순위']}등 / 갱신: {row['타사갱신']}회)")
             else:
                 st.warning("분석할 내 매물 데이터가 없습니다.")
 
