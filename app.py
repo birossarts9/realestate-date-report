@@ -1056,7 +1056,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [용어 통일 + 우선순위 정렬 + 웹UI 통합] 최종 완결판
+        # 🚀 [로직 완벽 교정] 타격 시간 확보 매물 최우선 2중 정렬
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
@@ -1087,7 +1087,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         mid_tier_avg = round(mid_tier_sum / mid_tier_count, 1) if mid_tier_count > 0 else 0.0
         low_tier_avg = round(low_tier_sum / low_tier_count, 1) if low_tier_count > 0 else 0.0
 
-        # 🎯 [신규 통합] 대시보드 웹 화면용 '오늘의 AI 마스터 결론' 자동 출력
+        # 대시보드 웹 화면 출력
         st.markdown(f"""
         <div style="border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin-bottom: 25px; background-color: #f8fafc;">
             <h4 style="color: #1e293b; margin-top: 0; margin-bottom: 15px; font-weight: 800;">💡 오늘의 AI 마스터 결론</h4>
@@ -1106,7 +1106,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </div>
         """, unsafe_allow_html=True)
 
-        # 2. 작전 지시 (빈집 분리 및 시간 확보 매물 최우선 정렬)
+        # 2. 작전 지시 로직
         ai_recommendations = []
         if not t_df.empty and not my_all.empty:
             temp_recs = []
@@ -1128,7 +1128,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                         total_renews = len(b_boosted)
                         
-                        # ⭐ [핵심] 우선순위 점수 부여 (3점: 완벽, 2점: 누적중, 1점: 빈집)
+                        # 우선순위 점수 부여
                         if total_renews >= 3:
                             priority_score = 3
                         elif total_renews > 0:
@@ -1142,10 +1142,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                         })
                 
                 if diag_list:
-                    top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
+                    # ⭐ [핵심 수정] 단지 내 대표를 뽑을 때도 '명확한 시간(priority)'을 1순위로 봄
+                    top_in_comp = pd.DataFrame(diag_list).sort_values(
+                        by=['priority', 'survival', 'avg'], 
+                        ascending=[False, False, True]
+                    ).iloc[0]
                     temp_recs.append(top_in_comp)
             
-            # ⭐ [우선순위 정렬] 1. Priority(시간 도출 여부) -> 2. 생존율 -> 3. 평균순위
+            # 최종 3개 뽑을 때도 Priority 최우선
             final_targets = pd.DataFrame(temp_recs).sort_values(
                 by=['priority', 'survival', 'avg'], 
                 ascending=[False, False, True]
@@ -1155,7 +1159,6 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 b_key = row['key']
                 total_renews = row['renews']
                 
-                # 빈집과 데이터 부족 명확히 분리
                 if total_renews == 0:
                     rec_time_str = "자유 갱신 (경쟁 없는 빈집)"
                 elif total_renews < 3:
