@@ -347,7 +347,7 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
         font_body = ImageFont.truetype("NanumGothic.ttf", 22)
         font_bold = ImageFont.truetype("NanumGothic.ttf", 26)
         font_large_num = ImageFont.truetype("NanumGothic.ttf", 36)
-        font_small = ImageFont.truetype("NanumGothic.ttf", 16) # 평균 순위용 조금 작은 폰트
+        font_small = ImageFont.truetype("NanumGothic.ttf", 16)
     except:
         font_title = font_sub = font_body = font_bold = font_large_num = font_small = ImageFont.load_default()
 
@@ -359,27 +359,39 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     draw.text((50, 110), f"{realtor_name} 대표님 작전 리포트", font=font_sub, fill=(71, 85, 105))
     draw.text((750, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
 
-    # 2. [1단 카드] 3구간 등수 직관형 요약 (이모지 제거, 모든 평균 추가)
+    # 2. [1단 카드] 3구간 요약 (⭐ 중앙 정렬 알고리즘 적용 & 용어 통일)
     draw.rounded_rectangle([(50, 160), (950, 280)], radius=20, fill=(255, 255, 255))
     
-    # [1~3위 장악]
-    draw.text((70, 190), "[최상위 장악 1~3위]", font=font_bold, fill=(37, 99, 235))
-    draw.text((120, 230), f"{top_count}건", font=font_large_num, fill=(37, 99, 235))
-    if top_count > 0: draw.text((190, 245), f"(평균 {top_avg}위)", font=font_small, fill=(107, 118, 132))
+    # 3등분 중앙 좌표 지정
+    centers = [200, 500, 800]
+    titles = ["[상위권 1~3위]", "[중위권 4~7위]", "[하위권 8위~]"]
+    colors = [(37, 99, 235), (5, 150, 105), (225, 29, 72)]
+    counts = [top_count, mid_count, low_count]
+    avgs = [top_avg, mid_avg, low_avg]
+
+    for i in range(3):
+        # 타이틀 중앙 정렬
+        t_width = draw.textlength(titles[i], font=font_bold)
+        draw.text((centers[i] - t_width/2, 185), titles[i], font=font_bold, fill=colors[i])
         
-    draw.line([(380, 190), (380, 250)], fill=(226, 232, 240), width=2)
-    
-    # [4~7위 안정권]
-    draw.text((400, 190), "[안정권 방어 4~7위]", font=font_bold, fill=(5, 150, 105))
-    draw.text((450, 230), f"{mid_count}건", font=font_large_num, fill=(5, 150, 105))
-    if mid_count > 0: draw.text((520, 245), f"(평균 {mid_avg}위)", font=font_small, fill=(107, 118, 132))
-    
-    draw.line([(710, 190), (710, 250)], fill=(226, 232, 240), width=2)
-    
-    # [8위 밖 누수]
-    draw.text((750, 190), "[노출 누수 8위~]", font=font_bold, fill=(225, 29, 72))
-    draw.text((780, 230), f"{low_count}건", font=font_large_num, fill=(225, 29, 72))
-    if low_count > 0: draw.text((850, 245), f"(평균 {low_avg}위)", font=font_small, fill=(107, 118, 132))
+        # 건수 & 평균 순위 텍스트 묶음 중앙 정렬
+        c_text = f"{counts[i]}건"
+        a_text = f"(평균 {avgs[i]}위)" if counts[i] > 0 else ""
+        
+        c_width = draw.textlength(c_text, font=font_large_num)
+        a_width = draw.textlength(a_text, font=font_small) if a_text else 0
+        gap = 8 if a_text else 0
+        total_width = c_width + gap + a_width
+        
+        start_x = centers[i] - total_width/2
+        
+        draw.text((start_x, 225), c_text, font=font_large_num, fill=colors[i])
+        if a_text:
+            draw.text((start_x + c_width + gap, 242), a_text, font=font_small, fill=(107, 118, 132))
+
+    # 구분선 그리기
+    draw.line([(350, 190), (350, 250)], fill=(226, 232, 240), width=2)
+    draw.line([(650, 190), (650, 250)], fill=(226, 232, 240), width=2)
 
     # 3. [2단 카드 - 좌/우 분할]
     draw.rounded_rectangle([(50, 310), (485, 730)], radius=20, fill=(255, 255, 255))
@@ -1083,13 +1095,13 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 선택하신 기간({days_val}일) 동안 활동한 매물 <b>{top_tier_count + mid_tier_count + low_tier_count}개</b>의 종합 성적입니다.
             </p>
             <div style="border-left: 4px solid #3b82f6; padding-left: 12px; margin-bottom: 10px;">
-                <span style="color: #3b82f6; font-weight: 700;">최상위 장악 (1~3위)</span> : 총 {top_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {top_tier_avg}위)</span>
+                <span style="color: #3b82f6; font-weight: 700;">상위권 (1~3위)</span> : 총 {top_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {top_tier_avg}위)</span>
             </div>
             <div style="border-left: 4px solid #10b981; padding-left: 12px; margin-bottom: 10px;">
-                <span style="color: #10b981; font-weight: 700;">안정권 방어 (4~7위)</span> : 총 {mid_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {mid_tier_avg}위)</span>
+                <span style="color: #10b981; font-weight: 700;">중위권 (4~7위)</span> : 총 {mid_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {mid_tier_avg}위)</span>
             </div>
             <div style="border-left: 4px solid #ef4444; padding-left: 12px;">
-                <span style="color: #ef4444; font-weight: 700;">노출 누수 (8위~)</span> : 총 {low_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {low_tier_avg}위)</span>
+                <span style="color: #ef4444; font-weight: 700;">하위권 (8위~)</span> : 총 {low_tier_count}개 <span style="color:#64748b; font-size:14px;">(평균 {low_tier_avg}위)</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
