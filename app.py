@@ -1046,14 +1046,14 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         st.markdown(pricing_card, unsafe_allow_html=True)
 
         # ========================================================
-        # 🚀 [최종 업데이트] 3구간 지표 & 블루오션 대응 컨설팅 로직
+        # 🚀 [최종 완결판] 3구간 지표 + 타격 시간 우선 정렬 로직
         # ========================================================
         st.markdown("<br>", unsafe_allow_html=True)
         
         days_val = selected_days if 'selected_days' in locals() else 7
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
 
-        # 1. 상단 지표용 구간별 데이터 계산
+        # 1. [상단 지표 묘수] 3구간 데이터 & 평균 순위 계산
         top_tier_count, top_tier_sum = 0, 0
         mid_tier_count, low_tier_count = 0, 0
         
@@ -1072,7 +1072,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         
         top_tier_avg = round(top_tier_sum / top_tier_count, 1) if top_tier_count > 0 else 0.0
 
-        # 2. AI 작전 지시 로직 (대시보드 동기화 + 빈집 대응)
+        # 2. [작전 지시] 시간 계산 가능 매물 '우선 배치' 로직
         ai_recommendations = []
         if not t_df.empty and not my_all.empty:
             temp_recs = []
@@ -1087,26 +1087,43 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                     b_ranks = b_grp.groupby('수집일시')['묶음내순위_숫자'].min()
                     appearances = len(b_ranks)
                     
+                    # 깡통 매물 필터 통과
                     if appearances >= max(3, total_sessions_comp * 0.1):
                         survival = (appearances / total_sessions_comp) * 100
                         avg_rank = b_ranks.mean()
-                        diag_list.append({'key': b_key, 'danji': comp_name, 'survival': survival, 'avg': avg_rank})
+                        
+                        # ⭐ [핵심] 경쟁사 데이터가 3개 이상 있어서 '명확한 시간'이 나오는지 판별
+                        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                        has_clear_time = len(b_boosted) >= 3 
+                        
+                        diag_list.append({
+                            'key': b_key, 'danji': comp_name, 'survival': survival, 
+                            'avg': avg_rank, 'has_time': has_clear_time
+                        })
                 
                 if diag_list:
+                    # 단지 내 최고 매물 1개 선발
                     top_in_comp = pd.DataFrame(diag_list).sort_values(['survival', 'avg'], ascending=[False, True]).iloc[0]
                     temp_recs.append(top_in_comp)
             
-            final_targets = pd.DataFrame(temp_recs).sort_values(['survival', 'avg'], ascending=[False, True]).head(3) if temp_recs else pd.DataFrame()
+            # ⭐ [우선순위 정렬] 1. 시간명확(True) 우선 -> 2. 생존율 높음 -> 3. 평균순위 좋음
+            if temp_recs:
+                final_targets = pd.DataFrame(temp_recs).sort_values(
+                    by=['has_time', 'survival', 'avg'], 
+                    ascending=[False, False, True]
+                ).head(3)
+            else:
+                final_targets = pd.DataFrame()
             
             for _, row in final_targets.iterrows():
                 b_key = row['key']
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                 total_renews = len(b_boosted)
                 
-                # [수정] 데이터 부족 시 짧은 컨설팅 멘트로 대체
                 if total_renews < 3:
                     rec_time_str = "자유 갱신 (경쟁 없는 빈집)"
                 else:
+                    # 시간 계산 로직 (기존과 동일)
                     active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
                     if len(active_hours) <= 1:
                         best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
@@ -1149,7 +1166,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
                 
                 ai_recommendations.append(f"{mask_text(danji_name)} {mask_text(clean_spec)} - {rec_time_str}")
 
-        # 3. 시장 점유율 데이터 가공
+        # 3. 시장 점유율 가공
         top_comp_list = []
         if 'ms_counts' in locals() and not ms_counts.empty:
             ms_df = ms_counts.copy()
@@ -1159,7 +1176,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
             top_df = agg_ms.sort_values('총점수', ascending=False).head(6)
             top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
 
-        # 4. 웹 화면 출력 (블루오션 컨설팅 멘트 적용)
+        # 4. 웹 화면 출력
         fallback_msg = "<div style='font-size: 15px; color: #059669;'>현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.<br>편하신 시간에 자유롭게 갱신하셔도 1위 노출이 보장됩니다.</div>"
         
         st.markdown(f"""
@@ -1169,7 +1186,7 @@ https://realestate-date-report.streamlit.app/?id={user_id}&ref={ref_id}"""
         </div>
         """, unsafe_allow_html=True)
 
-        # 5. 이미지 생성 함수 호출 (파라미터 변경 주의)
+        # 5. 이미지 생성 호출 (이전 답변의 상단 이미지 변경 코드가 적용되어 있어야 합니다!)
         report_image_bytes = generate_kakao_report_image(
             display_realtor, top_tier_count, top_tier_avg, mid_tier_count, low_tier_count, days_val, ranks_dict_val, top_comp_list, ai_recommendations
         )
