@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🚀 스텔스 캡처 & 레이아웃 최종본
+    # 탭 1. 📊 마스터 대시보드 - 🚀 중앙 정렬 & 카테고리 숨김 캡처
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -809,7 +809,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                badge_style = "padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap;"
+                badge_style = "padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px;"
                 if avg_total_rank > 15.0 and comp_renews >= 2:
                     badge = f"<div style='{badge_style} background-color:#fff1f0; color:#ef4444;'>🚨 광고 중단</div>"
                 elif comp_renews > 0:
@@ -827,11 +827,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
-                item_html = "<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'>"
-                item_html += "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
-                item_html += f"<div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
-                item_html += f"<div>{badge}</div></div>"
-                item_html += f"<div style='font-size:13px; color:#64748b;'>내 순위: <span style='font-weight:700; color:#0f172a;'>{avg_my_rank:.1f}등</span> <span style='margin:0 8px; color:#cbd5e1;'>|</span> 단지 노출: <span style='font-weight:700; color:#0f172a;'>{avg_total_rank:.1f}위</span></div></div>"
+                item_html = (
+                    f"<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'>"
+                    f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
+                    f"<div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
+                    f"<div>{badge}</div></div>"
+                    f"<div style='font-size:13px; color:#64748b;'>내 순위: <span style='font-weight:700; color:#0f172a;'>{avg_my_rank:.1f}등</span> <span style='margin:0 8px; color:#cbd5e1;'>|</span> 단지 노출: <span style='font-weight:700; color:#0f172a;'>{avg_total_rank:.1f}위</span></div></div>"
+                )
 
                 if avg_total_rank <= 5.0:
                     diag_dict["top"] += item_html
@@ -845,7 +847,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         # 2. [헤더] 마스터 대시보드 타이틀
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 30px 40px; border-radius: 16px; color: white; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 25px 35px; border-radius: 16px; color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1 style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
                 <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700;">TOP RANK AI</span>
@@ -857,8 +859,19 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         </div>
         """, unsafe_allow_html=True)
 
+        # ------------------------------------------------------
+        # 💡 [신규 디자인] 섹션 타이틀 중앙 정렬 및 밑줄 포인트
+        # ------------------------------------------------------
+        def build_section_header(title, icon):
+            return f"""
+            <div style='text-align:center; margin: 50px 0 25px 0;'>
+                <h3 style='font-weight:900; color:#0f172a; font-size:24px; margin:0;'>{icon} {title}</h3>
+                <div style='width:40px; height:4px; background-color:#3b82f6; margin:12px auto 0 auto; border-radius:2px;'></div>
+            </div>
+            """
+
         # 3. [전략 지표 세션] 
-        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:15px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
+        st.markdown(build_section_header("전략 분석 지표", "🛡️"), unsafe_allow_html=True)
         col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
@@ -884,10 +897,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 fig_ms.update_layout(height=220, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
                 st.plotly_chart(fig_ms, use_container_width=True)
 
-        st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
-
         # 4. [등급별 카드 세션]
-        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
+        st.markdown(build_section_header("실시간 매물 등급 및 처방", "🎯"), unsafe_allow_html=True)
 
         t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
         m_cnt = summary_stats["mid"][0]; m_avg = round(summary_stats["mid"][1]/m_cnt, 1) if m_cnt > 0 else 0
@@ -897,7 +908,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             empty_msg = "<div style='color:#94a3b8; font-size:15px; text-align:center; padding:40px 0;'>해당 매물이 없습니다.</div>"
             html = f"<div style='background-color:white; border-radius:16px; border:1px solid {border_color}; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:30px; overflow:hidden;'>"
             html += f"<div style='background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid {border_color}; display:flex; justify-content:space-between; align-items:center;'>"
-            html += f"<span style='font-weight:800; color:{color}; font-size:18px;'>{icon} {title}</span>"
+            html += f"<div style='display:flex; align-items:center; gap:8px;'><span style='font-size:22px;'>{icon}</span><span style='font-weight:800; color:{color}; font-size:18px; margin-top:2px;'>{title}</span></div>"
             html += f"<span style='font-weight:900; color:#1e293b; font-size:20px;'>{count}건 <span style='font-weight:500; color:#64748b; font-size:14px; margin-left:5px;'>(단지 평균 {avg}위)</span></span>"
             html += f"</div><div style='max-height:400px; overflow-y:auto;'>"
             html += f"{items_html if items_html else empty_msg}</div></div>"
@@ -908,39 +919,40 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown(build_card_html("하위권 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 📸 5. [캡처 엔진] 버튼 아래는 숨기고 깔끔하게 스캔하는 JS
+        # 📸 5. [강화된 캡처 엔진] 상단 라디오 메뉴 숨김 로직 추가
         # ------------------------------------------------------
-        st.markdown("<br>", unsafe_allow_html=True)
         components.html("""
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <div style="text-align: center; padding: 20px 0;">
             <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 18px 36px; border-radius: 12px; font-size: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px; transition: transform 0.1s;">
-                📸 현재 화면 그대로 캡처하기 (카톡 전송용)
+                📸 마스터 대시보드 리포트 저장 (카톡 전송용)
             </button>
-            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">버튼을 누르면 버튼 윗부분(마스터 대시보드)까지만 깔끔하게 잘려서 저장됩니다.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">상단의 탭 메뉴는 자동으로 숨겨지며, 깔끔한 리포트 이미지만 저장됩니다.</p>
         </div>
         <script>
         function captureDashboard() {
             const parentDoc = window.parent.document;
             const mainContainer = parentDoc.querySelector('[data-testid="stMainBlockContainer"]') || parentDoc.querySelector('.main .block-container');
             
-            if (!mainContainer) {
-                alert("대시보드 영역을 찾을 수 없습니다.");
-                return;
-            }
+            if (!mainContainer) return alert("대시보드 영역을 찾을 수 없습니다.");
 
-            // 현재 버튼이 있는 iframe과 그 부모 컨테이너 찾기
             const myIframe = window.frameElement;
             let myContainer = myIframe;
             while (myContainer && myContainer.tagName !== 'BODY') {
-                if (myContainer.getAttribute('data-testid') === 'stElementContainer' || myContainer.classList.contains('element-container')) {
-                    break;
-                }
+                if (myContainer.getAttribute('data-testid') === 'stElementContainer' || myContainer.classList.contains('element-container')) break;
                 myContainer = myContainer.parentElement;
             }
 
-            // 내 컨테이너(버튼 영역)를 포함해 그 아래에 있는 모든 요소(성과표, 배너 등)를 임시로 숨김
             const hiddenElements = [];
+            
+            // 💡 [추가] 상단 스트림릿 라디오 탭 메뉴 숨기기
+            const radioMenus = parentDoc.querySelectorAll('.stRadio');
+            radioMenus.forEach(el => {
+                hiddenElements.push({ el: el, display: el.style.display });
+                el.style.display = 'none';
+            });
+
+            // 💡 캡처 버튼 본인 이하 숨기기
             if (myContainer && myContainer.tagName !== 'BODY') {
                 let sibling = myContainer;
                 while (sibling) {
@@ -950,28 +962,18 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 }
             }
 
-            // 숨김 처리가 화면에 반영될 시간(0.15초)을 준 뒤 캡처 실행
             setTimeout(() => {
                 html2canvas(mainContainer, {
-                    useCORS: true,
-                    scale: 2, 
-                    backgroundColor: "#ffffff"
+                    useCORS: true, scale: 2, backgroundColor: "#ffffff"
                 }).then(canvas => {
-                    // 캡처 완료 후 숨겼던 요소들 즉시 원상 복구
-                    hiddenElements.forEach(item => {
-                        item.el.style.display = item.display;
-                    });
-                    
-                    // 다운로드 실행
+                    hiddenElements.forEach(item => { item.el.style.display = item.display; });
                     const link = document.createElement('a');
                     link.download = 'TOP_RANK_마스터대시보드.png';
                     link.href = canvas.toDataURL('image/png');
                     link.click();
                 }).catch(err => {
-                    hiddenElements.forEach(item => {
-                        item.el.style.display = item.display;
-                    });
-                    alert("캡처 중 오류가 발생했습니다. 브라우저 기본 캡처를 이용해주세요.");
+                    hiddenElements.forEach(item => { item.el.style.display = item.display; });
+                    alert("캡처 중 오류가 발생했습니다.");
                 });
             }, 150); 
         }
