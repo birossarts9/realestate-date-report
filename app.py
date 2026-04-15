@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🚀 레이아웃 최종 완성본 (버그 완벽 수정)
+    # 탭 1. 📊 마스터 대시보드 - 🚀 스텔스 캡처 & 레이아웃 최종본
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -791,7 +791,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         if not recent_my_df.empty:
             for b_key, b_grp in recent_my_df.groupby('매물묶음키'):
-                # 💡 [수정] 매물 풀스펙 추출 (층, 타입, 가격 등 모두 포함)
                 parts = [p.strip() for p in b_key.split('|')]
                 if len(parts) >= 3:
                     masked_danji = mask_text(parts[0])
@@ -810,7 +809,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                # 💡 뱃지 디자인
                 badge_style = "padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap;"
                 if avg_total_rank > 15.0 and comp_renews >= 2:
                     badge = f"<div style='{badge_style} background-color:#fff1f0; color:#ef4444;'>🚨 광고 중단</div>"
@@ -829,7 +827,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
-                # 🚨 [버그 픽스] 마크다운 오류 방지를 위해 띄어쓰기 없이 한 줄짜리 HTML 문자열로 조립
                 item_html = "<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'>"
                 item_html += "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
                 item_html += f"<div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
@@ -889,7 +886,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
-        # 4. [등급별 카드 세션] - 세로형 3단 일체형 카드
+        # 4. [등급별 카드 세션]
         st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
 
         t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
@@ -902,11 +899,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             html += f"<div style='background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid {border_color}; display:flex; justify-content:space-between; align-items:center;'>"
             html += f"<span style='font-weight:800; color:{color}; font-size:18px;'>{icon} {title}</span>"
             html += f"<span style='font-weight:900; color:#1e293b; font-size:20px;'>{count}건 <span style='font-weight:500; color:#64748b; font-size:14px; margin-left:5px;'>(단지 평균 {avg}위)</span></span>"
-            html += f"</div>"
-            # 💡 [스크롤 속성 추가] 매물이 많을 경우 카드 안에서만 스크롤되도록 max-height 설정
-            html += f"<div style='max-height:400px; overflow-y:auto;'>"
-            html += f"{items_html if items_html else empty_msg}"
-            html += f"</div></div>"
+            html += f"</div><div style='max-height:400px; overflow-y:auto;'>"
+            html += f"{items_html if items_html else empty_msg}</div></div>"
             return html
 
         st.markdown(build_card_html("상위권 매물 (1~5위)", "🏆", t_cnt, t_avg, "#1d4ed8", "#eff6ff", "#bfdbfe", diag_dict["top"]), unsafe_allow_html=True)
@@ -914,38 +908,78 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown(build_card_html("하위권 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 📸 5. [캡처 엔진] 화면 그대로 스캔하는 JS 버튼
+        # 📸 5. [캡처 엔진] 버튼 아래는 숨기고 깔끔하게 스캔하는 JS
         # ------------------------------------------------------
         st.markdown("<br>", unsafe_allow_html=True)
         components.html("""
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <div style="text-align: center; padding: 20px 0;">
-            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 18px 36px; border-radius: 12px; font-size: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px;">
+            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 18px 36px; border-radius: 12px; font-size: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px; transition: transform 0.1s;">
                 📸 현재 화면 그대로 캡처하기 (카톡 전송용)
             </button>
-            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">버튼을 누르면 위 대시보드가 고화질 이미지로 자동 저장됩니다.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">버튼을 누르면 버튼 윗부분(마스터 대시보드)까지만 깔끔하게 잘려서 저장됩니다.</p>
         </div>
         <script>
         function captureDashboard() {
-            const target = window.parent.document.querySelector('[data-testid="stMainBlockContainer"]') || window.parent.document.body;
-            html2canvas(target, {
-                useCORS: true,
-                scale: 2, 
-                backgroundColor: "#ffffff"
-            }).then(canvas => {
-                const link = document.createElement('a');
-                link.download = 'TOP_RANK_마스터대시보드.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            }).catch(err => {
-                alert("캡처 중 오류가 발생했습니다. 브라우저 기본 캡처를 이용해주세요.");
-            });
+            const parentDoc = window.parent.document;
+            const mainContainer = parentDoc.querySelector('[data-testid="stMainBlockContainer"]') || parentDoc.querySelector('.main .block-container');
+            
+            if (!mainContainer) {
+                alert("대시보드 영역을 찾을 수 없습니다.");
+                return;
+            }
+
+            // 현재 버튼이 있는 iframe과 그 부모 컨테이너 찾기
+            const myIframe = window.frameElement;
+            let myContainer = myIframe;
+            while (myContainer && myContainer.tagName !== 'BODY') {
+                if (myContainer.getAttribute('data-testid') === 'stElementContainer' || myContainer.classList.contains('element-container')) {
+                    break;
+                }
+                myContainer = myContainer.parentElement;
+            }
+
+            // 내 컨테이너(버튼 영역)를 포함해 그 아래에 있는 모든 요소(성과표, 배너 등)를 임시로 숨김
+            const hiddenElements = [];
+            if (myContainer && myContainer.tagName !== 'BODY') {
+                let sibling = myContainer;
+                while (sibling) {
+                    hiddenElements.push({ el: sibling, display: sibling.style.display });
+                    sibling.style.display = 'none';
+                    sibling = sibling.nextElementSibling;
+                }
+            }
+
+            // 숨김 처리가 화면에 반영될 시간(0.15초)을 준 뒤 캡처 실행
+            setTimeout(() => {
+                html2canvas(mainContainer, {
+                    useCORS: true,
+                    scale: 2, 
+                    backgroundColor: "#ffffff"
+                }).then(canvas => {
+                    // 캡처 완료 후 숨겼던 요소들 즉시 원상 복구
+                    hiddenElements.forEach(item => {
+                        item.el.style.display = item.display;
+                    });
+                    
+                    // 다운로드 실행
+                    const link = document.createElement('a');
+                    link.download = 'TOP_RANK_마스터대시보드.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                }).catch(err => {
+                    hiddenElements.forEach(item => {
+                        item.el.style.display = item.display;
+                    });
+                    alert("캡처 중 오류가 발생했습니다. 브라우저 기본 캡처를 이용해주세요.");
+                });
+            }, 150); 
         }
         </script>
         """, height=150)
 
         # ------------------------------------------------------
-        # 6. [AI 자동 갱신 성과 영역]
+        # 6. [AI 자동 갱신 성과 영역] - 캡처 시 안 보이게 됨
         # ------------------------------------------------------
         st.markdown("<br><hr>", unsafe_allow_html=True)
         components.html(f"<div style='padding: 15px 0;'><h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3></div>", height=60)
@@ -1034,7 +1068,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         merged_df['상위(3위) 방어시간'] = [x[3] for x in tracking_results]
                         merged_df['순위 궤적'] = trend_data
         
-                        merged_df = merged_df.sort_values(by='갱신시간', ascending=False)
+                        merged_df = merged_df.sort_values('갱신시간', ascending=False)
                         success_count = len(merged_df); up_defense_count = len(merged_df[merged_df['성과 요약'].astype(str).str.contains('상승|진입|롤링', na=False)])
                     else: success_count, up_defense_count = 0, 0
                 except Exception as e:
@@ -1057,7 +1091,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
         # ------------------------------------------------------
-        # 7. [하단 서비스 결제 안내 배너]
+        # 7. [하단 서비스 결제 안내 배너] - 캡처 시 안 보이게 됨
         # ------------------------------------------------------
         st.markdown("<br><hr><br><br>", unsafe_allow_html=True)
         st.markdown("""
