@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🏦 띄어쓰기 버그 픽스 & 디자인 강화
+    # 탭 1. 📊 마스터 대시보드 - 🏦 여백 최적화 & Top 5 동기화
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -828,7 +828,6 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
-                # 💡 [버그 픽스] 스트림릿 코드 인식 오류를 막기 위해 들여쓰기 제거 후 한 줄로 결합
                 item_html = (
                     f"<div style='padding:15px 0; border-bottom: 1px dashed #e2e8f0;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;'>"
@@ -849,14 +848,14 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     diag_dict["low"] += item_html
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
 
-        # 2. [헤더] 마스터 대시보드 타이틀 (글씨 크기 및 정렬 대폭 개선)
+        # 2. [헤더] 마스터 대시보드 타이틀 (💡 위아래 padding 및 margin 대폭 축소)
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 35px 40px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.2);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 25px 30px; border-radius: 20px; color: white; margin-bottom: 25px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.2);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1 style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
                 <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:14px; font-weight:700; letter-spacing: 0.5px;">TOP RANK AI</span>
             </div>
-            <div style="margin-top: 20px; font-size: 18px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
+            <div style="margin-top: 12px; font-size: 18px; line-height: 1.5; opacity: 0.95; word-break: keep-all; font-weight: 500;">
                 네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b style="color:#bfdbfe;">{display_realtor}</b> 전용 리포트입니다.<br>
                 매물별 노출 등급에 따른 AI 처방을 확인하고, <b>권장 타격 시간에 맞춰 상위 노출을 관리하세요.</b>
             </div>
@@ -864,7 +863,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         """, unsafe_allow_html=True)
 
         # 3. [전략 지표 세션] 
-        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:15px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
         col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
@@ -878,23 +877,26 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         top_comp_list = []
         with col_ms:
-            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 10)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
             if 'ms_counts' in locals() and not ms_counts.empty:
                 import plotly.express as px
                 ms_df = ms_counts.copy()
                 ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
                 agg_ms = ms_df.groupby('부동산명_축약')['총점수'].sum().reset_index()
-                top_df = agg_ms.sort_values('총점수', ascending=False).head(10)
+                
+                # 💡 [수정] Top 10 -> Top 5 로 변경
+                top_df = agg_ms.sort_values('총점수', ascending=False).head(5)
                 top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
                 
                 fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', color_discrete_sequence=['#3182f6'], text='총점수', template='plotly_white')
                 fig_ms.update_yaxes(autorange="reversed")
-                fig_ms.update_layout(height=350, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
+                # 💡 [수정] Top 5에 맞춰 그래프 높이를 350 -> 220으로 축소
+                fig_ms.update_layout(height=220, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
                 st.plotly_chart(fig_ms, use_container_width=True)
 
-        st.markdown("<br><hr style='margin:10px 0 30px 0;'>", unsafe_allow_html=True)
+        st.markdown("<br><hr style='margin:10px 0 25px 0;'>", unsafe_allow_html=True)
 
-        # 4. [등급별 카드 세션] - 💡 띄어쓰기 버그를 완벽히 차단한 렌더러 함수
+        # 4. [등급별 카드 세션]
         st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
 
         t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
@@ -926,6 +928,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown("<br>", unsafe_allow_html=True)
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
         
+        # 💡 [데이터 동기화] Top 5 데이터가 이미지 제너레이터로 그대로 들어갑니다.
         report_image_bytes = generate_kakao_report_image(
             display_realtor, t_cnt, t_avg, m_cnt, m_avg, l_cnt, l_avg, selected_days, ranks_dict_val, top_comp_list, []
         )
