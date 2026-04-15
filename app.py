@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🏦 Toss 스타일 + 카톡 버튼 복구
+    # 탭 1. 📊 마스터 대시보드 - 🏦 일체형 스크롤 카드 & 풀스펙 버전
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -787,13 +787,20 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
         recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)] if 't_df' in locals() else pd.DataFrame()
 
-        diag_dict = {"top": [], "mid": [], "low": []}
+        diag_dict = {"top": "", "mid": "", "low": ""}
         summary_stats = {"top": [0, 0], "mid": [0, 0], "low": [0, 0]}
 
         if not recent_my_df.empty:
             for b_key, b_grp in recent_my_df.groupby('매물묶음키'):
-                danji_name = b_grp['단지명'].iloc[0]
-                short_name = f"{mask_text(danji_name)} {mask_text(b_key.split('|')[0].replace(danji_name, '').strip())}"
+                # 💡 [수정] 매물 풀스펙 추출 (층, 타입, 가격 등 모두 포함)
+                parts = [p.strip() for p in b_key.split('|')]
+                if len(parts) >= 3:
+                    masked_danji = mask_text(parts[0])
+                    masked_dong = mask_text(parts[1])
+                    rest_spec = " · ".join(parts[2:]) # 층, 타입, 향, 가격 등 연결
+                    full_spec = f"{masked_danji} {masked_dong} <span style='color:#64748b; font-weight:normal;'>[{rest_spec}]</span>"
+                else:
+                    full_spec = b_key
                 
                 try:
                     b_grp_numeric = b_grp.copy()
@@ -804,14 +811,14 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                # 💡 개별 매물 뱃지 디자인
-                badge_style = "display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700; margin-left:8px;"
+                # 💡 뱃지 디자인
+                badge_style = "padding:3px 10px; border-radius:8px; font-size:12px; font-weight:800; white-space:nowrap;"
                 if avg_total_rank > 15.0 and comp_renews >= 2:
-                    badge = f"<span style='{badge_style} background-color:#fff1f0; color:#ff4d4f;'>🚨 광고 중단</span>"
+                    badge = f"<div style='{badge_style} background-color:#fff1f0; color:#ff4d4f;'>🚨 광고 중단</div>"
                 elif comp_renews > 0:
                     b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                     active_h = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
-                    best_h = (active_h[0] + 1) % 24
+                    best_h = (active_h[0] + 1) % 24 if active_h else 12
                     if len(active_h) > 1:
                         max_g = -1
                         for i in range(len(active_h)):
@@ -819,67 +826,61 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                             if g > max_g: max_g = g; best_h = (active_h[i] + 1) % 24
                     ampm = "오후" if best_h >= 12 else "오전"
                     disp_h = best_h if best_h <= 12 else best_h - 12
-                    badge = f"<span style='{badge_style} background-color:#e6f7ff; color:#1890ff;'>⚡ {ampm} {disp_h or 12}시 타격</span>"
+                    badge = f"<div style='{badge_style} background-color:#eff6ff; color:#3b82f6;'>⚡ {ampm} {disp_h or 12}시 타격</div>"
                 else:
-                    badge = f"<span style='{badge_style} background-color:#f6ffed; color:#52c41a;'>✅ 자유 갱신</span>"
+                    badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
+                # 💡 일체형 카드 내부 리스트 디자인
                 item_html = f"""
-                <div style="background-color:white; padding:12px; border-radius:12px; margin-bottom:10px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border: 1px solid #f0f0f0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:600; color:#262626; font-size:14px;">{short_name}</span>
-                        {badge}
+                <div style="padding:14px 0; border-bottom: 1px dashed #e2e8f0;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <div style="font-weight:700; color:#334155; font-size:15px; line-height:1.4;">{full_spec}</div>
+                        <div style="margin-left:15px;">{badge}</div>
                     </div>
-                    <div style="font-size:12px; color:#8c8c8c; margin-top:4px;">내 순위: {avg_my_rank:.1f}등 / 단지 전체: {avg_total_rank:.1f}위</div>
+                    <div style="font-size:13px; color:#64748b;">내 순위: <b style="color:#0f172a;">{avg_my_rank:.1f}등</b> <span style="margin:0 5px;">|</span> 단지 전체 노출: <b style="color:#0f172a;">{avg_total_rank:.1f}위</b></div>
                 </div>
                 """
 
                 if avg_total_rank <= 5.0:
-                    diag_dict["top"].append(item_html)
+                    diag_dict["top"] += item_html
                     summary_stats["top"][0] += 1; summary_stats["top"][1] += avg_total_rank
                 elif avg_total_rank <= 15.0:
-                    diag_dict["mid"].append(item_html)
+                    diag_dict["mid"] += item_html
                     summary_stats["mid"][0] += 1; summary_stats["mid"][1] += avg_total_rank
                 else:
-                    diag_dict["low"].append(item_html)
+                    diag_dict["low"] += item_html
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
 
         # 2. [헤더] 마스터 대시보드 타이틀
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #3182f6 0%, #1e3a8a 100%); padding: 30px; border-radius: 24px; color: white; margin-bottom: 25px; box-shadow: 0 10px 30px rgba(49, 130, 246, 0.2);">
+        <div style="background: linear-gradient(135deg, #3182f6 0%, #1e3a8a 100%); padding: 30px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(30, 58, 138, 0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1 style="margin: 0; font-size: 28px; font-weight: 800;">🚀 마스터 대시보드</h1>
-                <span style="background:rgba(255,255,255,0.2); padding:4px 12px; border-radius:100px; font-size:12px; font-weight:600;">TOP RANK AI</span>
+                <span style="background:rgba(255,255,255,0.2); padding:5px 12px; border-radius:20px; font-size:13px; font-weight:700;">TOP RANK AI</span>
             </div>
-            <p style="margin: 15px 0 0 0; font-size: 16px; line-height: 1.6; opacity: 0.85; word-break: keep-all;">
+            <p style="margin: 15px 0 0 0; font-size: 16px; line-height: 1.6; opacity: 0.9; word-break: keep-all;">
                 네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b>{display_realtor}</b> 전용 리포트입니다. 
                 매물별 등급에 따른 AI 처방을 확인하세요.
             </p>
         </div>
         """, unsafe_allow_html=True)
 
-        # 3. [전략 지표 세션] - 내 순위 & 점유율
-        st.markdown("<h4 style='font-weight:800; color:#1f1f1f; margin-bottom:15px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
-        col_rank, col_ms = st.columns([1, 1])
+        # 3. [전략 지표 세션] - 오류 수정 (HTML 감싸기 제거)
+        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
+        col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
-            st.markdown("""
-            <div style="background:white; padding:20px; border-radius:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); height:400px; border:1px solid #f0f0f0;">
-                <div style="font-weight:800; color:#262626; margin-bottom:15px; font-size:16px;">🥇 우리 부동산 단지별 순위</div>
-            """, unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
             if not recent_my_df.empty:
                 my_complex_rank = recent_my_df.groupby('단지명')['묶음내순위_숫자'].min().reset_index()
                 my_complex_rank.columns = ['단지명', '최고순위']
                 my_complex_rank['단지명'] = my_complex_rank['단지명'].apply(mask_text)
                 st.dataframe(my_complex_rank.sort_values('최고순위'), hide_index=True, use_container_width=True)
             else: st.info("데이터가 없습니다.")
-            st.markdown("</div>", unsafe_allow_html=True)
 
         top_comp_list = []
         with col_ms:
-            st.markdown("""
-            <div style="background:white; padding:20px; border-radius:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); height:400px; border:1px solid #f0f0f0;">
-                <div style="font-weight:800; color:#262626; margin-bottom:10px; font-size:16px;">🏆 시장 점유율 (Top 10)</div>
-            """, unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 10)</div>", unsafe_allow_html=True)
             if 'ms_counts' in locals() and not ms_counts.empty:
                 import plotly.express as px
                 ms_df = ms_counts.copy()
@@ -888,75 +889,50 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 top_df = agg_ms.sort_values('총점수', ascending=False).head(10)
                 top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
                 
-                fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
-                                color_discrete_sequence=['#3182f6'], text='총점수', template='plotly_white')
-                fig_ms.update_yaxes(autorange="reversed") # 💡 1위 상단 배치
-                fig_ms.update_layout(height=320, margin=dict(t=0, b=0, l=0, r=10), xaxis_visible=False, yaxis_title="")
+                fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', color_discrete_sequence=['#3182f6'], text='총점수', template='plotly_white')
+                fig_ms.update_yaxes(autorange="reversed")
+                fig_ms.update_layout(height=350, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
                 st.plotly_chart(fig_ms, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
 
-        # 4. [등급별 카드 세션] - 세로 나열 & 상시 노출
-        st.markdown("<h4 style='font-weight:800; color:#1f1f1f; margin-top:30px; margin-bottom:15px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
+        st.markdown("<br><hr style='margin:10px 0 30px 0;'>", unsafe_allow_html=True)
 
-        # 변수 매핑 (카톡 전송 함수용)
-        top_tier_count = summary_stats["top"][0]
-        top_tier_avg = round(summary_stats["top"][1]/top_tier_count, 1) if top_tier_count > 0 else 0.0
-        mid_tier_count = summary_stats["mid"][0]
-        mid_tier_avg = round(summary_stats["mid"][1]/mid_tier_count, 1) if mid_tier_count > 0 else 0.0
-        low_tier_count = summary_stats["low"][0]
-        low_tier_avg = round(summary_stats["low"][1]/low_tier_count, 1) if low_tier_count > 0 else 0.0
+        # 4. [등급별 카드 세션] - 💡 HTML/CSS 일체형 스크롤 카드
+        st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
 
-        # --- 상위권 ---
-        st.markdown(f"""
-        <div style="background:white; padding:20px; border-radius:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border:1px solid #f0f0f0; margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <span style="font-weight:800; color:#3182f6; font-size:18px;">🏆 상위권 매물 (1~5위)</span>
-                <span style="font-weight:900; color:#262626; font-size:20px;">{top_tier_count}건 <small style="font-weight:400; color:#8c8c8c; font-size:13px;">(평균 {top_tier_avg}위)</small></span>
+        t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
+        m_cnt = summary_stats["mid"][0]; m_avg = round(summary_stats["mid"][1]/m_cnt, 1) if m_cnt > 0 else 0
+        l_cnt = summary_stats["low"][0]; l_avg = round(summary_stats["low"][1]/l_cnt, 1) if l_cnt > 0 else 0
+
+        def build_card_html(title, count, avg, color, bg_color, items_html):
+            empty_msg = "<div style='color:#94a3b8; font-size:14px; text-align:center; padding:30px 0;'>해당 매물이 없습니다.</div>"
+            return f"""
+            <div style="background-color:white; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:25px; overflow:hidden;">
+                <div style="background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:800; color:{color}; font-size:18px;">{title}</span>
+                    <span style="font-weight:900; color:#1e293b; font-size:20px;">{count}건 <span style="font-weight:500; color:#64748b; font-size:14px; margin-left:5px;">(단지 평균 {avg}위)</span></span>
+                </div>
+                <div style="padding:10px 25px 20px 25px; max-height:350px; overflow-y:auto;">
+                    {items_html if items_html else empty_msg}
+                </div>
             </div>
-        """, unsafe_allow_html=True)
-        if diag_dict["top"]:
-            with st.container(height=300):
-                for item in diag_dict["top"]: st.markdown(item, unsafe_allow_html=True)
-        else: st.caption("해당 매물이 없습니다.")
-        st.markdown("</div>", unsafe_allow_html=True)
+            """
 
-        # --- 중위권 ---
-        st.markdown(f"""
-        <div style="background:white; padding:20px; border-radius:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border:1px solid #f0f0f0; margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <span style="font-weight:800; color:#52c41a; font-size:18px;">🚀 중위권 매물 (6~15위)</span>
-                <span style="font-weight:900; color:#262626; font-size:20px;">{mid_tier_count}건 <small style="font-weight:400; color:#8c8c8c; font-size:13px;">(평균 {mid_tier_avg}위)</small></span>
-            </div>
-        """, unsafe_allow_html=True)
-        if diag_dict["mid"]:
-            with st.container(height=300):
-                for item in diag_dict["mid"]: st.markdown(item, unsafe_allow_html=True)
-        else: st.caption("해당 매물이 없습니다.")
-        st.markdown("</div>", unsafe_allow_html=True)
+        # 상위권 카드 렌더링
+        st.markdown(build_card_html("🏆 상위권 매물 (1~5위)", t_cnt, t_avg, "#2563eb", "#eff6ff", diag_dict["top"]), unsafe_allow_html=True)
+        # 중위권 카드 렌더링
+        st.markdown(build_card_html("🚀 중위권 매물 (6~15위)", m_cnt, m_avg, "#16a34a", "#f0fdf4", diag_dict["mid"]), unsafe_allow_html=True)
+        # 하위권 카드 렌더링
+        st.markdown(build_card_html("🚨 하위권 경고 (16위 밖)", l_cnt, l_avg, "#dc2626", "#fef2f2", diag_dict["low"]), unsafe_allow_html=True)
 
-        # --- 하위권 ---
-        st.markdown(f"""
-        <div style="background:white; padding:20px; border-radius:20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border:1px solid #ffccc7; margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <span style="font-weight:800; color:#ff4d4f; font-size:18px;">🚨 하위권 경고 (16위 밖)</span>
-                <span style="font-weight:900; color:#262626; font-size:20px;">{low_tier_count}건 <small style="font-weight:400; color:#8c8c8c; font-size:13px;">(평균 {low_tier_avg}위)</small></span>
-            </div>
-        """, unsafe_allow_html=True)
-        if diag_dict["low"]:
-            with st.container(height=300):
-                for item in diag_dict["low"]: st.markdown(item, unsafe_allow_html=True)
-        else: st.caption("해당 매물이 없습니다.")
-        st.markdown("</div>", unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # ⭐ 4.5 [복구 완료] 카톡 전송용 이미지 다운로드 버튼
+        # 5. 카톡 전송용 이미지 다운로드 버튼
         # ------------------------------------------------------
         st.markdown("<br>", unsafe_allow_html=True)
         ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
         
-        # ai_recommendations 리스트는 더 이상 텍스트 박스로 안 쓰지만, 이미지 생성 함수용으로 빈 리스트 전달
         report_image_bytes = generate_kakao_report_image(
-            display_realtor, top_tier_count, top_tier_avg, mid_tier_count, mid_tier_avg, low_tier_count, low_tier_avg, selected_days, ranks_dict_val, top_comp_list, []
+            display_realtor, t_cnt, t_avg, m_cnt, m_avg, l_cnt, l_avg, selected_days, ranks_dict_val, top_comp_list, []
         )
         
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
@@ -971,7 +947,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             )
 
         # ------------------------------------------------------
-        # 5. [AI 자동 갱신 성과 영역]
+        # 6. [AI 자동 갱신 성과 영역]
         # ------------------------------------------------------
         st.markdown("<br><hr>", unsafe_allow_html=True)
         components.html(f"<div style='padding: 15px 0;'><h3 style='color:#1e3a8a; margin: 0; font-size: 24px; font-weight: bold;'>🚀 AI 자동 갱신 성과</h3></div>", height=60)
@@ -1083,7 +1059,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.info("아직 수집된 자동 갱신 성과 로그가 없습니다.")
 
         # ------------------------------------------------------
-        # 6. [하단 서비스 결제 안내 배너]
+        # 7. [하단 서비스 결제 안내 배너]
         # ------------------------------------------------------
         st.markdown("<br><hr><br><br>", unsafe_allow_html=True)
         st.markdown("""
