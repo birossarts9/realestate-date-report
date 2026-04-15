@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🚀 중앙 정렬 & 스텔스 캡처 완결판
+    # 탭 1. 📊 마스터 대시보드 - 🚀 레이아웃 100% 원상복구 및 최적화
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -827,8 +827,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
+                # 💡 [버그 해결] padding 좌우(0)를 줘서 박스 양끝까지 꽉 차게 정렬
                 item_html = (
-                    f"<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'>"
+                    f"<div style='padding:16px 0; border-bottom:1px solid #f1f5f9;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
                     f"<div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
                     f"<div>{badge}</div></div>"
@@ -845,36 +846,27 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     diag_dict["low"] += item_html
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
 
-        # 2. [헤더] 마스터 대시보드 타이틀 (💡 초소형 여백 적용)
+        # 2. [헤더] 마스터 대시보드 타이틀
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 18px 30px; border-radius: 16px; color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 30px 40px; border-radius: 16px; color: white; margin-bottom: 40px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1 style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
-                <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700; letter-spacing: 0.5px;">TOP RANK AI</span>
+                <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700;">TOP RANK AI</span>
             </div>
-            <div style="margin-top: 12px; font-size: 16px; line-height: 1.5; opacity: 0.95; word-break: keep-all; font-weight: 500;">
+            <div style="margin-top: 15px; font-size: 16px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
                 네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b style="color:#bfdbfe;">{display_realtor}</b> 전용 리포트입니다.<br>
                 매물별 노출 등급에 따른 AI 처방을 확인하고, <b>권장 타격 시간에 맞춰 상위 노출을 관리하세요.</b>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # 💡 [신규 디자인] 섹션 타이틀 중앙 정렬 및 밑줄 포인트 함수
-        def build_section_header(title, icon):
-            return f"""
-            <div style='text-align:center; margin: 45px 0 25px 0;'>
-                <h3 style='font-weight:900; color:#0f172a; font-size:24px; margin:0;'>{icon} {title}</h3>
-                <div style='width:40px; height:4px; background-color:#3b82f6; margin:10px auto 0 auto; border-radius:2px;'></div>
-            </div>
-            """
-
+        # 💡 [버그 해결] 쓸데없는 중앙 정렬과 밑줄을 날리고 깔끔한 좌측 정렬로 복구
         # 3. [전략 지표 세션] 
-        st.markdown(build_section_header("전략 분석 지표", "🛡️"), unsafe_allow_html=True)
+        st.markdown("<h4 style='font-weight:900; color:#1e293b; margin-bottom:20px; font-size:22px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
         col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
-            # 💡 [수정] 🥇 제목 중앙 정렬
-            st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:12px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
             if not recent_my_df.empty:
                 my_complex_rank = recent_my_df.groupby('단지명')['묶음내순위_숫자'].min().reset_index()
                 my_complex_rank.columns = ['단지명', '최고순위']
@@ -883,8 +875,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             else: st.info("데이터가 없습니다.")
 
         with col_ms:
-            # 💡 [수정] 🏆 제목 중앙 정렬 및 Top 5 축소
-            st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:12px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
             if 'ms_counts' in locals() and not ms_counts.empty:
                 import plotly.express as px
                 ms_df = ms_counts.copy()
@@ -897,10 +888,10 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
                 st.plotly_chart(fig_ms, use_container_width=True)
 
-        st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+        st.markdown("<br><hr style='margin:10px 0 40px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
         # 4. [등급별 카드 세션]
-        st.markdown(build_section_header("실시간 매물 등급 및 처방", "🎯"), unsafe_allow_html=True)
+        st.markdown("<h4 style='font-weight:900; color:#1e293b; margin-bottom:20px; font-size:22px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
 
         t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
         m_cnt = summary_stats["mid"][0]; m_avg = round(summary_stats["mid"][1]/m_cnt, 1) if m_cnt > 0 else 0
@@ -908,13 +899,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         def build_card_html(title, icon, count, avg, color, bg_color, border_color, items_html):
             empty_msg = "<div style='color:#94a3b8; font-size:15px; text-align:center; padding:40px 0;'>해당 매물이 없습니다.</div>"
+            # 💡 [버그 해결] padding 값 정상화 (20px 25px) 및 중앙 정렬 래퍼 삭제
             html = f"<div style='background-color:white; border-radius:16px; border:1px solid {border_color}; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:30px; overflow:hidden;'>"
             html += f"<div style='background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid {border_color}; display:flex; justify-content:space-between; align-items:center;'>"
             html += f"<div style='display:flex; align-items:center; gap:8px;'><span style='font-size:22px;'>{icon}</span><span style='font-weight:800; color:{color}; font-size:18px; margin-top:2px;'>{title}</span></div>"
             html += f"<span style='font-weight:900; color:#1e293b; font-size:20px;'>{count}건 <span style='font-weight:500; color:#64748b; font-size:14px; margin-left:5px;'>(단지 평균 {avg}위)</span></span>"
-            # 💡 [fix] 텍스트가 왼쪽 테두리에 붙지 않도록 전체 텍스트 블록을 중앙으로 이동시키는 래퍼 추가
-            html += f"</div><div style='max-height:400px; overflow-y:auto; padding-top:10px; padding-bottom:20px;'>"
-            html += f"<div style='width:fit-content; margin: 0 auto;'>{items_html if items_html else empty_msg}</div></div></div>"
+            html += f"</div><div style='max-height:400px; overflow-y:auto; padding: 10px 25px 20px 25px;'>"
+            html += f"{items_html if items_html else empty_msg}</div></div>"
             return html
 
         st.markdown(build_card_html("상위권 매물 (1~5위)", "🏆", t_cnt, t_avg, "#1d4ed8", "#eff6ff", "#bfdbfe", diag_dict["top"]), unsafe_allow_html=True)
@@ -922,15 +913,15 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown(build_card_html("하위권 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 📸 5. [강화된 캡처 엔진] 상단 탭 메뉴 숨김 + 데이터 복구 속도 최적화
+        # 📸 5. [캡처 엔진] 상단 라디오 메뉴 숨김 + 깔끔한 저장
         # ------------------------------------------------------
         components.html("""
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <div style="text-align: center; padding: 20px 0;">
-            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 16px 32px; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px;">
+            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 18px 36px; border-radius: 12px; font-size: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px; transition: transform 0.1s;">
                 📸 마스터 대시보드 리포트 저장 (카톡 전송용)
             </button>
-            <p style="color: #64748b; font-size: 14px; margin-top: 10px;">상단의 탭 카테고리 메뉴는 자동으로 숨겨지며, 깔끔한 리포트 이미지만 저장됩니다.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">상단의 탭 메뉴는 자동으로 숨겨지며, 깔끔한 리포트 이미지만 저장됩니다.</p>
         </div>
         <script>
         function captureDashboard() {
@@ -948,14 +939,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
             const hiddenElements = [];
             
-            // 💡 [수정] 상단 스트림릿 라디오 카테고리 메뉴 완벽 숨기기
             const radioMenus = parentDoc.querySelectorAll('.stRadio');
             radioMenus.forEach(el => {
                 hiddenElements.push({ el: el, display: el.style.display });
                 el.style.display = 'none';
             });
 
-            // 💡 [수정] 성과표/결제배너 숨기기 로직은 유지
             if (myContainer && myContainer.tagName !== 'BODY') {
                 let sibling = myContainer;
                 while (sibling) {
@@ -965,17 +954,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 }
             }
 
-            // 숨김 처리 완료까지 0.15초 대기
             setTimeout(() => {
                 html2canvas(mainContainer, {
-                    useCORS: true,
-                    scale: 2, // 고화질
-                    backgroundColor: "#ffffff"
+                    useCORS: true, scale: 2, backgroundColor: "#ffffff"
                 }).then(canvas => {
-                    // 데이터 복구 (숨김 해제)
                     hiddenElements.forEach(item => { item.el.style.display = item.display; });
-                    
-                    // 다운로드
                     const link = document.createElement('a');
                     link.download = 'TOP_RANK_마스터대시보드.png';
                     link.href = canvas.toDataURL('image/png');
