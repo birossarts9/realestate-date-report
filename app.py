@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🏦 일체형 스크롤 카드 & 풀스펙 버전
+    # 탭 1. 📊 마스터 대시보드 - 🏦 띄어쓰기 버그 픽스 & 디자인 강화
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -792,12 +792,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         if not recent_my_df.empty:
             for b_key, b_grp in recent_my_df.groupby('매물묶음키'):
-                # 💡 [수정] 매물 풀스펙 추출 (층, 타입, 가격 등 모두 포함)
                 parts = [p.strip() for p in b_key.split('|')]
                 if len(parts) >= 3:
                     masked_danji = mask_text(parts[0])
                     masked_dong = mask_text(parts[1])
-                    rest_spec = " · ".join(parts[2:]) # 층, 타입, 향, 가격 등 연결
+                    rest_spec = " · ".join(parts[2:]) 
                     full_spec = f"{masked_danji} {masked_dong} <span style='color:#64748b; font-weight:normal;'>[{rest_spec}]</span>"
                 else:
                     full_spec = b_key
@@ -811,10 +810,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                # 💡 뱃지 디자인
-                badge_style = "padding:3px 10px; border-radius:8px; font-size:12px; font-weight:800; white-space:nowrap;"
+                badge_style = "padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px;"
                 if avg_total_rank > 15.0 and comp_renews >= 2:
-                    badge = f"<div style='{badge_style} background-color:#fff1f0; color:#ff4d4f;'>🚨 광고 중단</div>"
+                    badge = f"<div style='{badge_style} background-color:#fff1f0; color:#ef4444;'>🚨 광고 중단</div>"
                 elif comp_renews > 0:
                     b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
                     active_h = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
@@ -830,16 +828,16 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
-                # 💡 일체형 카드 내부 리스트 디자인
-                item_html = f"""
-                <div style="padding:14px 0; border-bottom: 1px dashed #e2e8f0;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <div style="font-weight:700; color:#334155; font-size:15px; line-height:1.4;">{full_spec}</div>
-                        <div style="margin-left:15px;">{badge}</div>
-                    </div>
-                    <div style="font-size:13px; color:#64748b;">내 순위: <b style="color:#0f172a;">{avg_my_rank:.1f}등</b> <span style="margin:0 5px;">|</span> 단지 전체 노출: <b style="color:#0f172a;">{avg_total_rank:.1f}위</b></div>
-                </div>
-                """
+                # 💡 [버그 픽스] 스트림릿 코드 인식 오류를 막기 위해 들여쓰기 제거 후 한 줄로 결합
+                item_html = (
+                    f"<div style='padding:15px 0; border-bottom: 1px dashed #e2e8f0;'>"
+                    f"<div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;'>"
+                    f"<div style='font-weight:700; color:#334155; font-size:15px; line-height:1.5;'>{full_spec}</div>"
+                    f"<div style='margin-left:15px;'>{badge}</div>"
+                    f"</div>"
+                    f"<div style='font-size:13px; color:#64748b;'>내 순위: <b style='color:#0f172a;'>{avg_my_rank:.1f}등</b> <span style='margin:0 6px; color:#cbd5e1;'>|</span> 단지 노출: <b style='color:#0f172a;'>{avg_total_rank:.1f}위</b></div>"
+                    f"</div>"
+                )
 
                 if avg_total_rank <= 5.0:
                     diag_dict["top"] += item_html
@@ -851,21 +849,21 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     diag_dict["low"] += item_html
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
 
-        # 2. [헤더] 마스터 대시보드 타이틀
+        # 2. [헤더] 마스터 대시보드 타이틀 (글씨 크기 및 정렬 대폭 개선)
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #3182f6 0%, #1e3a8a 100%); padding: 30px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 20px rgba(30, 58, 138, 0.15);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 35px 40px; border-radius: 20px; color: white; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.2);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="margin: 0; font-size: 28px; font-weight: 800;">🚀 마스터 대시보드</h1>
-                <span style="background:rgba(255,255,255,0.2); padding:5px 12px; border-radius:20px; font-size:13px; font-weight:700;">TOP RANK AI</span>
+                <h1 style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
+                <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:14px; font-weight:700; letter-spacing: 0.5px;">TOP RANK AI</span>
             </div>
-            <p style="margin: 15px 0 0 0; font-size: 16px; line-height: 1.6; opacity: 0.9; word-break: keep-all;">
-                네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b>{display_realtor}</b> 전용 리포트입니다. 
-                매물별 등급에 따른 AI 처방을 확인하세요.
-            </p>
+            <div style="margin-top: 20px; font-size: 18px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
+                네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b style="color:#bfdbfe;">{display_realtor}</b> 전용 리포트입니다.<br>
+                매물별 노출 등급에 따른 AI 처방을 확인하고, <b>권장 타격 시간에 맞춰 상위 노출을 관리하세요.</b>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # 3. [전략 지표 세션] - 오류 수정 (HTML 감싸기 제거)
+        # 3. [전략 지표 세션] 
         st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🛡️ 전략 분석 지표</h4>", unsafe_allow_html=True)
         col_rank, col_ms = st.columns([1, 1.2])
         
@@ -896,7 +894,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         st.markdown("<br><hr style='margin:10px 0 30px 0;'>", unsafe_allow_html=True)
 
-        # 4. [등급별 카드 세션] - 💡 HTML/CSS 일체형 스크롤 카드
+        # 4. [등급별 카드 세션] - 💡 띄어쓰기 버그를 완벽히 차단한 렌더러 함수
         st.markdown("<h4 style='font-weight:800; color:#1e293b; margin-bottom:20px;'>🎯 실시간 매물 등급 및 처방</h4>", unsafe_allow_html=True)
 
         t_cnt = summary_stats["top"][0]; t_avg = round(summary_stats["top"][1]/t_cnt, 1) if t_cnt > 0 else 0
@@ -904,24 +902,21 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         l_cnt = summary_stats["low"][0]; l_avg = round(summary_stats["low"][1]/l_cnt, 1) if l_cnt > 0 else 0
 
         def build_card_html(title, count, avg, color, bg_color, items_html):
-            empty_msg = "<div style='color:#94a3b8; font-size:14px; text-align:center; padding:30px 0;'>해당 매물이 없습니다.</div>"
-            return f"""
-            <div style="background-color:white; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:25px; overflow:hidden;">
-                <div style="background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:800; color:{color}; font-size:18px;">{title}</span>
-                    <span style="font-weight:900; color:#1e293b; font-size:20px;">{count}건 <span style="font-weight:500; color:#64748b; font-size:14px; margin-left:5px;">(단지 평균 {avg}위)</span></span>
-                </div>
-                <div style="padding:10px 25px 20px 25px; max-height:350px; overflow-y:auto;">
-                    {items_html if items_html else empty_msg}
-                </div>
-            </div>
-            """
+            empty_msg = "<div style='color:#94a3b8; font-size:15px; text-align:center; padding:40px 0;'>해당 매물이 없습니다.</div>"
+            return (
+                f"<div style='background-color:white; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:25px; overflow:hidden;'>"
+                f"<div style='background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;'>"
+                f"<span style='font-weight:800; color:{color}; font-size:18px;'>{title}</span>"
+                f"<span style='font-weight:900; color:#1e293b; font-size:20px;'>{count}건 <span style='font-weight:500; color:#64748b; font-size:14px; margin-left:5px;'>(단지 평균 {avg}위)</span></span>"
+                f"</div>"
+                f"<div style='padding:10px 25px 20px 25px; max-height:350px; overflow-y:auto;'>"
+                f"{items_html if items_html else empty_msg}"
+                f"</div>"
+                f"</div>"
+            )
 
-        # 상위권 카드 렌더링
         st.markdown(build_card_html("🏆 상위권 매물 (1~5위)", t_cnt, t_avg, "#2563eb", "#eff6ff", diag_dict["top"]), unsafe_allow_html=True)
-        # 중위권 카드 렌더링
         st.markdown(build_card_html("🚀 중위권 매물 (6~15위)", m_cnt, m_avg, "#16a34a", "#f0fdf4", diag_dict["mid"]), unsafe_allow_html=True)
-        # 하위권 카드 렌더링
         st.markdown(build_card_html("🚨 하위권 경고 (16위 밖)", l_cnt, l_avg, "#dc2626", "#fef2f2", diag_dict["low"]), unsafe_allow_html=True)
 
 
