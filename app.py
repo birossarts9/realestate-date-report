@@ -849,12 +849,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         # 2. [헤더] 마스터 대시보드 타이틀 
         # 💡 [수정] padding-top을 40px로 띄우고, 서브 텍스트 크기를 19px로 확대. 뱃지는 inline-flex로 정렬.
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 40px 40px 30px 40px; border-radius: 16px; color: white; margin-bottom: 40px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 20px 40px 30px 40px; border-radius: 16px; color: white; margin-bottom: 40px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
+                <h1 style="margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
                 <div style="background:rgba(255,255,255,0.2); padding:0 16px; border-radius:20px; font-size:13px; font-weight:700; height:32px; display:inline-flex; align-items:center; justify-content:center; letter-spacing:0.5px;">TOP RANK AI</div>
             </div>
-            <div style="margin-top: 20px; font-size: 19px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
+            <div style="margin-top: 15px; font-size: 24px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
                 네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b style="color:#bfdbfe;">{display_realtor}</b> 전용 리포트입니다.<br>
                 매물별 노출 등급에 따른 AI 처방을 확인하고, <b>권장 타격 시간에 맞춰 상위 노출을 관리하세요.</b>
             </div>
