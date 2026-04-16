@@ -337,104 +337,109 @@ def load_server_data():
     return df
 
 def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid_avg, low_count, low_avg, selected_days, my_ranks_dict, top_competitors_list, recommendations):
-    width, height = 1000, 1000
-    img = Image.new('RGB', (width, height), color=(248, 250, 252)) 
+    # 1. 도화지 세팅 (세로형으로 조금 더 길게 조정하여 시원한 느낌 부여)
+    width, height = 1000, 1100 
+    img = Image.new('RGB', (width, height), color=(255, 255, 255)) 
     draw = ImageDraw.Draw(img)
     
+    # 폰트 세팅 (제목과 설명을 대시보드처럼 시원하게 확대)
     try:
-        font_title = ImageFont.truetype("NanumGothic.ttf", 46)
-        font_sub = ImageFont.truetype("NanumGothic.ttf", 24)
-        font_body = ImageFont.truetype("NanumGothic.ttf", 22)
-        font_bold = ImageFont.truetype("NanumGothic.ttf", 26)
-        font_large_num = ImageFont.truetype("NanumGothic.ttf", 36)
-        font_small = ImageFont.truetype("NanumGothic.ttf", 16)
+        font_title = ImageFont.truetype("NanumGothicBold.ttf", 54) # 🚀 마스터 대시보드
+        font_desc = ImageFont.truetype("NanumGothic.ttf", 26)      # 하단 긴 설명
+        font_tier_title = ImageFont.truetype("NanumGothicBold.ttf", 28)
+        font_tier_num = ImageFont.truetype("NanumGothicBold.ttf", 44)
+        font_label = ImageFont.truetype("NanumGothicBold.ttf", 22)
+        font_small = ImageFont.truetype("NanumGothic.ttf", 18)
     except:
-        font_title = font_sub = font_body = font_bold = font_large_num = font_small = ImageFont.load_default()
+        font_title = font_desc = font_tier_title = font_tier_num = font_label = font_small = ImageFont.load_default()
 
-    import textwrap
-
-    # 1. 상단 헤더
-    now_str = datetime.now().strftime('%Y.%m.%d')
-    draw.text((50, 50), "TOP RANK AI REPORT", font=font_title, fill=(15, 23, 42))
-    draw.text((50, 110), f"{realtor_name} 대표님 작전 리포트", font=font_sub, fill=(71, 85, 105))
-    draw.text((750, 110), f"Date: {now_str}", font=font_sub, fill=(148, 163, 184))
-
-    # 2. [1단 카드] 3구간 요약 (⭐ 중앙 정렬 알고리즘 적용 & 용어 통일)
-    draw.rounded_rectangle([(50, 160), (950, 280)], radius=20, fill=(255, 255, 255))
+    # ------------------------------------------------------
+    # 2. [상단 헤더 영역] - 그라데이션 대신 깔끔한 Toss 스타일 블루박스
+    # ------------------------------------------------------
+    draw.rounded_rectangle([(40, 40), (960, 240)], radius=25, fill=(37, 99, 235))
     
-    # 3등분 중앙 좌표 지정
-    centers = [200, 500, 800]
-    titles = ["[상위권 1~3위]", "[중위권 4~7위]", "[하위권 8위~]"]
-    colors = [(37, 99, 235), (5, 150, 105), (225, 29, 72)]
-    counts = [top_count, mid_count, low_count]
-    avgs = [top_avg, mid_avg, low_avg]
+    # 🚀 마스터 대시보드 (중앙 정렬)
+    title_text = "🚀 마스터 대시보드"
+    t_w = draw.textlength(title_text, font=font_title)
+    draw.text(((width - t_w) / 2, 75), title_text, font=font_title, fill=(255, 255, 255))
+    
+    # 설명문 (중앙 정렬 + 크기 확대)
+    desc_line1 = f"네이버 부동산 실시간 분석 : {realtor_name} 전용 리포트"
+    desc_line2 = "매물 등급별 AI 처방에 맞춰 광고비를 스마트하게 지출하세요."
+    d1_w = draw.textlength(desc_line1, font=font_desc)
+    d2_w = draw.textlength(desc_line2, font=font_desc)
+    draw.text(((width - d1_w) / 2, 145), desc_line1, font=font_desc, fill=(191, 219, 254))
+    draw.text(((width - d2_w) / 2, 185), desc_line2, font=font_desc, fill=(255, 255, 255))
 
-    for i in range(3):
-        # 타이틀 중앙 정렬
-        t_width = draw.textlength(titles[i], font=font_bold)
-        draw.text((centers[i] - t_width/2, 185), titles[i], font=font_bold, fill=colors[i])
-        
-        # 건수 & 평균 순위 텍스트 묶음 중앙 정렬
-        c_text = f"{counts[i]}건"
-        a_text = f"(평균 {avgs[i]}위)" if counts[i] > 0 else ""
-        
-        c_width = draw.textlength(c_text, font=font_large_num)
-        a_width = draw.textlength(a_text, font=font_small) if a_text else 0
-        gap = 8 if a_text else 0
-        total_width = c_width + gap + a_width
-        
-        start_x = centers[i] - total_width/2
-        
-        draw.text((start_x, 225), c_text, font=font_large_num, fill=colors[i])
-        if a_text:
-            draw.text((start_x + c_width + gap, 242), a_text, font=font_small, fill=(107, 118, 132))
+    # ------------------------------------------------------
+    # 3. [전략 분석 지표] - 중앙 정렬 강조
+    # ------------------------------------------------------
+    section1_title = "🛡️ 전략 분석 지표"
+    s1_w = draw.textlength(section1_title, font=font_tier_title)
+    draw.text(((width - s1_w) / 2, 290), section1_title, font=font_tier_title, fill=(15, 23, 42))
+    # 타이틀 밑줄 (Bar) - 텍스트 바로 밑에 밀착
+    draw.rectangle([(width/2 - 25, 335), (width/2 + 25, 340)], fill=(59, 130, 246))
 
-    # 구분선 그리기
-    draw.line([(350, 190), (350, 250)], fill=(226, 232, 240), width=2)
-    draw.line([(650, 190), (650, 250)], fill=(226, 232, 240), width=2)
-
-    # 3. [2단 카드 - 좌/우 분할]
-    draw.rounded_rectangle([(50, 310), (485, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((80, 340), "[내 단지별 랭킹]", font=font_bold, fill=(37, 99, 235))
-    y_offset = 410
+    # [좌] 우리 부동산 순위 / [우] 시장 점유율 박스
+    draw.rounded_rectangle([(40, 360), (490, 680)], radius=20, outline=(226, 232, 240), width=2)
+    draw.text((70, 385), "🥇 단지별 최고 순위", font=font_label, fill=(30, 41, 59))
+    
+    y_off = 435
     if my_ranks_dict:
-        for complex_name, rank in list(my_ranks_dict.items())[:6]: 
-            c_display = complex_name[:12] + ".." if len(complex_name) > 12 else complex_name
-            rank_str = f"{rank}위" if isinstance(rank, int) else str(rank)
-            draw.text((80, y_offset), c_display, font=font_body, fill=(51, 61, 75))
-            draw.text((400, y_offset), rank_str, font=font_bold, fill=(71, 85, 105))
-            draw.line([(80, y_offset+35), (450, y_offset+35)], fill=(241, 245, 249), width=1)
-            y_offset += 50
+        for name, rank in list(my_ranks_dict.items())[:5]:
+            draw.text((70, y_off), name[:12], font=font_small, fill=(71, 85, 105))
+            draw.text((400, y_off), f"{rank}위", font=font_tier_title, fill=(37, 99, 235))
+            y_off += 45
 
-    draw.rounded_rectangle([(515, 310), (950, 730)], radius=20, fill=(255, 255, 255))
-    draw.text((545, 340), "[시장 점유율 TOP 6]", font=font_bold, fill=(37, 99, 235))
-    y_offset = 410
-    if top_competitors_list:
-        max_score = max([v for _, v in top_competitors_list]) if top_competitors_list else 1
-        for i, (comp_name, score) in enumerate(top_competitors_list[:6]):
-            comp_display = comp_name[:10] + ".." if len(comp_name) > 10 else comp_name
-            draw.text((545, y_offset), f"{i+1}. {comp_display}", font=font_small, fill=(71, 85, 105))
-            bar_len = int((score / max_score) * 180) if max_score > 0 else 0
-            bar_color = (37, 99, 235) if i == 0 else (226, 232, 240)
-            draw.rounded_rectangle([(720, y_offset+2), (720+bar_len, y_offset+16)], radius=5, fill=bar_color)
-            draw.text((725+bar_len, y_offset), f"{int(score)}점", font=font_small, fill=(15, 23, 42))
-            y_offset += 50
-
-    # 4. [3단 카드] AI 마스터 작전 지시 
-    draw.rounded_rectangle([(50, 760), (950, 950)], radius=20, fill=(232, 243, 255))
-    draw.text((80, 790), "[오늘의 AI 마스터 작전 지시]", font=font_bold, fill=(37, 99, 235))
+    draw.rounded_rectangle([(510, 360), (960, 680)], radius=20, outline=(226, 232, 240), width=2)
+    draw.text((540, 385), "🏆 시장 점유율 (Top 5)", font=font_label, fill=(30, 41, 59))
     
-    y_rec = 835
-    if recommendations:
-        for rec in recommendations:
-            wrapped_rec = textwrap.fill(f"• {rec}", width=60)
-            draw.text((80, y_rec), wrapped_rec, font=font_body, fill=(30, 41, 59))
-            y_rec += 35
-    else:
-        draw.text((80, 835), "현재 타사의 갱신 경쟁이 없는 블루오션 상태입니다.", font=font_body, fill=(5, 150, 105)) 
-        draw.text((80, 865), "편하신 시간에 자유롭게 갱신하셔도 상위 노출이 유리합니다.", font=font_body, fill=(71, 85, 105))
+    y_off = 435
+    if top_competitors_list:
+        max_s = max([s for _, s in top_competitors_list]) if top_competitors_list else 1
+        for i, (name, score) in enumerate(top_competitors_list[:5]):
+            draw.text((540, y_off), f"{i+1}. {name[:8]}", font=font_small, fill=(71, 85, 105))
+            bar_w = int((score/max_s) * 150)
+            draw.rounded_rectangle([(720, y_off+5), (720+bar_w, y_off+18)], radius=4, fill=(219, 234, 254))
+            draw.text((880, y_off), f"{int(score)}점", font=font_small, fill=(30, 41, 59))
+            y_off += 45
 
-    draw.text((330, 970), "자세한 분석 내용은 웹 대시보드 링크를 통해 확인하세요", font=font_small, fill=(148, 163, 184))
+    # ------------------------------------------------------
+    # 4. [실시간 매물 등급] - 1-5위 / 6-15위 / 16위 밖 업데이트
+    # ------------------------------------------------------
+    section2_title = "🎯 실시간 매물 노출 등급"
+    s2_w = draw.textlength(section2_title, font=font_tier_title)
+    draw.text(((width - s2_w) / 2, 730), section2_title, font=font_tier_title, fill=(15, 23, 42))
+    draw.rectangle([(width/2 - 25, 775), (width/2 + 25, 780)], fill=(59, 130, 246))
+
+    # 3분할 카드 영역
+    tiers = [
+        {"t": "상위권 (1~5위)", "c": (37, 99, 235), "bg": (239, 246, 255), "count": top_count, "avg": top_avg},
+        {"t": "중위권 (6~15위)", "c": (22, 163, 74), "bg": (240, 253, 244), "count": mid_count, "avg": mid_avg},
+        {"t": "하위권 (16위~)", "c": (220, 38, 38), "bg": (254, 242, 242), "count": low_count, "avg": low_avg}
+    ]
+    
+    card_centers = [200, 500, 800]
+    for i, tier in enumerate(tiers):
+        # 카드 배경
+        draw.rounded_rectangle([(card_centers[i]-145, 800), (card_centers[i]+145, 960)], radius=15, fill=tier["bg"])
+        
+        # 타이틀 중앙 정렬
+        tw = draw.textlength(tier["t"], font=font_small)
+        draw.text((card_centers[i] - tw/2, 825), tier["t"], font=font_small, fill=tier["c"])
+        
+        # 건수 (크게)
+        cw = draw.textlength(f"{tier['count']}건", font=font_tier_num)
+        draw.text((card_centers[i] - cw/2, 860), f"{tier['count']}건", font=font_tier_num, fill=tier["c"])
+        
+        # 평균 순위
+        aw = draw.textlength(f"평균 {tier['avg']}위", font=font_small)
+        draw.text((card_centers[i] - aw/2, 920), f"평균 {tier['avg']}위", font=font_small, fill=(100, 116, 139))
+
+    # 하단 카피라이트
+    footer = "본 리포트는 TOP RANK AI에 의해 실시간 생성되었습니다."
+    fw = draw.textlength(footer, font=font_small)
+    draw.text(((width - fw) / 2, 1030), footer, font=font_small, fill=(148, 163, 184))
 
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
