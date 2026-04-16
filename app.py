@@ -952,12 +952,25 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
-            st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
-            if not recent_my_df.empty:
-                my_complex_rank = recent_my_df.groupby('단지명')['묶음내순위_숫자'].min().reset_index()
-                my_complex_rank.columns = ['단지명', '최고순위']
-                my_complex_rank['단지명'] = my_complex_rank['단지명'].apply(mask_text)
-                st.dataframe(my_complex_rank.sort_values('최고순위'), hide_index=True, use_container_width=True)
+            if 'my_ranks_dict' in locals() and my_ranks_dict:
+                # 4번 탭(M/S)과 동일한 파워 점수 기반의 my_ranks_dict를 가져와서 UI에 뿌림
+                rank_data = []
+                for comp, rank in my_ranks_dict.items():
+                    # 순위가 정수면 'O위', 아니면('권외' 등) 그대로 출력
+                    display_rank = f"{rank}위" if isinstance(rank, int) else str(rank)
+                    rank_data.append({
+                        "단지명": mask_text(comp), 
+                        "점유율 순위": display_rank,
+                        "정렬용": rank if isinstance(rank, int) else 999 # 정렬을 위한 숨김 데이터
+                    })
+                
+                my_complex_rank = pd.DataFrame(rank_data)
+                # 1위부터 오름차순 정렬 후 숨김 데이터는 삭제
+                my_complex_rank = my_complex_rank.sort_values('정렬용').drop(columns=['정렬용'])
+                
+                st.dataframe(my_complex_rank, hide_index=True, use_container_width=True)
+            else:
+                st.info("분석된 단지별 점유율 순위가 없습니다.")
 
         with col_ms:
             st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
