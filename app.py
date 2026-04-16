@@ -340,11 +340,11 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     from PIL import Image, ImageDraw, ImageFont
     import io
 
-    # 1. 도화지 세팅 (매물 개수에 따라 세로 길이 자동 조절)
+    # 1. 도화지 세팅 (매물 최대 5개로 제한하여 세로 길이 고정 계산)
     base_height = 800
     for key in ["top", "mid", "low"]:
         base_height += 80 
-        items = item_data.get(key, [])
+        items = item_data.get(key, [])[:5]  # 매물 리스트 5개로 강제 슬라이싱
         base_height += len(items) * 75 if items else 60
         base_height += 30 
 
@@ -353,7 +353,7 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     img = Image.new('RGB', (width, height), color=(248, 250, 252)) 
     draw = ImageDraw.Draw(img)
     
-    # 🚨 [폰트 에러 해결] 대표님이 원래 쓰시던 NanumGothic.ttf 로 싹 다 통일했습니다!
+    # 폰트 세팅 (기본 나눔고딕으로 통일)
     try:
         f_title = ImageFont.truetype("NanumGothic.ttf", 46)
         f_badge = ImageFont.truetype("NanumGothic.ttf", 18)
@@ -368,10 +368,10 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
         f_title = f_badge = f_desc = f_sec = f_sub = f_body = f_bold = f_item = f_item_sub = ImageFont.load_default()
 
     # ------------------------------------------------------
-    # [헤더 영역] 
+    # [헤더 영역] - 이모지 전면 삭제
     # ------------------------------------------------------
     draw.rounded_rectangle([(40, 40), (960, 230)], radius=20, fill=(37, 99, 235))
-    draw.text((80, 70), "🚀 마스터 대시보드", font=f_title, fill=(255, 255, 255))
+    draw.text((80, 70), "마스터 대시보드", font=f_title, fill=(255, 255, 255))
     
     badge_text = "TOP RANK AI"
     bw = draw.textlength(badge_text, font=f_badge)
@@ -382,13 +382,13 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     draw.text((80, 180), "매물별 노출 등급에 따른 AI 처방을 확인하고, 권장 타격 시간에 맞춰 상위 노출을 관리하세요.", font=f_desc, fill=(255, 255, 255))
 
     # ------------------------------------------------------
-    # [섹션 1] 전략 분석 지표
+    # [섹션 1] 전략 분석 지표 - 이모지 삭제
     # ------------------------------------------------------
-    draw.text((500, 290), "🛡️ 전략 분석 지표", font=f_sec, fill=(15, 23, 42), anchor="mm")
+    draw.text((500, 290), "전략 분석 지표", font=f_sec, fill=(15, 23, 42), anchor="mm")
     draw.rounded_rectangle([(470, 315), (530, 320)], radius=2, fill=(59, 130, 246))
 
     draw.rounded_rectangle([(40, 350), (490, 610)], radius=16, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
-    draw.text((265, 385), "🥇 우리 부동산 단지별 순위", font=f_sub, fill=(51, 65, 85), anchor="mm")
+    draw.text((265, 385), "우리 부동산 단지별 순위", font=f_sub, fill=(51, 65, 85), anchor="mm")
     y_off = 430
     for name, rank in list(my_ranks_dict.items())[:5]:
         draw.text((70, y_off), name[:14], font=f_body, fill=(71, 85, 105))
@@ -396,7 +396,7 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
         y_off += 35
 
     draw.rounded_rectangle([(510, 350), (960, 610)], radius=16, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
-    draw.text((735, 385), "🏆 시장 점유율 (Top 5)", font=f_sub, fill=(51, 65, 85), anchor="mm")
+    draw.text((735, 385), "시장 점유율 (Top 5)", font=f_sub, fill=(51, 65, 85), anchor="mm")
     y_off = 430
     max_s = max([s for _, s in top_comp_list]) if top_comp_list else 1
     for i, (name, score) in enumerate(top_comp_list[:5]):
@@ -407,26 +407,29 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
         y_off += 35
 
     # ------------------------------------------------------
-    # [섹션 2] 실시간 매물 등급 및 처방 
+    # [섹션 2] 실시간 매물 등급 및 처방 - 이모지 삭제 및 5개 제한
     # ------------------------------------------------------
-    draw.text((500, 670), "🎯 실시간 매물 등급 및 처방", font=f_sec, fill=(15, 23, 42), anchor="mm")
+    draw.text((500, 670), "실시간 매물 등급 및 처방", font=f_sec, fill=(15, 23, 42), anchor="mm")
     draw.rounded_rectangle([(470, 695), (530, 700)], radius=2, fill=(59, 130, 246))
 
     y_cursor = 730
     tiers = [
-        {"title": "🏆 상위권 매물 (1~5위)", "c": top_count, "a": top_avg, "color": (29, 78, 216), "bg": (239, 246, 255), "key": "top"},
-        {"title": "🚀 중위권 매물 (6~15위)", "c": mid_count, "a": mid_avg, "color": (21, 128, 61), "bg": (240, 253, 244), "key": "mid"},
-        {"title": "🚨 하위권 경고 (16위 밖)", "c": low_count, "a": low_avg, "color": (185, 28, 28), "bg": (254, 242, 242), "key": "low"}
+        {"title": "상위권 매물 (1~5위)", "c": top_count, "a": top_avg, "color": (29, 78, 216), "bg": (239, 246, 255), "key": "top"},
+        {"title": "중위권 매물 (6~15위)", "c": mid_count, "a": mid_avg, "color": (21, 128, 61), "bg": (240, 253, 244), "key": "mid"},
+        {"title": "하위권 경고 (16위 밖)", "c": low_count, "a": low_avg, "color": (185, 28, 28), "bg": (254, 242, 242), "key": "low"}
     ]
 
     for t in tiers:
-        items = item_data.get(t["key"], [])
+        items = item_data.get(t["key"], [])[:5] # 매물 5개 강제 제한
         box_h = 80 + (len(items) * 75 if items else 60)
         
         draw.rounded_rectangle([(40, y_cursor), (960, y_cursor + box_h)], radius=16, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
         draw.rounded_rectangle([(40, y_cursor), (960, y_cursor + 70)], radius=16, fill=t["bg"])
         draw.text((70, y_cursor + 35), t["title"], font=f_sub, fill=t["color"], anchor="lm")
-        draw.text((930, y_cursor + 35), f"{t['c']}건 (단지 평균 {t['a']}위)", font=f_sub, fill=(15, 23, 42), anchor="rm")
+        
+        # 건수가 5개를 초과할 경우 요약 텍스트 출력
+        count_text = f"전체 {t['c']}건 중 5건 (단지 평균 {t['a']}위)" if t['c'] > 5 else f"{t['c']}건 (단지 평균 {t['a']}위)"
+        draw.text((930, y_cursor + 35), count_text, font=f_sub, fill=(15, 23, 42), anchor="rm")
         
         c_y = y_cursor + 70
         if not items:
@@ -435,11 +438,14 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
             for item in items:
                 draw.text((70, c_y + 25), item["spec"], font=f_item, fill=(51, 65, 85), anchor="lm")
                 
-                bw = draw.textlength(item["badge"], font=f_badge)
-                bg_color = (254, 226, 226) if "중단" in item["badge"] else ((219, 234, 254) if "타격" in item["badge"] else (220, 252, 231))
-                text_color = (220, 38, 38) if "중단" in item["badge"] else ((37, 99, 235) if "타격" in item["badge"] else (22, 163, 74))
+                # 뱃지 텍스트 내의 이모지도 강제 제거
+                clean_badge = item["badge"].replace("🚨 ", "").replace("⚡ ", "").replace("✅ ", "")
+                bw = draw.textlength(clean_badge, font=f_badge)
+                
+                bg_color = (254, 226, 226) if "중단" in clean_badge else ((219, 234, 254) if "타격" in clean_badge else (220, 252, 231))
+                text_color = (220, 38, 38) if "중단" in clean_badge else ((37, 99, 235) if "타격" in clean_badge else (22, 163, 74))
                 draw.rounded_rectangle([(930 - bw - 24, c_y + 12), (930, c_y + 40)], radius=6, fill=bg_color)
-                draw.text((930 - bw - 12, c_y + 26), item["badge"], font=f_badge, fill=text_color, anchor="lm")
+                draw.text((930 - bw - 12, c_y + 26), clean_badge, font=f_badge, fill=text_color, anchor="lm")
                 
                 draw.text((70, c_y + 55), item["rank_str"], font=f_item_sub, fill=(100, 116, 139), anchor="lm")
                 draw.line([(40, c_y + 75), (960, c_y + 75)], fill=(241, 245, 249), width=1)
