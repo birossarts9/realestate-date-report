@@ -15,6 +15,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 from PIL import Image, ImageDraw, ImageFont
 import io
+import datetime
+import streamlit as st
 
 # 1. 시트 접근 권한 설정
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -489,6 +491,69 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     img_buffer = io.BytesIO()
     img.save(img_buffer, format="PNG")
     return img_buffer.getvalue()
+
+
+def generate_kakao_text_message(item_data):
+    # 1. A매물 (비인기/경쟁치열 -> 광고중단) 및 B매물 (인기/블루오션 -> 타격/자유갱신) 찾기
+    bad_item = None
+    bad_count = 0
+    good_item = None
+    good_count = 0
+
+    # item_data가 {"top": [...], "mid": [...], "low": [...]} 형태라고 가정
+    for tier in ["top", "mid", "low"]:
+        for item in item_data.get(tier, []):
+            badge_text = item.get("badge", "")
+            
+            # 광고 중단해야 할 매물 카운트 및 대표 1개 추출
+            if "중단" in badge_text:
+                bad_count += 1
+                if not bad_item:
+                    bad_item = item
+                    
+            # 집중 타격해야 할 매물 카운트 및 대표 1개 추출
+            elif "타격" in badge_text or "자유 갱신" in badge_text:
+                good_count += 1
+                if not good_item:
+                    good_item = item
+
+    # 2. 오늘 날짜 포맷팅
+    today_str = datetime.datetime.now().strftime("%m월 %d일")
+    
+    # 3. 텍스트 메세지 조립 (대표님이 작성하신 템플릿 적용)
+    msg = "대표님 오늘의 컨설팅을 브리핑 드립니다.\n\n"
+    
+    if bad_item:
+        msg += f"현재 [{bad_item['spec']}] 매물은 고객에게 거의 보여지지 않는 비인기 매물이면서 경쟁만 치열합니다.\n"
+        msg += "지금은 재광고를 해도 의미가 없습니다.\n당분간 이 매물은 광고를 중단하세요.\n\n"
+    else:
+        msg += "현재 보유하신 매물 중 불필요하게 광고비가 낭비되는(광고 중단 필요) 악성 매물은 발견되지 않았습니다.\n\n"
+    
+    if good_item:
+        # 타격 시간 텍스트 정제 (예: "⚡ 오후 2시 타격" -> "오후 2시에")
+        time_str = "즉시" if "자유 갱신" in good_item['badge'] else good_item['badge'].replace("⚡ ", "").replace(" 타격", "에")
+        msg += f"반대로 [{good_item['spec']}] 매물은 고객에게 많이 보여지는 인기 매물이면서 광고 경쟁이 치열하지 않은 블루오션입니다.\n"
+        msg += f"특히 {time_str} 재광고를 진행하면 가장 오랫동안 상단에 머무를 확률이 높습니다.\n이 매물에 집중하세요.\n\n"
+    
+    msg += f"📊 {today_str} 현재\n"
+    msg += f"- A매물과 같이 광고비 효율이 적은 매물: {bad_count}개\n"
+    msg += f"- B매물과 같이 광고비 효율이 높은 매물: {good_count}개\n\n"
+    
+    msg += "대시보드에 접속하셔서 나머지 매물도 확인하고 스마트하게 광고 전략을 세워보세요.\n"
+    msg += "매일 일일이 시간 맞춰 광고하기 힘드시다면, 언제든 무료로 '광고 자동화 봇' 서비스까지 이용하시길 권장드립니다.\n\n"
+    msg += "오늘도 화이팅하세요!"
+    
+    return msg
+
+# --- Streamlit UI 적용 부분 ---
+st.markdown("### 💬 카톡 전송용 브리핑 메세지")
+if st.button("텍스트 메세지 생성"):
+    # item_data는 기존에 이미지 만들 때 쓰시던 매물 데이터를 그대로 넣어주시면 됩니다.
+    kakao_msg = generate_kakao_text_message(item_data) 
+    
+    # st.code를 사용하면 우측 상단에 자동으로 '복사(Copy)' 버튼이 생겨서 카톡에 붙여넣기 아주 편합니다.
+    st.code(kakao_msg, language="text")
+    st.success("메세지가 생성되었습니다! 우측 상단의 복사 버튼을 눌러 카톡에 붙여넣기 하세요.")
     
 # 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
 splash_placeholder = st.empty()
