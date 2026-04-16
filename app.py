@@ -672,7 +672,23 @@ try:
     
     uniq = t_df.drop_duplicates(subset=['매물번호', '부동산명', '단지명']).copy()
     uniq['묶음_총개수'] = uniq.groupby(bundle_keys)['부동산명'].transform('count')
-    uniq['파워점수'] = 10 + (10 / uniq['묶음내순위_숫자']) + (uniq['묶음_총개수'] * 0.1)
+    
+    # 🌟 [5단계 핵심 공사] 상위권(1~3위) + 거대 묶음일수록 파워 보너스 폭발
+    def calculate_power_score(row):
+        rank = row['묶음내순위_숫자']
+        total_bundle = row['묶음_총개수']
+        
+        base_score = 10 + (10 / rank)
+        
+        # 대표님 룰: 3위 이내 상위권이고 묶인 곳이 2곳 이상이면 보너스 발동
+        if rank <= 3 and total_bundle >= 2:
+            bonus = total_bundle * 1.5  # 예: 20곳 묶인 곳 3위 안이면 30점 추가 보너스!
+        else:
+            bonus = 0
+            
+        return base_score + bonus
+
+    uniq['파워점수'] = uniq.apply(calculate_power_score, axis=1)
     ms_counts = uniq.groupby(['단지명', '부동산명']).agg(매물건수=('부동산명', 'count'), 총점수=('파워점수', 'sum')).reset_index()
     ms_counts['총점수'] = ms_counts['총점수'].round().astype(int)
     
@@ -728,12 +744,37 @@ try:
     if target_complexes:
         boosted_df = boosted_df[boosted_df['단지명'].isin(target_complexes)].copy()
     
-    if not boosted_df.empty:
-        battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='경쟁사_갱신횟수')
-        real_red_oceans = battle_grounds[battle_grounds['경쟁사_갱신횟수'] >= 3].sort_values('경쟁사_갱신횟수', ascending=False)
-        my_red = real_red_oceans[real_red_oceans['매물묶음키'].isin(my_bundles)]
+    # 🌟 [4단계 핵심 공사] 진짜 경쟁 치열도(Red-Ocean) 계산 로직
+    # 1. 일요일(6) 제외 '실제 영업일(D)' 계산
+    if not t_df.empty:
+        dates = pd.date_range(start_dt.date(), end_dt.date())
+        operating_days = len([d for d in dates if d.weekday() != 6])
+        operating_days = max(1, operating_days) # 0으로 나누기 방지
     else:
-        my_red = pd.DataFrame(columns=['매물묶음키', '경쟁사_갱신횟수'])
+        operating_days = 1
+
+    # 2. 매물별 묶인 부동산 수(N) 계산
+    bundle_realtors = t_df.groupby('매물묶음키')['부동산명'].nunique().reset_index(name='부동산수')
+
+    if not boosted_df.empty:
+        battle_grounds = boosted_df.groupby('매물묶음키').size().reset_index(name='총갱신횟수')
+        battle_grounds = pd.merge(battle_grounds, bundle_realtors, on='매물묶음키', how='left')
+        battle_grounds['부동산수'] = battle_grounds['부동산수'].fillna(1)
+        
+        # [핵심 공식 1] 개별 공격성 (부동산 1곳당 하루 평균 갱신 횟수)
+        battle_grounds['개별공격성'] = battle_grounds['총갱신횟수'] / operating_days / battle_grounds['부동산수']
+        # [핵심 공식 2] 일일 총 트래픽 (이 매물이 하루에 갱신되는 전체 횟수)
+        battle_grounds['일일총갱신'] = battle_grounds['총갱신횟수'] / operating_days
+        
+        # 진짜 피 튀기는 격전지: 개별 공격성이 0.4 이상(2.5일에 1번 꼴)이거나 하루 총 갱신이 2회 이상일 때
+        real_red_oceans = battle_grounds[(battle_grounds['개별공격성'] >= 0.4) | (battle_grounds['일일총갱신'] >= 2.0)].sort_values('일일총갱신', ascending=False)
+        my_red = real_red_oceans[real_red_oceans['매물묶음키'].isin(my_bundles)]
+        
+        # 💡 다른 메뉴에서도 언제든 갱신 지표를 꺼내 쓸 수 있도록 딕셔너리로 저장
+        red_ocean_dict = battle_grounds.set_index('매물묶음키').to_dict('index')
+    else:
+        my_red = pd.DataFrame(columns=['매물묶음키', '총갱신횟수', '개별공격성', '일일총갱신'])
+        red_ocean_dict = {}
         
     top_spender, top_spender_raw_name, peak_hour_str = "없음", "", ""
     global_peak_hour = 12
