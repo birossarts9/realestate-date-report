@@ -779,7 +779,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🚀 좌우 여백 일치 & 레이아웃 칼정렬
+    # 탭 1. 📊 마스터 대시보드 - 🚀 텍스트 정렬/여백/크기 완벽 수정본
     # ==========================================================
     if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
         
@@ -827,13 +827,13 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 else:
                     badge = f"<div style='{badge_style} background-color:#f0fdf4; color:#10b981;'>✅ 자유 갱신</div>"
 
-                # 💡 [버그 픽스] padding: 16px 25px 적용으로 배너/헤더와 수직 라인 완벽 일치
+                # 💡 [수정] padding: 16px 25px 를 주어 상단 카드 헤더의 여백(25px)과 완벽하게 일치시킴
                 item_html = (
                     f"<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'>"
                     f"<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'>"
-                    f"<div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
+                    f"<div style='font-size:16px; font-weight:700; color:#334155; line-height:1.4;'>{full_spec}</div>"
                     f"<div>{badge}</div></div>"
-                    f"<div style='font-size:13px; color:#64748b;'>내 순위: <span style='font-weight:700; color:#0f172a;'>{avg_my_rank:.1f}등</span> <span style='margin:0 8px; color:#cbd5e1;'>|</span> 단지 노출: <span style='font-weight:700; color:#0f172a;'>{avg_total_rank:.1f}위</span></div></div>"
+                    f"<div style='font-size:14px; color:#64748b;'>내 순위: <span style='font-weight:700; color:#0f172a;'>{avg_my_rank:.1f}등</span> <span style='margin:0 8px; color:#cbd5e1;'>|</span> 단지 노출: <span style='font-weight:700; color:#0f172a;'>{avg_total_rank:.1f}위</span></div></div>"
                 )
 
                 if avg_total_rank <= 5.0:
@@ -846,29 +846,27 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     diag_dict["low"] += item_html
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
 
-        # 2. [헤더] 마스터 대시보드 타이틀 (💡 padding 좌우 25px 적용)
+        # 2. [헤더] 마스터 대시보드 타이틀 
+        # 💡 [수정] padding-top을 40px로 띄우고, 서브 텍스트 크기를 19px로 확대. 뱃지는 inline-flex로 정렬.
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 30px 25px; border-radius: 16px; color: white; margin-bottom: 20px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
+        <div style="background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); padding: 40px 40px 30px 40px; border-radius: 16px; color: white; margin-bottom: 40px; box-shadow: 0 10px 25px rgba(30, 58, 138, 0.15);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
-                <span style="background:rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:700; letter-spacing: 0.5px;">TOP RANK AI</span>
+                <h1 style="margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px;">🚀 마스터 대시보드</h1>
+                <div style="background:rgba(255,255,255,0.2); padding:0 16px; border-radius:20px; font-size:13px; font-weight:700; height:32px; display:inline-flex; align-items:center; justify-content:center; letter-spacing:0.5px;">TOP RANK AI</div>
             </div>
-            <div style="margin-top: 15px; font-size: 16px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
+            <div style="margin-top: 20px; font-size: 19px; line-height: 1.6; opacity: 0.95; word-break: keep-all; font-weight: 500;">
                 네이버 부동산 검색 알고리즘과 경쟁사 활동을 실시간 분석한 <b style="color:#bfdbfe;">{display_realtor}</b> 전용 리포트입니다.<br>
                 매물별 노출 등급에 따른 AI 처방을 확인하고, <b>권장 타격 시간에 맞춰 상위 노출을 관리하세요.</b>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        # 💡 [신규 디자인] 섹션 타이틀 좌측 정렬 (깔끔한 B2B SaaS 느낌)
+        # 💡 [수정] 제목 밑의 바(bar) margin-top을 5px로 줄여 텍스트에 가깝게 붙임
         def build_section_header(title, icon):
             return f"""
-            <div style='margin: 40px 0 20px 0;'>
-                <div style='display:flex; align-items:center; gap:10px;'>
-                    <span style='font-size:24px;'>{icon}</span>
-                    <h3 style='font-weight:900; color:#0f172a; font-size:22px; margin:0;'>{title}</h3>
-                </div>
-                <div style='width:30px; height:4px; background-color:#3b82f6; margin-top:10px; border-radius:2px;'></div>
+            <div style='text-align:center; margin: 45px 0 20px 0;'>
+                <h3 style='font-weight:900; color:#0f172a; font-size:24px; margin:0;'>{icon} {title}</h3>
+                <div style='width:40px; height:4px; background-color:#3b82f6; margin:5px auto 0 auto; border-radius:2px;'></div>
             </div>
             """
 
@@ -877,7 +875,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         col_rank, col_ms = st.columns([1, 1.2])
         
         with col_rank:
-            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🥇 우리 부동산 단지별 순위</div>", unsafe_allow_html=True)
             if not recent_my_df.empty:
                 my_complex_rank = recent_my_df.groupby('단지명')['묶음내순위_숫자'].min().reset_index()
                 my_complex_rank.columns = ['단지명', '최고순위']
@@ -886,7 +884,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             else: st.info("데이터가 없습니다.")
 
         with col_ms:
-            st.markdown("<div style='font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center; font-weight:800; color:#334155; font-size:16px; padding-bottom:10px;'>🏆 시장 점유율 (Top 5)</div>", unsafe_allow_html=True)
             if 'ms_counts' in locals() and not ms_counts.empty:
                 import plotly.express as px
                 ms_df = ms_counts.copy()
@@ -899,7 +897,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
                 st.plotly_chart(fig_ms, use_container_width=True)
 
-        st.markdown("<br><hr style='margin:10px 0 20px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+        st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
 
         # 4. [등급별 카드 세션]
         st.markdown(build_section_header("실시간 매물 등급 및 처방", "🎯"), unsafe_allow_html=True)
@@ -910,12 +908,10 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
         def build_card_html(title, icon, count, avg, color, bg_color, border_color, items_html):
             empty_msg = "<div style='color:#94a3b8; font-size:15px; text-align:center; padding:40px 0;'>해당 매물이 없습니다.</div>"
-            # 💡 [버그 픽스] 헤더 패딩 좌우 25px 적용
             html = f"<div style='background-color:white; border-radius:16px; border:1px solid {border_color}; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom:30px; overflow:hidden;'>"
             html += f"<div style='background-color:{bg_color}; padding:20px 25px; border-bottom:1px solid {border_color}; display:flex; justify-content:space-between; align-items:center;'>"
             html += f"<div style='display:flex; align-items:center; gap:8px;'><span style='font-size:22px;'>{icon}</span><span style='font-weight:800; color:{color}; font-size:18px; margin-top:2px;'>{title}</span></div>"
             html += f"<span style='font-weight:900; color:#1e293b; font-size:20px;'>{count}건 <span style='font-weight:500; color:#64748b; font-size:14px; margin-left:5px;'>(단지 평균 {avg}위)</span></span>"
-            # 💡 [버그 픽스] 감싸는 padding 제거. 내부 item_html이 25px 패딩을 가짐
             html += f"</div><div style='max-height:400px; overflow-y:auto;'>"
             html += f"{items_html if items_html else empty_msg}</div></div>"
             return html
@@ -925,21 +921,20 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
         st.markdown(build_card_html("하위권 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
 
         # ------------------------------------------------------
-        # 📸 5. [강화된 캡처 엔진] 최상위 타이틀 및 라디오 버튼 완벽 숨김
+        # 📸 5. [캡처 엔진] 상단 탭 메뉴 숨김 기능 유지
         # ------------------------------------------------------
         components.html("""
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
         <div style="text-align: center; padding: 20px 0;">
-            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 18px 36px; border-radius: 12px; font-size: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px; transition: transform 0.1s;">
+            <button onclick="captureDashboard()" style="background-color: #3b82f6; color: white; border: none; padding: 16px 32px; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4); letter-spacing: -0.5px;">
                 📸 마스터 대시보드 리포트 저장 (카톡 전송용)
             </button>
-            <p style="color: #64748b; font-size: 14px; margin-top: 12px;">상단의 불필요한 메뉴들은 자동으로 숨겨지며, 깔끔한 리포트 이미지만 저장됩니다.</p>
+            <p style="color: #64748b; font-size: 14px; margin-top: 10px;">상단의 탭 카테고리 메뉴는 자동으로 숨겨지며, 깔끔한 리포트 이미지만 저장됩니다.</p>
         </div>
         <script>
         function captureDashboard() {
             const parentDoc = window.parent.document;
-            // 💡 캡처 시 좌우 정렬이 틀어지지 않도록 최상위 stVerticalBlock 타겟팅
-            const mainContainer = parentDoc.querySelector('[data-testid="stMainBlockContainer"] > div.stVerticalBlock') || parentDoc.querySelector('[data-testid="stMainBlockContainer"]');
+            const mainContainer = parentDoc.querySelector('[data-testid="stMainBlockContainer"]') || parentDoc.querySelector('.main .block-container');
             
             if (!mainContainer) return alert("대시보드 영역을 찾을 수 없습니다.");
 
@@ -952,23 +947,12 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
             const hiddenElements = [];
             
-            // 1. 라디오 탭 메뉴 숨기기
             const radioMenus = parentDoc.querySelectorAll('.stRadio');
             radioMenus.forEach(el => {
                 hiddenElements.push({ el: el, display: el.style.display });
                 el.style.display = 'none';
             });
 
-            // 2. 최상단 "OO대표님을 위한 시장 동향" 제목 숨기기
-            const firstChildren = mainContainer.children;
-            for(let i=0; i<3; i++) {
-                if(firstChildren[i] && firstChildren[i].innerText.includes("시장 동향")) {
-                    hiddenElements.push({ el: firstChildren[i], display: firstChildren[i].style.display });
-                    firstChildren[i].style.display = 'none';
-                }
-            }
-
-            // 3. 버튼 본인 및 하단(성과표 등) 숨기기
             if (myContainer && myContainer.tagName !== 'BODY') {
                 let sibling = myContainer;
                 while (sibling) {
@@ -980,7 +964,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
 
             setTimeout(() => {
                 html2canvas(mainContainer, {
-                    useCORS: true, scale: 2, backgroundColor: "#ffffff"
+                    useCORS: true,
+                    scale: 2, 
+                    backgroundColor: "#ffffff"
                 }).then(canvas => {
                     hiddenElements.forEach(item => { item.el.style.display = item.display; });
                     const link = document.createElement('a');
