@@ -548,16 +548,6 @@ def generate_kakao_text_message(item_data):
     msg += "오늘도 화이팅하세요!"
     
     return msg
-
-# --- Streamlit UI 적용 부분 ---
-st.markdown("### 💬 카톡 전송용 브리핑 메세지")
-if st.button("텍스트 메세지 생성"):
-    # item_data는 기존에 이미지 만들 때 쓰시던 매물 데이터를 그대로 넣어주시면 됩니다.
-    kakao_msg = generate_kakao_text_message(item_data) 
-    
-    # st.code를 사용하면 우측 상단에 자동으로 '복사(Copy)' 버튼이 생겨서 카톡에 붙여넣기 아주 편합니다.
-    st.code(kakao_msg, language="text")
-    st.success("메세지가 생성되었습니다! 우측 상단의 복사 버튼을 눌러 카톡에 붙여넣기 하세요.")
     
 # 💡 [로딩 화면 최적화] 프로그레스 바 + 인트로 영상 스플래시 스크린 적용
 splash_placeholder = st.empty()
@@ -1102,6 +1092,18 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 type="primary",
                 use_container_width=True
             )
+            
+            # 👇 --- 여기서부터 복사해서 붙여넣으세요 --- 👇
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
+            if st.button("💬 텍스트 브리핑 메세지 자동 생성", use_container_width=True):
+                # 정확한 변수명인 item_data_for_image를 함수로 전달합니다.
+                kakao_msg = generate_kakao_text_message(item_data_for_image) 
+                
+                st.code(kakao_msg, language="text")
+                st.success("✨ 메세지가 생성되었습니다! 우측 상단의 복사(Copy) 버튼을 눌러 카톡에 붙여넣기 하세요.")
+            st.markdown("</div>", unsafe_allow_html=True)
+            # 👆 --- 여기까지 --- 👆
 
         # ------------------------------------------------------
         # 6. [AI 자동 갱신 성과 영역] 
