@@ -1093,16 +1093,59 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 use_container_width=True
             )
             
-            # 👇 --- 여기서부터 복사해서 붙여넣으세요 --- 👇
+            # 👇 --- 여기서부터 덮어쓰기 하세요 --- 👇
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
-            if st.button("💬 텍스트 브리핑 메세지 자동 생성", use_container_width=True):
-                # 정확한 변수명인 item_data_for_image를 함수로 전달합니다.
-                kakao_msg = generate_kakao_text_message(item_data_for_image) 
+            
+            # 1. 텍스트 메세지를 백그라운드에서 미리 생성
+            kakao_msg = generate_kakao_text_message(item_data_for_image)
+            
+            # 2. 자바스크립트에서 에러 없이 읽을 수 있도록 JSON 형태로 변환(이스케이프 처리)
+            import json
+            js_msg = json.dumps(kakao_msg)
+            
+            # 3. 원클릭 클립보드 복사를 위한 스마트 HTML+JS 버튼 생성
+            copy_html = f"""
+            <div style="text-align: center; padding-top: 5px;">
+                <button id="copyBtn" onclick="copyText()" style="width: 100%; max-width: 500px; padding: 12px 20px; background-color: #ffffff; color: #1e3a8a; border: 2px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 800; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    💬 텍스트 브리핑 메세지 복사하기
+                </button>
+            </div>
+            <script>
+            function copyText() {{
+                const btn = document.getElementById("copyBtn");
+                const textToCopy = {js_msg};
                 
-                st.code(kakao_msg, language="text")
-                st.success("✨ 메세지가 생성되었습니다! 우측 상단의 복사(Copy) 버튼을 눌러 카톡에 붙여넣기 하세요.")
-            st.markdown("</div>", unsafe_allow_html=True)
+                // Streamlit 보안(iframe) 환경에서도 완벽히 작동하는 클립보드 복사 로직
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {{
+                    document.execCommand('copy');
+                    // 복사 성공 시 버튼 UI 시각적 피드백
+                    btn.innerText = "✅ 클립보드에 복사되었습니다! (카톡 붙여넣기)";
+                    btn.style.backgroundColor = "#10b981";
+                    btn.style.color = "white";
+                    btn.style.borderColor = "#10b981";
+                    // 3초 뒤에 원래 버튼 상태로 복귀
+                    setTimeout(() => {{
+                        btn.innerText = "💬 텍스트 브리핑 메세지 복사하기";
+                        btn.style.backgroundColor = "#ffffff";
+                        btn.style.color = "#1e3a8a";
+                        btn.style.borderColor = "#cbd5e1";
+                    }}, 3000);
+                }} catch (err) {{
+                    console.error('복사 실패', err);
+                    alert("복사에 실패했습니다.");
+                }}
+                document.body.removeChild(textArea);
+            }}
+            </script>
+            """
+            
+            # 버튼을 화면에 렌더링 (잘리지 않도록 높이 넉넉히 부여)
+            import streamlit.components.v1 as components
+            components.html(copy_html, height=80)
             # 👆 --- 여기까지 --- 👆
 
         # ------------------------------------------------------
