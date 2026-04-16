@@ -515,35 +515,37 @@ def generate_kakao_text_message(item_data):
                 if not good_item:
                     good_item = item
 
-    # 2. 오늘 날짜 포맷팅
+    # 2. 오늘 날짜 포맷팅 (datetime.now() 사용)
+    from datetime import datetime
     today_str = datetime.now().strftime("%m월 %d일")
     
-    # 3. 텍스트 메세지 조립 (행동 지시형 카톡 브리핑)
-    msg = f"소장님, {today_str} TOP RANK AI의 핵심 컨설팅 브리핑입니다.\n\n"
+    # 3. 텍스트 메세지 조립 (대표님 원본 템플릿 100% 적용)
+    msg = f"대표님, {today_str} TOP RANK AI의 핵심 컨설팅입니다.\n\n"
     
-    # [방어 지시 - 1개만 확실히]
     if bad_item:
-        msg += f"🚨 오늘의 방어 (포인트 쓰지 마세요)\n"
+        msg += "🚨 광고비 절약 Point!\n"
         msg += f"- 매물: {bad_item['spec']}\n"
-        msg += f"- 처방: 이 매물은 현재 의미 없는 출혈 경쟁(밑 빠진 독) 상태입니다. 지금 재광고를 하셔도 10분 내로 뒤로 밀립니다. 오늘은 이 매물에 들어갈 포인트를 아끼세요.\n\n"
-    
-    # [타격 지시 - 1개만 확실히]
+        msg += "- 사유: 이 매물은 현재 고객에게 거의 보여지지 않는 비인기 매물입니다. 지금 재광고를 하셔도 고객에게 보여지지 않습니다. 당분간 이 매물은 광고를 중단하세요.\n\n"
+    else:
+        msg += "🚨 광고비 절약 Point!\n"
+        msg += "- 현재 광고비가 누수되고 있는 비인기/경쟁 과열 매물은 발견되지 않았습니다.\n\n"
+        
     if good_item:
-        time_str = "즉시" if "자유 갱신" in good_item['badge'] else good_item['badge'].replace("⚡ ", "").replace(" 타격", "에")
-        msg += f"🎯 오늘의 타격 (이때 집중하세요)\n"
+        # ⚡ 뱃지에 있는 시간에서 " 타격", "⚡ " 글자를 빼고 "시에"를 붙여서 자연스럽게 만듦
+        time_str = "즉시" if "자유 갱신" in good_item['badge'] else good_item['badge'].replace("⚡ ", "").replace(" 타격", "시에")
+        
+        msg += "🎯 효과적인 광고비 사용 Point!\n"
         msg += f"- 매물: {good_item['spec']}\n"
-        msg += f"- 처방: 현재 경쟁사들이 갱신을 멈춘 상태입니다. {time_str} 집중적으로 재광고하시면 최소 비용으로 오후 내내 상위권 독식이 가능합니다.\n\n"
+        msg += f"- 처방: 이 매물은 현재 고객에게 많이 보여지는 인기 매물입니다. 특히 {time_str} 재광고를 진행하면 가장 오랫동안 상단에 머무를 확률이 높습니다. 이 매물에 집중하세요.\n\n"
+    else:
+        msg += "🎯 효과적인 광고비 사용 Point!\n"
+        msg += "- 현재 집중 타격하기에 적합한 최적의 매물이 대기 중이 아닙니다.\n\n"
 
-    # 만약 방어나 타격 매물이 하나도 없을 경우의 예외 처리
-    if not bad_item and not good_item:
-        msg += "✅ 오늘 소장님의 매물들은 특별한 광고비 낭비나 긴급 타격점 없이 안정적으로 방어되고 있습니다.\n\n"
+    msg += "📊 현재 단지 내 상황 점검\n"
+    msg += f"- 광고비 효율이 떨어지는 매물: {bad_count}개\n"
+    msg += f"- 광고비 효율이 높은 매물: {good_count}개\n\n"
     
-    # [전체 통계 및 업셀링]
-    msg += f"📊 현재 단지 내 상황 점검\n"
-    msg += f"- 불필요하게 광고비 효율이 떨어지는 매물: {bad_count}개\n"
-    msg += f"- 즉시 광고를 태우면 효율이 극대화되는 매물: {good_count}개\n\n"
-    
-    msg += "대시보드에 접속하셔서 나머지 매물도 확인하고 스마트하게 광고 전략을 세워보세요.\n"
+    msg += "대시보드에 접속하셔서 나머지 매물도 확인하고 광고 전략을 세워보세요.\n"
     msg += "매일 일일이 시간 맞춰 광고하기 힘드시다면, 언제든 무료로 '광고 자동화 봇' 서비스까지 이용하시길 권장드립니다.\n\n"
     msg += "오늘도 화이팅하세요!"
     
