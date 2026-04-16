@@ -1025,15 +1025,27 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 
                 item_dict = {"spec": raw_spec, "badge": raw_badge, "rank_str": raw_rank_str}
 
-                if avg_total_rank <= 5.0:
+                # ⭐ 1단계에서 만든 9-Box 매트릭스 엔진 호출!
+                nine_box_grade = get_9box_grade(avg_total_rank, avg_my_rank)
+                ai_diagnosis = get_grade_description(nine_box_grade)
+                
+                # 랭크 텍스트에 AI 진단명(S-상 등)을 추가하여 직관성 극대화
+                html_rank_str = f"내 등급: <span style='font-weight:700; color:#3b82f6;'>{nine_box_grade}</span> <span style='margin:0 8px; color:#cbd5e1;'>|</span> 단지 노출: <span style='font-weight:700; color:#0f172a;'>{avg_total_rank:.1f}위</span> <br><span style='font-size:12px; color:#ef4444;'>{ai_diagnosis}</span>"
+                
+                item_html = f"<div style='padding:16px 25px; border-bottom:1px solid #f1f5f9;'><div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;'><div style='font-size:15px; font-weight:700; color:#334155; line-height:1.4;'>{html_spec}</div><div>{html_badge}</div></div><div style='font-size:13px; color:#64748b;'>{html_rank_str}</div></div>"
+                
+                item_dict = {"spec": raw_spec, "badge": raw_badge, "rank_str": f"[{nine_box_grade}] 노출 {avg_total_rank:.1f}위"}
+
+                # S, A, B 노출 등급(앞글자)에 따라 각각의 박스로 분류
+                if nine_box_grade.startswith("S"):
                     diag_dict["top"] += item_html
                     if len(item_data_for_image["top"]) < 5: item_data_for_image["top"].append(item_dict)
                     summary_stats["top"][0] += 1; summary_stats["top"][1] += avg_total_rank
-                elif avg_total_rank <= 15.0:
+                elif nine_box_grade.startswith("A"):
                     diag_dict["mid"] += item_html
                     if len(item_data_for_image["mid"]) < 5: item_data_for_image["mid"].append(item_dict)
                     summary_stats["mid"][0] += 1; summary_stats["mid"][1] += avg_total_rank
-                else:
+                else: # B등급 (16위 밖)
                     diag_dict["low"] += item_html
                     if len(item_data_for_image["low"]) < 5: item_data_for_image["low"].append(item_dict)
                     summary_stats["low"][0] += 1; summary_stats["low"][1] += avg_total_rank
@@ -1112,9 +1124,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             html += f"{items_html if items_html else empty_msg}</div></div>"
             return html
 
-        st.markdown(build_card_html("상위권 매물 (1~5위)", "🏆", t_cnt, t_avg, "#1d4ed8", "#eff6ff", "#bfdbfe", diag_dict["top"]), unsafe_allow_html=True)
-        st.markdown(build_card_html("중위권 매물 (6~15위)", "🚀", m_cnt, m_avg, "#15803d", "#f0fdf4", "#bbf7d0", diag_dict["mid"]), unsafe_allow_html=True)
-        st.markdown(build_card_html("하위권 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
+        st.markdown(build_card_html("S급 노출 매물 (1~5위)", "🏆", t_cnt, t_avg, "#1d4ed8", "#eff6ff", "#bfdbfe", diag_dict["top"]), unsafe_allow_html=True)
+        st.markdown(build_card_html("A급 노출 매물 (6~15위)", "🚀", m_cnt, m_avg, "#15803d", "#f0fdf4", "#bbf7d0", diag_dict["mid"]), unsafe_allow_html=True)
+        st.markdown(build_card_html("B급 누락 경고 (16위 밖)", "🚨", l_cnt, l_avg, "#b91c1c", "#fef2f2", "#fecaca", diag_dict["low"]), unsafe_allow_html=True)
 
         # ------------------------------------------------------
         # 📸 [버그 픽스 완료] 완벽한 파이썬 이미지 생성 버튼
