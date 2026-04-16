@@ -15,8 +15,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 from PIL import Image, ImageDraw, ImageFont
 import io
-import datetime
-import streamlit as st
 
 # 1. 시트 접근 권한 설정
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -518,7 +516,7 @@ def generate_kakao_text_message(item_data):
                     good_item = item
 
     # 2. 오늘 날짜 포맷팅
-    today_str = datetime.datetime.now().strftime("%m월 %d일")
+    today_str = datetime.now().strftime("%m월 %d일")
     
     # 3. 텍스트 메세지 조립 (행동 지시형 카톡 브리핑)
     msg = f"소장님, {today_str} TOP RANK AI의 핵심 컨설팅 브리핑입니다.\n\n"
