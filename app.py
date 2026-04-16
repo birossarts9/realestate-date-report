@@ -287,6 +287,50 @@ def process_data(df):
     df['매물묶음키'] = df.apply(make_bundle_key, axis=1)
     return df
 
+# ==========================================================
+# 🧠 [코어 로직] 9-Box 매트릭스 등급 판별 엔진
+# ==========================================================
+def get_9box_grade(avg_total_rank, avg_bundle_rank):
+    """
+    매물의 전체 노출 순위와 묶음 내 순위를 받아 9가지 절대 등급을 반환합니다.
+    """
+    # 1. 전체 노출 등급 (고객에게 보이는 위치)
+    if avg_total_rank <= 5.0:
+        exposure = "S"  # 1~5위 (최상단)
+    elif avg_total_rank <= 15.0:
+        exposure = "A"  # 6~15위 (1페이지 내 노출)
+    else:
+        exposure = "B"  # 16위 밖 (노출 거의 안 됨)
+
+    # 2. 묶음 내 경쟁 등급 (경쟁사 대비 내 위치)
+    if avg_bundle_rank <= 3.0:
+        bundle = "상"  # 1~3위 (접기 없이 바로 보임)
+    elif avg_bundle_rank <= 6.0:
+        bundle = "중"  # 4~6위 (더보기 누르면 상단)
+    else:
+        bundle = "하"  # 7위 밖 (클릭 확률 희박)
+
+    return f"{exposure}-{bundle}"
+
+def get_grade_description(grade):
+    """
+    9-Box 등급에 따른 AI의 직관적인 상태 진단 텍스트를 반환합니다.
+    """
+    desc_map = {
+        "S-상": "🏆 [완벽] 인기 매물 최상단 단독 노출 중 (유지)",
+        "S-중": "🔥 [위험] 인기 매물 1페이지 턱걸이 (상단 타격 필요)",
+        "S-하": "💸 [손실] 인기 매물인데 내 부동산은 안 보임 (집중 타격 요망)",
+        
+        "A-상": "🚀 [우수] 1페이지 방어 성공 (가성비 유지)",
+        "A-중": "⚠️ [주의] 1페이지 중간 위치 (경쟁사 동향 주시)",
+        "A-하": "📉 [누락] 1페이지에 있지만 나는 안 보임 (순위 끌어올리기)",
+        
+        "B-상": "🧊 [빈집] 아무도 안 찾는 매물의 1등 (조건 변경 요망)",
+        "B-중": "💤 [방치] 노출 안 되는 매물의 중간 (광고 보류)",
+        "B-하": "🚨 [최악] 노출 안 되는데 내 순위도 꼴등 (즉시 광고 중단)"
+    }
+    return desc_map.get(grade, "진단 불가")
+
 @st.cache_data(ttl=600, max_entries=1, show_spinner=False)
 def load_server_data():
     current_dir = os.path.dirname(os.path.abspath(__file__))
