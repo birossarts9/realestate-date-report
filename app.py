@@ -482,9 +482,9 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     draw_section_title("실시간 매물 노출 등급", 730)
 
     tiers = [
-        {"t": "상위권 매물 (1~5위)", "c": top_count, "a": top_avg, "color": (29, 78, 216), "bg": (239, 246, 255), "key": "top"},
-        {"t": "중위권 매물 (6~15위)", "c": mid_count, "a": mid_avg, "color": (21, 128, 61), "bg": (240, 253, 244), "key": "mid"},
-        {"t": "하위권 경고 (16위 밖)", "c": low_count, "a": low_avg, "color": (185, 28, 28), "bg": (254, 242, 242), "key": "low"}
+        {"t": "S급 노출 매물 (1~5위)", "c": top_count, "a": top_avg, "color": (29, 78, 216), "bg": (239, 246, 255), "key": "top"},
+        {"t": "A급 노출 매물 (6~15위)", "c": mid_count, "a": mid_avg, "color": (21, 128, 61), "bg": (240, 253, 244), "key": "mid"},
+        {"t": "B급 누락 경고 (16위 밖)", "c": low_count, "a": low_avg, "color": (185, 28, 28), "bg": (254, 242, 242), "key": "low"}
     ]
 
     y_cursor = 800
@@ -536,58 +536,54 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
 
 
 def generate_kakao_text_message(item_data):
-    # 1. A매물 (비인기/경쟁치열 -> 광고중단) 및 B매물 (인기/블루오션 -> 타격/자유갱신) 찾기
     bad_item = None
     bad_count = 0
     good_item = None
     good_count = 0
 
-    # item_data가 {"top": [...], "mid": [...], "low": [...]} 형태라고 가정
     for tier in ["top", "mid", "low"]:
         for item in item_data.get(tier, []):
             badge_text = item.get("badge", "")
+            rank_str = item.get("rank_str", "")
             
-            # 광고 중단해야 할 매물 카운트 및 대표 1개 추출
-            if "중단" in badge_text:
+            # B급이거나 광고 중단 뱃지면 '돈 아낄 곳'으로 분류
+            if "중단" in badge_text or "B급" in rank_str:
                 bad_count += 1
-                if not bad_item:
-                    bad_item = item
+                if not bad_item: bad_item = item
                     
-            # 집중 타격해야 할 매물 카운트 및 대표 1개 추출
-            elif "타격" in badge_text or "자유 갱신" in badge_text:
+            # S급/A급이면서 타격/자유갱신 뱃지면 '돈 쓸 곳'으로 분류
+            elif ("타격" in badge_text or "자유 갱신" in badge_text) and ("S급" in rank_str or "A급" in rank_str):
                 good_count += 1
-                if not good_item:
-                    good_item = item
+                if not good_item: good_item = item
 
-    # 2. 오늘 날짜 포맷팅 (datetime.now() 사용)
     from datetime import datetime
     today_str = datetime.now().strftime("%m월 %d일")
     
-    # 3. 텍스트 메세지 조립 (대표님 원본 템플릿 100% 적용)
     msg = f"대표님, {today_str} TOP RANK AI의 핵심 컨설팅입니다.\n\n"
     
     if bad_item:
         msg += "🚨 광고비 절약 Point!\n"
         msg += f"- 매물: {bad_item['spec']}\n"
-        msg += "- 사유: 이 매물은 현재 고객에게 거의 보여지지 않는 비인기 매물입니다. 지금 재광고를 하셔도 고객에게 보여지지 않습니다. 당분간 이 매물은 광고를 중단하세요.\n\n"
+        msg += "- 사유: 이 매물은 알고리즘 노출 등급이 낮아 광고비만 낭비될 확률이 높습니다. 당분간 광고를 보류하세요.\n\n"
     else:
         msg += "🚨 광고비 절약 Point!\n"
-        msg += "- 현재 광고비가 누수되고 있는 비인기/경쟁 과열 매물은 발견되지 않았습니다.\n\n"
+        msg += "- 현재 광고비가 누수되고 있는 불량 매물은 발견되지 않았습니다.\n\n"
         
     if good_item:
-        # ⚡ 뱃지에 있는 시간에서 " 타격", "⚡ " 글자를 빼고 "시에"를 붙여서 자연스럽게 만듦
-        time_str = "즉시" if "자유 갱신" in good_item['badge'] else good_item['badge'].replace("⚡ ", "").replace(" 타격", "시에")
+        # ⚡ "오후 3시 타격" -> "오후 3시"만 추출해서 오타 없이 자연스럽게 연결
+        clean_time = good_item['badge'].replace("⚡ ", "").replace(" 타격", "")
+        time_str = "지금 즉시" if "자유" in clean_time else f"[{clean_time}]에"
         
         msg += "🎯 효과적인 광고비 사용 Point!\n"
         msg += f"- 매물: {good_item['spec']}\n"
-        msg += f"- 처방: 이 매물은 현재 고객에게 많이 보여지는 인기 매물입니다. 특히 {time_str} 재광고를 진행하면 가장 오랫동안 상단에 머무를 확률이 높습니다. 이 매물에 집중하세요.\n\n"
+        msg += f"- 처방: 네이버 노출 확률이 가장 높은 핵심 매물입니다. {time_str} 재광고를 진행하면 상단에 가장 오래 머무를 수 있습니다. 이 매물에 예산을 집중하세요.\n\n"
     else:
         msg += "🎯 효과적인 광고비 사용 Point!\n"
         msg += "- 현재 집중 타격하기에 적합한 최적의 매물이 대기 중이 아닙니다.\n\n"
 
-    msg += "📊 현재 단지 내 상황 점검\n"
-    msg += f"- 광고비 효율이 떨어지는 매물: {bad_count}개\n"
-    msg += f"- 광고비 효율이 높은 매물: {good_count}개\n\n"
+    msg += "📊 현재 내 매물 노출 현황 요약\n"
+    msg += f"- 예산 보류 요망 (B급/하위권): {bad_count}개\n"
+    msg += f"- 예산 집중 요망 (S,A급/상위권): {good_count}개\n\n"
     
     msg += "대시보드에 접속하셔서 나머지 매물도 확인하고 광고 전략을 세워보세요.\n"
     msg += "매일 일일이 시간 맞춰 광고하기 힘드시다면, 언제든 무료로 '광고 자동화 봇' 서비스까지 이용하시길 권장드립니다.\n\n"
@@ -998,52 +994,42 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
                 # ------------------------------------------------------------------
-                # 💡 [핵심 수정] 뱃지 로직에 심야(00~07시) 유령 트래픽 배제 로직 적용
+                # 💡 [마스터 엔진 교체] 탭 3의 '생존 기반 하이브리드 로직' 적용
                 # ------------------------------------------------------------------
                 if avg_total_rank > 15.0 and comp_renews >= 2:
                     raw_badge = "광고 중단"
                     html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fff1f0; color:#ef4444;'>🚨 {raw_badge}</div>"
                 elif comp_renews > 0:
                     b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                    active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
+                    b_history = t_df[t_df['매물묶음키'] == b_key]
                     
-                    if len(active_hours) <= 1:
-                        best_hour = (active_hours[0] + 1) % 24 if active_hours else 12
-                        # 💡 계산된 시간이 심야면 아침 8시 영업시작 시간으로 고정
-                        if 0 <= best_hour <= 7: best_hour = 8
-                    else:
-                        max_effective_gap = -1
-                        best_hour = 12
-                        
-                        for i in range(len(active_hours)):
-                            curr_h = active_hours[i]
-                            next_h = active_hours[(i + 1) % len(active_hours)]
-                            raw_gap = (next_h - curr_h) % 24
-                            if raw_gap == 0: raw_gap = 24 
+                    hour_scores = {h: 0 for h in range(24)}
+                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts()
+                    
+                    for h in range(24):
+                        if h not in enemy_hours: hour_scores[h] += 30
+                        else: hour_scores[h] -= (enemy_hours[h] * 10)
                             
-                            strike_hour = (curr_h + 1) % 24
+                    good_survivals = b_history[b_history['묶음내순위_숫자'] <= 3]
+                    if not good_survivals.empty:
+                        survival_hours = good_survivals['수집일시'].dt.hour.value_counts()
+                        for h in survival_hours.index:
+                            hour_scores[h] += (survival_hours[h] * 5)
                             
-                            effective_gap = 0
-                            # 💡 00시~07시는 유효 방어 시간 점수에서 아예 제외!
-                            for h in range(strike_hour, strike_hour + raw_gap):
-                                real_h = h % 24
-                                if 8 <= real_h <= 23:
-                                    effective_gap += 1
-                                    
-                            if effective_gap > max_effective_gap:
-                                max_effective_gap = effective_gap
-                                best_hour = strike_hour
-                        
-                        # 💡 최종 채택된 타격 시간조차 심야(00~07시)에 걸려있다면 아침 8시로 밀어버림
-                        if 0 <= best_hour <= 7:
-                            best_hour = 8
+                    for h in range(8): hour_scores[h] = -999 
 
-                    ampm = "오후" if best_hour >= 12 else "오전"
-                    disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                    if disp_h == 0: disp_h = 12 # 0시는 12시로 표기
+                    best_hour = max(hour_scores, key=hour_scores.get)
                     
-                    raw_badge = f"{ampm} {disp_h}시 타격"
-                    html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#eff6ff; color:#3b82f6;'>⚡ {raw_badge}</div>"
+                    if hour_scores[best_hour] > 0:
+                        ampm = "오후" if best_hour >= 12 else "오전"
+                        disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                        if disp_h == 0: disp_h = 12
+                        
+                        raw_badge = f"{ampm} {disp_h}시 타격"
+                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#eff6ff; color:#3b82f6;'>⚡ {raw_badge}</div>"
+                    else:
+                        raw_badge = "수시 방어"
+                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fef3c7; color:#d97706;'>🔥 {raw_badge}</div>"
                 else:
                     raw_badge = "자유 갱신"
                     html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#f0fdf4; color:#10b981;'>✅ {raw_badge}</div>"
