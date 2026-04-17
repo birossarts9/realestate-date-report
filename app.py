@@ -1048,11 +1048,14 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 master_strategy_dict = precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name)
                 
                 if avg_total_rank > 15.0 and comp_renews >= 2:
-                    raw_badge = "광고 중단"
-                    html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fff1f0; color:#ef4444;'>🚨 {raw_badge}</div>"
+                    raw_badge = "🚨 광고 중단"
+                    html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fff1f0; color:#ef4444;'>{raw_badge}</div>"
                 else:
                     # 정답지에서 내 매물키에 맞는 뱃지만 0.001초 만에 꺼내옴
                     cached_badge = master_strategy_dict.get(b_key, "✅ 즉시 자유 갱신")
+                    
+                    # 💡 [버그 픽스] 아까 제가 빼먹었던 코드입니다! 카톡용 텍스트 변수를 여기서 채워줍니다.
+                    raw_badge = cached_badge 
                     
                     if "타격" in cached_badge:
                         html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#eff6ff; color:#3b82f6;'>{cached_badge}</div>"
