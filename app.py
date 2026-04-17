@@ -535,7 +535,7 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     return img_buffer.getvalue()
 
 # ==========================================
-# 💡 [최적화 엔진 추가] 서버가 뻗지 않도록 계산 결과를 1시간 동안 저장(캐싱)해두는 뇌
+# 💡 [최적화 엔진] 서버가 뻗지 않도록 계산 결과를 1시간 동안 저장(캐싱)해두는 뇌
 @st.cache_data(ttl=3600)
 def precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name):
     strategy_dict = {}
@@ -546,28 +546,25 @@ def precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name):
     for b_key in vip_bundles:
         b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
         comp_renews = len(b_boosted)
-        badge_text = "✅ 자유 갱신"  # 💡 '즉시' 제거됨
+        badge_text = "✅ 자유 갱신" 
         
         if comp_renews > 0:
-            enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
+            # 💡 [로직 전면 개편] 단순 빈도(0회)가 아니라, 적의 '마지막 타격 시간'을 찾아서 그 뒤를 덮어씁니다.
+            active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
             
-            # 💡 [버그 픽스 완료] 9시 쏠림을 막기 위해, 영업 황금시간대부터 우선 탐색하도록 순서를 바꿈
-            target_hours = [10, 14, 11, 15, 16, 13, 17, 18, 19, 20, 21, 22, 23, 9] 
-            
-            best_hour = None
-            min_enemy_count = 999
-            
-            for h in target_hours:
-                count = enemy_hours.get(h, 0)
-                if count < min_enemy_count:
-                    min_enemy_count = count
-                    best_hour = h
-                    
-            if min_enemy_count <= 3:
-                ampm = "오후" if best_hour >= 12 else "오전"
-                disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                if disp_h == 0: disp_h = 12
-                badge_text = f"⚡ {ampm} {disp_h}시 타격"
+            if active_hours:
+                last_enemy_hour = active_hours[-1] # 적이 마지막으로 누른 시간
+                
+                # 적의 마지막 타격이 밤 23시라면 덮을 시간이 없으므로 수시 방어
+                if last_enemy_hour == 23:
+                    badge_text = "🔥 수시 방어"
+                else:
+                    # 적의 마지막 타격 '바로 다음 시간'을 우리의 타격 시간으로 설정!
+                    best_hour = last_enemy_hour + 1
+                    ampm = "오후" if best_hour >= 12 else "오전"
+                    disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                    if disp_h == 0: disp_h = 12
+                    badge_text = f"⚡ {ampm} {disp_h}시 타격"
             else:
                 badge_text = "🔥 수시 방어"
                 
