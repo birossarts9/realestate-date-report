@@ -541,19 +541,18 @@ def generate_kakao_text_message(item_data):
     good_item = None
     good_count = 0
 
-    # 1. 9-Box 엔진의 결과를 분석하여 대표 매물 선정
     for tier in ["top", "mid", "low"]:
         for item in item_data.get(tier, []):
             badge_text = item.get("badge", "")
             rank_str = item.get("rank_str", "")
             
             # [돈 아낄 곳] B급이거나 광고 중단 판정을 받은 매물
-            if "중단" in badge_text or "B급" in rank_str:
+            if "중단" in badge_text or "B-" in rank_str:
                 bad_count += 1
                 if not bad_item: bad_item = item
                     
-            # [돈 쓸 곳] S급, A급이면서 타격/수시방어/자유갱신 판정을 받은 매물
-            elif ("타격" in badge_text or "방어" in badge_text or "자유 갱신" in badge_text) and ("S급" in rank_str or "A급" in rank_str):
+            # 💡 [버그 픽스 완료] "S급" 대신 "S-" / "A-" 문자열을 찾도록 수정
+            elif ("타격" in badge_text or "방어" in badge_text or "자유 갱신" in badge_text) and ("S-" in rank_str or "A-" in rank_str):
                 good_count += 1
                 if not good_item: good_item = item
 
@@ -1710,26 +1709,34 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 hour_scores = {h: 0 for h in range(24)}
                 
                 if freq > 0:
-                    # 1. 경쟁사 회피 점수 (경쟁사가 갱신한 시간대 페널티 부여)
+                    # 🌟 0~23시 스코어링 보드 생성
+                    hour_scores = {h: 0 for h in range(24)}
                     enemy_hours = b_boosted['수집일시'].dt.hour.value_counts()
+                    
+                    # 💡 [버그 픽스] 동점 발생 시 8시 쏠림을 막기 위한 골든타임 가산점
+                    prime_hours = [10, 11, 14, 15, 16] 
+                    
+                    # 1. 경쟁사 회피 점수
                     for h in range(24):
                         if h not in enemy_hours:
-                            hour_scores[h] += 30  # 적이 안 누른 깨끗한 시간이면 가산점
+                            hour_scores[h] += 30  # 적이 없는 깨끗한 시간
+                            if h in prime_hours: 
+                                hour_scores[h] += 2  # 황금 시간대면 타이브레이커 가산점
                         else:
-                            hour_scores[h] -= (enemy_hours[h] * 10) # 많이 누른 시간이면 감점
+                            hour_scores[h] -= (enemy_hours[h] * 10) # 적이 누른 시간이면 감점
                             
-                    # 2. 생존 팩트 점수 (과거 7일간 3위 이내로 살아남았던 시간대 추적)
+                    # 2. 생존 팩트 점수
                     good_survivals = b_history[b_history['묶음내순위_숫자'] <= 3]
                     if not good_survivals.empty:
                         survival_hours = good_survivals['수집일시'].dt.hour.value_counts()
                         for h in survival_hours.index:
-                            hour_scores[h] += (survival_hours[h] * 5) # 오래 생존한 시간일수록 가산점
+                            hour_scores[h] += (survival_hours[h] * 5)
                             
-                    # 3. 영업시간 필터링 (00시 ~ 07시 심야 시간은 추천에서 제외)
+                    # 3. 영업시간 필터링 (0~7시는 절대 추천 안 함)
                     for h in range(8):
                         hour_scores[h] = -999 
 
-                    # 가장 점수가 높은 최적의 1시간 도출
+                    # 🏆 가장 점수가 높은 최적의 1시간 도출
                     best_hour = max(hour_scores, key=hour_scores.get)
                     
                     if hour_scores[best_hour] > 0:
@@ -1737,7 +1744,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                         rec_reason = "과거 생존율이 가장 높고 타사 간섭이 적은 확률적 최적 타점입니다."
                     else:
                         rec_time = "🔥 수시 방어"
-                        rec_reason = "알고리즘 롤링과 경쟁사 갱신이 불규칙하여, 특정 시간보다 순위 하락 시 즉각 봇 방어를 권장합니다."
+                        rec_reason = "경쟁이 극심하여 특정 시간 예측이 무의미합니다. 순위 하락 시 즉각적인 봇 방어를 권장합니다."
                 else:
                     rec_time = "✅ 즉시 자유 갱신"
                     rec_reason = "현재 경쟁사가 활동하지 않는 빈집입니다. 언제든 1번만 갱신하면 1등을 유지합니다."
