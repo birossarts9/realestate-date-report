@@ -534,6 +534,46 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     img.save(img_buffer, format="PNG")
     return img_buffer.getvalue()
 
+# ==========================================
+# 💡 [최적화 엔진 추가] 서버가 뻗지 않도록 계산 결과를 1시간 동안 저장(캐싱)해두는 뇌
+@st.cache_data(ttl=3600)
+def precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name):
+    strategy_dict = {}
+    
+    vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
+    vip_bundles = vip_current['매물묶음키'].dropna().unique()
+    
+    for b_key in vip_bundles:
+        b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+        comp_renews = len(b_boosted)
+        badge_text = "✅ 즉시 자유 갱신"
+        
+        if comp_renews > 0:
+            enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
+            target_hours = [h for h in range(9, 24)] # 09~23시 타겟팅
+            
+            best_hour = None
+            min_enemy_count = 999
+            
+            for h in target_hours:
+                count = enemy_hours.get(h, 0)
+                if count < min_enemy_count:
+                    min_enemy_count = count
+                    best_hour = h
+                    
+            if min_enemy_count <= 3:
+                ampm = "오후" if best_hour >= 12 else "오전"
+                disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                if disp_h == 0: disp_h = 12
+                badge_text = f"⚡ {ampm} {disp_h}시 타격"
+            else:
+                badge_text = "🔥 수시 방어"
+                
+        strategy_dict[b_key] = badge_text
+        
+    return strategy_dict
+# ==========================================
+    
 
 def generate_kakao_text_message(item_data):
     bad_item = None
@@ -1003,43 +1043,24 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 avg_my_rank = b_grp.groupby('수집일시')['묶음내순위_숫자'].min().mean()
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
-                # ------------------------------------------------------------------
-                # 💡 [마스터 엔진 롤백] 순수 밀도 기반 빈집 털이 로직 (생존시간 폐기)
-                # ------------------------------------------------------------------
+                # --- [탭 1 교체 시작] ---
+                # 💡 무거운 계산 대신, 메모리에서 정답지(캐싱)를 즉시 불러옵니다.
+                master_strategy_dict = precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name)
+                
                 if avg_total_rank > 15.0 and comp_renews >= 2:
                     raw_badge = "광고 중단"
                     html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fff1f0; color:#ef4444;'>🚨 {raw_badge}</div>"
-                elif comp_renews > 0:
-                    b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
-                    
-                    # 💡 실제 부동산 문의가 활발한 핵심 영업시간만 타겟팅 (점심시간 12시 제외)
-                    target_hours = [10, 11, 13, 14, 15, 16, 17]
-                    
-                    best_hour = None
-                    min_enemy_count = 999
-                    
-                    # 지정된 영업시간 안에서 가장 적들이 안 누른 '빈집 시간'을 찾음
-                    for h in target_hours:
-                        count = enemy_hours.get(h, 0)
-                        if count < min_enemy_count:
-                            min_enemy_count = count
-                            best_hour = h
-                            
-                    # 해당 시간의 경쟁사 갱신이 7일간 3회 이하면 '타격 추천', 너무 빽빽하면 '수시 방어'
-                    if min_enemy_count <= 3:
-                        ampm = "오후" if best_hour >= 12 else "오전"
-                        disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                        if disp_h == 0: disp_h = 12
-                        
-                        raw_badge = f"{ampm} {disp_h}시 타격"
-                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#eff6ff; color:#3b82f6;'>⚡ {raw_badge}</div>"
-                    else:
-                        raw_badge = "수시 방어"
-                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fef3c7; color:#d97706;'>🔥 {raw_badge}</div>"
                 else:
-                    raw_badge = "자유 갱신"
-                    html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#f0fdf4; color:#10b981;'>✅ {raw_badge}</div>"
+                    # 정답지에서 내 매물키에 맞는 뱃지만 0.001초 만에 꺼내옴
+                    cached_badge = master_strategy_dict.get(b_key, "✅ 즉시 자유 갱신")
+                    
+                    if "타격" in cached_badge:
+                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#eff6ff; color:#3b82f6;'>{cached_badge}</div>"
+                    elif "방어" in cached_badge:
+                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fef3c7; color:#d97706;'>{cached_badge}</div>"
+                    else:
+                        html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#f0fdf4; color:#10b981;'>{cached_badge}</div>"
+                # --- [탭 1 교체 끝] ---
 
                 # ------------------------------------------------------------------
 
@@ -1705,33 +1726,20 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 # 🌟 [앙상블 로직] 0~23시 스코어링 보드 생성
                 hour_scores = {h: 0 for h in range(24)}
                 
-                if freq > 0:
-                    # 🌟 [롤백] 순수 밀도 기반 스나이퍼 로직
-                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
-                    
-                    target_hours = [10, 11, 13, 14, 15, 16, 17]
-                    
-                    best_hour = None
-                    min_enemy_count = 999
-                    
-                    for h in target_hours:
-                        count = enemy_hours.get(h, 0)
-                        if count < min_enemy_count:
-                            min_enemy_count = count
-                            best_hour = h
-                    
-                    if min_enemy_count == 0:
-                        rec_time = f"⏰ {best_hour:02d}:00"
-                        rec_reason = "최근 7일간 해당 영업시간에 경쟁사들이 단 한 번도 갱신하지 않은 완벽한 틈새입니다."
-                    elif min_enemy_count <= 3:
-                        rec_time = f"⏰ {best_hour:02d}:00"
-                        rec_reason = f"영업시간 중 경쟁사 방어가 가장 헐거운 틈새입니다. (최근 7일 누적 {min_enemy_count}회)"
-                    else:
-                        rec_time = "🔥 수시 방어"
-                        rec_reason = "영업시간 내내 경쟁사의 갱신 트래픽이 빽빽합니다. 봇을 통한 수시 방어를 권장합니다."
+                # --- [탭 3 교체 시작] ---
+                master_strategy_dict = precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name)
+                cached_badge = master_strategy_dict.get(b_key, "✅ 즉시 자유 갱신")
+                
+                if "타격" in cached_badge:
+                    rec_time = cached_badge
+                    rec_reason = "영업시간 중 경쟁사 방어가 가장 헐거운 틈새입니다."
+                elif "방어" in cached_badge:
+                    rec_time = "🔥 수시 방어"
+                    rec_reason = "영업시간 내내 경쟁사의 갱신 트래픽이 빽빽합니다. 봇을 통한 수시 방어를 권장합니다."
                 else:
                     rec_time = "✅ 즉시 자유 갱신"
                     rec_reason = "현재 경쟁사가 활동하지 않는 빈집입니다. 언제든 1번만 갱신하면 1등을 유지합니다."
+                # --- [탭 3 교체 끝] ---
 
                 battle_data.append({
                     "단지명": mask_text(danji), 
