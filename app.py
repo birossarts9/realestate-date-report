@@ -546,11 +546,13 @@ def precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name):
     for b_key in vip_bundles:
         b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
         comp_renews = len(b_boosted)
-        badge_text = "✅ 즉시 자유 갱신"
+        badge_text = "✅ 자유 갱신"  # 💡 '즉시' 제거됨
         
         if comp_renews > 0:
             enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
-            target_hours = [h for h in range(9, 24)] # 09~23시 타겟팅
+            
+            # 💡 [버그 픽스 완료] 9시 쏠림을 막기 위해, 영업 황금시간대부터 우선 탐색하도록 순서를 바꿈
+            target_hours = [10, 14, 11, 15, 16, 13, 17, 18, 19, 20, 21, 22, 23, 9] 
             
             best_hour = None
             min_enemy_count = 999
@@ -770,14 +772,27 @@ try:
     real_empty_houses = bundle_latest_update[bundle_latest_update['방치시간'] >= 48].copy()
     my_empty = real_empty_houses[real_empty_houses['매물묶음키'].isin(my_bundles)]
     
+    # ------------------------------------------------------------------
+    # 💡 [핵심 버그 픽스] 유령 갱신(Ghost Renewal) 필터링 로직 도입
+    # ------------------------------------------------------------------
     trk = df.sort_values(group_keys + ['수집일시', '전체순위_숫자']).copy()
     trk['이전_확인일자'] = trk.groupby(group_keys)['확인일자'].shift(1)
+    trk['이전_수집일시'] = trk.groupby(group_keys)['수집일시'].shift(1)
+    
+    # 1. 확인일자가 변경된 매물 찾기
     c1 = trk['이전_확인일자'].notna() & (trk['이전_확인일자'] != trk['확인일자']) & trk['확인일자'].notna()
-    boosted_raw = trk[c1]
+    
+    # 2. [방어막] 이전 수집 시간과의 차이가 3시간(180분) 이내인 데이터만 '진짜 갱신'으로 인정
+    trk['수집시간격차_분'] = (trk['수집일시'] - trk['이전_수집일시']).dt.total_seconds() / 60.0
+    c2 = trk['수집시간격차_분'] <= 180.0
+    
+    # 3. 두 조건을 모두 만족하는 100% 순도 높은 갱신 팩트만 타격 엔진으로 보냄
+    boosted_raw = trk[c1 & c2]
+    
     boosted_raw = boosted_raw[(boosted_raw['수집일시'] >= start_dt) & (boosted_raw['수집일시'] <= end_dt)]
     boosted_df = boosted_raw[boosted_raw['왜곡영역'] == False].copy()
     
-    # 👇 [추가할 코드] 경쟁사 갱신 데이터도 현재 고객의 타겟 단지 안에서만 찾도록 자물쇠를 채웁니다!
+    # 👇 경쟁사 갱신 데이터도 현재 고객의 타겟 단지 안에서만 찾도록 자물쇠를 채웁니다!
     if target_complexes:
         boosted_df = boosted_df[boosted_df['단지명'].isin(target_complexes)].copy()
     
@@ -996,11 +1011,11 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
     selected_menu = st.radio(
         "메뉴 선택",
         [
-            "📊 오늘의 AI 성과 (핵심 요약)", 
+            "📊 마스터 대시보드",  # 💡 이름 변경
             "🔍 통합 매물 검색 (심층 분석)", 
             "🎯 내 매물 방어 현황 (액션)", 
             "📡 시장 & 경쟁사 동향 (분석)",
-            "🎯 AI 매물 정밀 진단 (Beta)"  # <-- 여기에 추가!
+            "🎯 AI 매물 정밀 진단 (Beta)" 
         ],
         horizontal=True,
         label_visibility="collapsed"
@@ -1012,9 +1027,9 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             st.session_state['last_logged_menu'] = selected_menu
 
     # ==========================================================
-    # 탭 1. 📊 마스터 대시보드 - 🚀 파이썬 이미지 엔진 완벽 연동본
+    # 탭 1. 📊 마스터 대시보드 
     # ==========================================================
-    if selected_menu == "📊 오늘의 AI 성과 (핵심 요약)":
+    if selected_menu == "📊 마스터 대시보드":  # 💡 조건문 이름도 똑같이 변경
         
         recent_my_df = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)] if 't_df' in locals() else pd.DataFrame()
 
@@ -1151,9 +1166,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 top_df = agg_ms.sort_values('총점수', ascending=False).head(5)
                 top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
                 
-                fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', color_discrete_sequence=['#3182f6'], text='총점수', template='plotly_white')
+                # 💡 [하이라이트 효과] 대표님 부동산은 진한 파란색, 경쟁사들은 연한 회색으로 차별화
+                top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == display_realtor else '#e2e8f0')
+                
+                fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
+                                color='색상', color_discrete_map='identity', 
+                                text='총점수', template='plotly_white')
+                
+                # 텍스트와 배경을 깔끔하게 다듬기
+                fig_ms.update_traces(textposition='outside', textfont=dict(weight='bold', color='#475569'))
                 fig_ms.update_yaxes(autorange="reversed")
-                fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="")
+                fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)')
                 st.plotly_chart(fig_ms, use_container_width=True)
 
         st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
