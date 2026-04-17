@@ -1167,7 +1167,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
                 
                 # 💡 [하이라이트 효과] 대표님 부동산은 진한 파란색, 경쟁사들은 연한 회색으로 차별화
-                top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == display_realtor else '#e2e8f0')
+                cleaned_my_realtor = clean_realtor_name(display_realtor) # 내 이름도 꼬리표를 뗌
+                top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == cleaned_my_realtor else '#e2e8f0')
                 
                 fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
                                 color='색상', color_discrete_map='identity', 
