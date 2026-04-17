@@ -541,18 +541,19 @@ def generate_kakao_text_message(item_data):
     good_item = None
     good_count = 0
 
+    # 1. 9-Box 엔진의 결과를 분석하여 대표 매물 선정
     for tier in ["top", "mid", "low"]:
         for item in item_data.get(tier, []):
             badge_text = item.get("badge", "")
             rank_str = item.get("rank_str", "")
             
-            # B급이거나 광고 중단 뱃지면 '돈 아낄 곳'으로 분류
+            # [돈 아낄 곳] B급이거나 광고 중단 판정을 받은 매물
             if "중단" in badge_text or "B급" in rank_str:
                 bad_count += 1
                 if not bad_item: bad_item = item
                     
-            # S급/A급이면서 타격/자유갱신 뱃지면 '돈 쓸 곳'으로 분류
-            elif ("타격" in badge_text or "자유 갱신" in badge_text) and ("S급" in rank_str or "A급" in rank_str):
+            # [돈 쓸 곳] S급, A급이면서 타격/수시방어/자유갱신 판정을 받은 매물
+            elif ("타격" in badge_text or "방어" in badge_text or "자유 갱신" in badge_text) and ("S급" in rank_str or "A급" in rank_str):
                 good_count += 1
                 if not good_item: good_item = item
 
@@ -561,6 +562,7 @@ def generate_kakao_text_message(item_data):
     
     msg = f"대표님, {today_str} TOP RANK AI의 핵심 컨설팅입니다.\n\n"
     
+    # 2. 절약 브리핑 생성
     if bad_item:
         msg += "🚨 광고비 절약 Point!\n"
         msg += f"- 매물: {bad_item['spec']}\n"
@@ -569,18 +571,27 @@ def generate_kakao_text_message(item_data):
         msg += "🚨 광고비 절약 Point!\n"
         msg += "- 현재 광고비가 누수되고 있는 불량 매물은 발견되지 않았습니다.\n\n"
         
+    # 3. 타격 브리핑 생성 (하이브리드 엔진의 처방에 따라 문맥 자동 변경)
     if good_item:
-        # ⚡ "오후 3시 타격" -> "오후 3시"만 추출해서 오타 없이 자연스럽게 연결
-        clean_time = good_item['badge'].replace("⚡ ", "").replace(" 타격", "")
-        time_str = "지금 즉시" if "자유" in clean_time else f"[{clean_time}]에"
+        badge_val = good_item['badge']
         
+        # 처방 종류별 맞춤 문장 생성
+        if "자유" in badge_val:
+            action_text = "지금 즉시 재광고를 진행하면"
+        elif "수시" in badge_val:
+            action_text = "경쟁이 치열하므로 봇을 통한 수시 방어를 진행하면"
+        else: # "오후 2시 타격" 등 특정 시간이 나온 경우
+            clean_time = badge_val.replace(" 타격", "")
+            action_text = f"[{clean_time}]에 맞추어 재광고를 진행하면"
+            
         msg += "🎯 효과적인 광고비 사용 Point!\n"
         msg += f"- 매물: {good_item['spec']}\n"
-        msg += f"- 처방: 네이버 노출 확률이 가장 높은 핵심 매물입니다. {time_str} 재광고를 진행하면 상단에 가장 오래 머무를 수 있습니다. 이 매물에 예산을 집중하세요.\n\n"
+        msg += f"- 처방: 네이버 노출 확률이 가장 높은 핵심 매물입니다. {action_text} 상단에 가장 오래 머무를 수 있습니다. 이 매물에 예산을 집중하세요.\n\n"
     else:
         msg += "🎯 효과적인 광고비 사용 Point!\n"
         msg += "- 현재 집중 타격하기에 적합한 최적의 매물이 대기 중이 아닙니다.\n\n"
 
+    # 4. 현황판 요약
     msg += "📊 현재 내 매물 노출 현황 요약\n"
     msg += f"- 예산 보류 요망 (B급/하위권): {bad_count}개\n"
     msg += f"- 예산 집중 요망 (S,A급/상위권): {good_count}개\n\n"
