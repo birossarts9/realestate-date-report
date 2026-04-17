@@ -1004,33 +1004,30 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 comp_renews = len(boosted_df[boosted_df['매물묶음키'] == b_key]) if 'boosted_df' in locals() else 0
 
                 # ------------------------------------------------------------------
-                # 💡 [마스터 엔진 교체] 탭 3의 '생존 기반 하이브리드 로직' 적용
+                # 💡 [마스터 엔진 롤백] 순수 밀도 기반 빈집 털이 로직 (생존시간 폐기)
                 # ------------------------------------------------------------------
                 if avg_total_rank > 15.0 and comp_renews >= 2:
                     raw_badge = "광고 중단"
                     html_badge = f"<div style='padding:4px 10px; border-radius:6px; font-size:12px; font-weight:800; white-space:nowrap; letter-spacing:-0.5px; background-color:#fff1f0; color:#ef4444;'>🚨 {raw_badge}</div>"
                 elif comp_renews > 0:
                     b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
-                    b_history = t_df[t_df['매물묶음키'] == b_key]
+                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
                     
-                    hour_scores = {h: 0 for h in range(24)}
-                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts()
+                    # 💡 실제 부동산 문의가 활발한 핵심 영업시간만 타겟팅 (점심시간 12시 제외)
+                    target_hours = [10, 11, 13, 14, 15, 16, 17]
                     
-                    for h in range(24):
-                        if h not in enemy_hours: hour_scores[h] += 30
-                        else: hour_scores[h] -= (enemy_hours[h] * 10)
+                    best_hour = None
+                    min_enemy_count = 999
+                    
+                    # 지정된 영업시간 안에서 가장 적들이 안 누른 '빈집 시간'을 찾음
+                    for h in target_hours:
+                        count = enemy_hours.get(h, 0)
+                        if count < min_enemy_count:
+                            min_enemy_count = count
+                            best_hour = h
                             
-                    good_survivals = b_history[b_history['묶음내순위_숫자'] <= 3]
-                    if not good_survivals.empty:
-                        survival_hours = good_survivals['수집일시'].dt.hour.value_counts()
-                        for h in survival_hours.index:
-                            hour_scores[h] += (survival_hours[h] * 5)
-                            
-                    for h in range(8): hour_scores[h] = -999 
-
-                    best_hour = max(hour_scores, key=hour_scores.get)
-                    
-                    if hour_scores[best_hour] > 0:
+                    # 해당 시간의 경쟁사 갱신이 7일간 3회 이하면 '타격 추천', 너무 빽빽하면 '수시 방어'
+                    if min_enemy_count <= 3:
                         ampm = "오후" if best_hour >= 12 else "오전"
                         disp_h = best_hour if best_hour <= 12 else best_hour - 12
                         if disp_h == 0: disp_h = 12
@@ -1709,42 +1706,29 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 hour_scores = {h: 0 for h in range(24)}
                 
                 if freq > 0:
-                    # 🌟 0~23시 스코어링 보드 생성
-                    hour_scores = {h: 0 for h in range(24)}
-                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts()
+                    # 🌟 [롤백] 순수 밀도 기반 스나이퍼 로직
+                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts().to_dict()
                     
-                    # 💡 [버그 픽스] 동점 발생 시 8시 쏠림을 막기 위한 골든타임 가산점
-                    prime_hours = [10, 11, 14, 15, 16] 
+                    target_hours = [10, 11, 13, 14, 15, 16, 17]
                     
-                    # 1. 경쟁사 회피 점수
-                    for h in range(24):
-                        if h not in enemy_hours:
-                            hour_scores[h] += 30  # 적이 없는 깨끗한 시간
-                            if h in prime_hours: 
-                                hour_scores[h] += 2  # 황금 시간대면 타이브레이커 가산점
-                        else:
-                            hour_scores[h] -= (enemy_hours[h] * 10) # 적이 누른 시간이면 감점
-                            
-                    # 2. 생존 팩트 점수
-                    good_survivals = b_history[b_history['묶음내순위_숫자'] <= 3]
-                    if not good_survivals.empty:
-                        survival_hours = good_survivals['수집일시'].dt.hour.value_counts()
-                        for h in survival_hours.index:
-                            hour_scores[h] += (survival_hours[h] * 5)
-                            
-                    # 3. 영업시간 필터링 (0~7시는 절대 추천 안 함)
-                    for h in range(8):
-                        hour_scores[h] = -999 
-
-                    # 🏆 가장 점수가 높은 최적의 1시간 도출
-                    best_hour = max(hour_scores, key=hour_scores.get)
+                    best_hour = None
+                    min_enemy_count = 999
                     
-                    if hour_scores[best_hour] > 0:
+                    for h in target_hours:
+                        count = enemy_hours.get(h, 0)
+                        if count < min_enemy_count:
+                            min_enemy_count = count
+                            best_hour = h
+                    
+                    if min_enemy_count == 0:
                         rec_time = f"⏰ {best_hour:02d}:00"
-                        rec_reason = "과거 생존율이 가장 높고 타사 간섭이 적은 확률적 최적 타점입니다."
+                        rec_reason = "최근 7일간 해당 영업시간에 경쟁사들이 단 한 번도 갱신하지 않은 완벽한 틈새입니다."
+                    elif min_enemy_count <= 3:
+                        rec_time = f"⏰ {best_hour:02d}:00"
+                        rec_reason = f"영업시간 중 경쟁사 방어가 가장 헐거운 틈새입니다. (최근 7일 누적 {min_enemy_count}회)"
                     else:
                         rec_time = "🔥 수시 방어"
-                        rec_reason = "경쟁이 극심하여 특정 시간 예측이 무의미합니다. 순위 하락 시 즉각적인 봇 방어를 권장합니다."
+                        rec_reason = "영업시간 내내 경쟁사의 갱신 트래픽이 빽빽합니다. 봇을 통한 수시 방어를 권장합니다."
                 else:
                     rec_time = "✅ 즉시 자유 갱신"
                     rec_reason = "현재 경쟁사가 활동하지 않는 빈집입니다. 언제든 1번만 갱신하면 1등을 유지합니다."
