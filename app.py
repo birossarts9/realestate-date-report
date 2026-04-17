@@ -1662,7 +1662,10 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     df_red_show = pd.merge(my_red, bundle_info, on='매물묶음키', how='left')
                     df_red_show['단지명'] = df_red_show['단지명'].apply(mask_text)
                     df_red_show['동/호수'] = df_red_show['동/호수'].apply(mask_text)
-                    st.dataframe(df_red_show[['단지명', '동/호수', '층/타입', '경쟁사_갱신횟수']], use_container_width=True)
+                    
+                    # 💡 [버그 픽스] 옛날 이름(경쟁사_갱신횟수)을 지우고, 새로 만든 '총갱신횟수'와 '일일총갱신'을 깔끔하게 표기합니다.
+                    df_red_show['일일 갱신'] = df_red_show['일일총갱신'].apply(lambda x: f"일 평균 {x:.1f}회")
+                    st.dataframe(df_red_show[['단지명', '동/호수', '층/타입', '총갱신횟수', '일일 갱신']], use_container_width=True)
                 else:
                     st.info("현재 과열된 경쟁 격전지가 없습니다.")
             
