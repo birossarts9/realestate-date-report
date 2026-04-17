@@ -1681,8 +1681,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                     st.info("현재 과열된 경쟁 격전지가 없습니다.")
             
         with act_tab3:
-            st.markdown("#### 매물별 AI 최적 갱신 시간 추천")
-            st.caption("🔍 **[도출 원리]** 해당 매물에 등록한 경쟁사들의 과거 갱신 기록을 분석하여 '가장 많이 갱신한 시간대(최빈값)'를 구한 뒤, 그 광고 집중 기간이 끝나는 직후 시간을 추천합니다.")
+            st.markdown("#### 매물별 AI 최적 갱신 시간 추천 (하이브리드 엔진)")
+            st.caption("🔍 **[도출 원리]** 타사의 갱신 트래픽이 적은 '빈집(기회)' 시간대와, 과거 7일간 실제로 상위권 노출이 가장 길었던 '생존(팩트)' 시간대를 교차 분석하여 확률이 가장 높은 O시를 추천합니다.")
             
             vip_current = t_df[t_df['부동산명'].str.contains(filter_realtor_name, na=False)]
             vip_bundles = vip_current['매물묶음키'].dropna().unique()
@@ -1699,20 +1699,48 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 comp_count = len(latest_b['부동산명'].unique())
                 
                 b_boosted = boosted_df[boosted_df['매물묶음키'] == b_key]
+                freq = len(b_boosted)
                 
-                if len(b_boosted) < 3:
-                    market_status = "⏳ 분석 중"
-                    rec_time = "-"
-                    rec_reason = "패턴 도출을 위한 데이터 부족 (최소 3~5일치 누적 필요)"
-                else:
-                    freq = len(b_boosted)
-                    if freq >= 10: market_status = "🔥 과열 (빈번한 갱신)"
-                    elif freq >= 5: market_status = "⚠️ 보통 (주기적 갱신)"
-                    else: market_status = "💧 안정 (갱신 적음)"
+                if freq >= 10: market_status = "🔥 과열 (빈번한 갱신)"
+                elif freq >= 5: market_status = "⚠️ 보통 (주기적 갱신)"
+                elif freq > 0: market_status = "💧 안정 (갱신 적음)"
+                else: market_status = "🧊 방치됨 (경쟁 없음)"
+                
+                # 🌟 [앙상블 로직] 0~23시 스코어링 보드 생성
+                hour_scores = {h: 0 for h in range(24)}
+                
+                if freq > 0:
+                    # 1. 경쟁사 회피 점수 (경쟁사가 갱신한 시간대 페널티 부여)
+                    enemy_hours = b_boosted['수집일시'].dt.hour.value_counts()
+                    for h in range(24):
+                        if h not in enemy_hours:
+                            hour_scores[h] += 30  # 적이 안 누른 깨끗한 시간이면 가산점
+                        else:
+                            hour_scores[h] -= (enemy_hours[h] * 10) # 많이 누른 시간이면 감점
+                            
+                    # 2. 생존 팩트 점수 (과거 7일간 3위 이내로 살아남았던 시간대 추적)
+                    good_survivals = b_history[b_history['묶음내순위_숫자'] <= 3]
+                    if not good_survivals.empty:
+                        survival_hours = good_survivals['수집일시'].dt.hour.value_counts()
+                        for h in survival_hours.index:
+                            hour_scores[h] += (survival_hours[h] * 5) # 오래 생존한 시간일수록 가산점
+                            
+                    # 3. 영업시간 필터링 (00시 ~ 07시 심야 시간은 추천에서 제외)
+                    for h in range(8):
+                        hour_scores[h] = -999 
+
+                    # 가장 점수가 높은 최적의 1시간 도출
+                    best_hour = max(hour_scores, key=hour_scores.get)
                     
-                    peak_hour = int(b_boosted['수집일시'].dt.hour.mode()[0])
-                    rec_time = f"⏰ {(peak_hour + 1) % 24:02d}:00"
-                    rec_reason = f"경쟁사 주력 타격시간({peak_hour}시) 감지. 이후 시간대 선점 권장"
+                    if hour_scores[best_hour] > 0:
+                        rec_time = f"⏰ {best_hour:02d}:00"
+                        rec_reason = "과거 생존율이 가장 높고 타사 간섭이 적은 확률적 최적 타점입니다."
+                    else:
+                        rec_time = "🔥 수시 방어"
+                        rec_reason = "알고리즘 롤링과 경쟁사 갱신이 불규칙하여, 특정 시간보다 순위 하락 시 즉각 봇 방어를 권장합니다."
+                else:
+                    rec_time = "✅ 즉시 자유 갱신"
+                    rec_reason = "현재 경쟁사가 활동하지 않는 빈집입니다. 언제든 1번만 갱신하면 1등을 유지합니다."
 
                 battle_data.append({
                     "단지명": mask_text(danji), 
@@ -1727,7 +1755,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             if battle_data:
                 battle_df = pd.DataFrame(battle_data)
                 st.dataframe(battle_df[["단지명", "동/호수 및 스펙", "경쟁사 수", "시장 상태", "⭐ 추천 갱신시간", "전략 사유"]], use_container_width=True)
-
+            else:
+                st.info("현재 분석 가능한 관리 매물이 없습니다.")
         with act_tab4:
             st.markdown("#### 🌀 단지별 알고리즘 변동성 진단")
             st.caption("해당 단지에서 네이버 노출 순위가 얼마나 요동치고 있는지 진단합니다.")
