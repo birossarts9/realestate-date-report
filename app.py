@@ -1159,22 +1159,27 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 import plotly.express as px
                 ms_df = ms_counts.copy()
                 ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
+                
+                # 1. 총점수 기준으로 합산 후 완벽하게 내림차순 정렬
                 agg_ms = ms_df.groupby('부동산명_축약')['총점수'].sum().reset_index()
                 top_df = agg_ms.sort_values('총점수', ascending=False).head(5)
+                
                 top_comp_list = [(row.부동산명_축약, row.총점수) for row in top_df.itertuples()]
                 
-                # 💡 [하이라이트 효과] 대표님 부동산은 진한 파란색, 경쟁사들은 연한 회색으로 차별화
-                cleaned_my_realtor = clean_realtor_name(display_realtor) # 내 이름도 꼬리표를 뗌
+                # 2. 색상 지정 (내 부동산은 파란색, 나머지는 연한 회색)
+                cleaned_my_realtor = clean_realtor_name(display_realtor)
                 top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == cleaned_my_realtor else '#e2e8f0')
                 
+                # 3. 차트 생성 (category_orders 속성으로 Y축 정렬 순서를 완벽하게 강제 고정)
                 fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
                                 color='색상', color_discrete_map='identity', 
-                                text='총점수', template='plotly_white')
+                                text='총점수', template='plotly_white',
+                                category_orders={"부동산명_축약": top_df['부동산명_축약'].tolist()[::-1]}) 
                 
-                # 텍스트와 배경을 깔끔하게 다듬기
                 fig_ms.update_traces(textposition='outside', textfont=dict(weight='bold', color='#475569'))
-                fig_ms.update_yaxes(autorange="reversed")
-                fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)')
+                # 불필요한 범례(legend) 제거 및 레이아웃 정리
+                fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
+                
                 st.plotly_chart(fig_ms, use_container_width=True)
 
         st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
