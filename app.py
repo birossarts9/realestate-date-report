@@ -1218,7 +1218,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
                 
                 st.plotly_chart(fig_ms, use_container_width=True)
-
+                
         st.markdown("<br><hr style='margin:10px 0 30px 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
         st.markdown(build_section_header("실시간 매물 등급 및 처방", "🎯"), unsafe_allow_html=True)
 
@@ -1259,25 +1259,29 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 data=report_image_bytes,
                 file_name=f"TOP_RANK_리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
                 mime="image/png",
-                type="primary",
-                use_container_width=True
+                type="primary"
+                # 💡 Warning 제거: use_container_width 삭제 (컬럼 안에 있으므로 자동 정렬됨)
             )
             
-            # 👇 --- 여기서부터 덮어쓰기 하세요 --- 👇
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # 1. 텍스트 메세지를 백그라운드에서 미리 생성
             kakao_msg = generate_kakao_text_message(item_data_for_image)
             
-            # 2. 자바스크립트에서 에러 없이 읽을 수 있도록 JSON 형태로 변환(이스케이프 처리)
             import json
             js_msg = json.dumps(kakao_msg)
             
-            # 3. 원클릭 클립보드 복사를 위한 스마트 HTML+JS 버튼 생성
+            # 💡 버튼 디자인 프리미엄화: 부드러운 그림자, 마우스 오버 시 입체감 부여
             copy_html = f"""
             <div style="text-align: center; padding-top: 5px;">
-                <button id="copyBtn" onclick="copyText()" style="width: 100%; max-width: 500px; padding: 12px 20px; background-color: #ffffff; color: #1e3a8a; border: 2px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 800; transition: all 0.2s ease; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    💬 텍스트 브리핑 메세지 복사하기
+                <button id="copyBtn" onclick="copyText()" 
+                style="width: 100%; max-width: 500px; padding: 14px 20px; 
+                       background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%); 
+                       color: #334155; border: 1px solid #cbd5e1; border-radius: 8px; 
+                       cursor: pointer; font-size: 15px; font-weight: 700; 
+                       transition: all 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                       display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                    텍스트 브리핑 메세지 복사하기
                 </button>
             </div>
             <script>
@@ -1285,23 +1289,20 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 const btn = document.getElementById("copyBtn");
                 const textToCopy = {js_msg};
                 
-                // Streamlit 보안(iframe) 환경에서도 완벽히 작동하는 클립보드 복사 로직
                 const textArea = document.createElement("textarea");
                 textArea.value = textToCopy;
                 document.body.appendChild(textArea);
                 textArea.select();
                 try {{
                     document.execCommand('copy');
-                    // 복사 성공 시 버튼 UI 시각적 피드백
-                    btn.innerText = "✅ 클립보드에 복사되었습니다! (카톡 붙여넣기)";
-                    btn.style.backgroundColor = "#10b981";
+                    btn.innerHTML = "✅ 클립보드에 복사되었습니다! (카톡 붙여넣기)";
+                    btn.style.background = "linear-gradient(180deg, #10b981 0%, #059669 100%)";
                     btn.style.color = "white";
-                    btn.style.borderColor = "#10b981";
-                    // 3초 뒤에 원래 버튼 상태로 복귀
+                    btn.style.borderColor = "#059669";
                     setTimeout(() => {{
-                        btn.innerText = "💬 텍스트 브리핑 메세지 복사하기";
-                        btn.style.backgroundColor = "#ffffff";
-                        btn.style.color = "#1e3a8a";
+                        btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg> 텍스트 브리핑 메세지 복사하기`;
+                        btn.style.background = "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)";
+                        btn.style.color = "#334155";
                         btn.style.borderColor = "#cbd5e1";
                     }}, 3000);
                 }} catch (err) {{
@@ -1313,11 +1314,10 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             </script>
             """
             
-            # 버튼을 화면에 렌더링 (잘리지 않도록 높이 넉넉히 부여)
             import streamlit.components.v1 as components
-            components.html(copy_html, height=80)
-            # 👆 --- 여기까지 --- 👆
-
+            # 💡 Warning 제거: st.components.v1.html 대신 iframe의 srcdoc 속성을 사용하여 경고 원천 차단
+            components.iframe(srcdoc=copy_html, height=80)
+            
         # ------------------------------------------------------
         # 6. [AI 자동 갱신 성과 영역] 
         # ------------------------------------------------------
