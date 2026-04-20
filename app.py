@@ -1160,7 +1160,7 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 ms_df = ms_counts.copy()
                 ms_df['부동산명_축약'] = ms_df['부동산명'].apply(lambda x: mask_text(clean_realtor_name(x), True))
                 
-                # 1. 총점수 기준으로 합산 후 완벽하게 내림차순 정렬
+                # 1. 총점수 기준으로 합산 후 내림차순 정렬
                 agg_ms = ms_df.groupby('부동산명_축약')['총점수'].sum().reset_index()
                 top_df = agg_ms.sort_values('총점수', ascending=False).head(5)
                 
@@ -1170,14 +1170,17 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 cleaned_my_realtor = clean_realtor_name(display_realtor)
                 top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == cleaned_my_realtor else '#e2e8f0')
                 
-                # 3. 차트 생성 (category_orders 속성으로 Y축 정렬 순서를 완벽하게 강제 고정)
+                # 3. 차트 생성
                 fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
                                 color='색상', color_discrete_map='identity', 
-                                text='총점수', template='plotly_white',
-                                category_orders={"부동산명_축약": top_df['부동산명_축약'].tolist()[::-1]}) 
+                                text='총점수', template='plotly_white')
                 
                 fig_ms.update_traces(textposition='outside', textfont=dict(weight='bold', color='#475569'))
-                # 불필요한 범례(legend) 제거 및 레이아웃 정리
+                
+                # 💡 여기가 핵심입니다. y축을 뒤집어서 1등이 맨 위에 오게 강제합니다.
+                fig_ms.update_yaxes(autorange="reversed")
+                
+                # 불필요한 범례 제거 및 레이아웃 깔끔하게 정리
                 fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
                 
                 st.plotly_chart(fig_ms, use_container_width=True)
