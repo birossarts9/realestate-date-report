@@ -1,2 +1,4 @@
 [server]
-fileWatcherType = "auto"
+# Streamlit이 감시하지 않아도 되는 무거운 폴더/파일들을 블랙리스트에 넣어 다이어트시킵니다.
+folderWatchBlacklist = ['venv', '.git', 'logs', 'data', 'node_modules', '__pycache__']
+fileWatcherType = "poll"
