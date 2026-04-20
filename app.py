@@ -549,23 +549,57 @@ def precalculate_ai_strategy(t_df, boosted_df, filter_realtor_name):
         badge_text = "✅ 자유 갱신" 
         
         if comp_renews > 0:
-            # 💡 [로직 전면 개편] 단순 빈도(0회)가 아니라, 적의 '마지막 타격 시간'을 찾아서 그 뒤를 덮어씁니다.
             active_hours = sorted(b_boosted['수집일시'].dt.hour.unique().tolist())
             
-            if active_hours:
-                last_enemy_hour = active_hours[-1] # 적이 마지막으로 누른 시간
-                
-                # 적의 마지막 타격이 밤 23시라면 덮을 시간이 없으므로 수시 방어
-                if last_enemy_hour == 23:
-                    badge_text = "🔥 수시 방어"
-                else:
-                    # 적의 마지막 타격 '바로 다음 시간'을 우리의 타격 시간으로 설정!
-                    best_hour = last_enemy_hour + 1
-                    ampm = "오후" if best_hour >= 12 else "오전"
-                    disp_h = best_hour if best_hour <= 12 else best_hour - 12
-                    if disp_h == 0: disp_h = 12
-                    badge_text = f"⚡ {ampm} {disp_h}시 타격"
+            # 💡 [핵심] 시간대별 트래픽 가중치 (Traffic Weight) 설정
+            # 오전 피크(10~11시), 오후 피크(16~18시)에 높은 점수 부여
+            def get_traffic_weight(h):
+                if 0 <= h <= 8: return 0.0     # 새벽: 트래픽 없음
+                elif 9 <= h <= 11: return 2.0  # 오전 자산가/주부 피크 (2배 가중치)
+                elif 12 <= h <= 13: return 1.5 # 직장인 점심 피크 (1.5배 가중치)
+                elif 16 <= h <= 18: return 2.5 # 퇴근 전 최대 실수요자 피크 (2.5배 가중치)
+                elif 19 <= h <= 23: return 1.5 # 야간 잔여 수요 (1.5배 가중치)
+                else: return 1.0               # 일반 일과 시간 (기본 1배)
+
+            if len(active_hours) == 1:
+                # 적이 1번만 눌렀다면 그 직후를 잡음
+                best_hour = (active_hours[0] + 1) % 24
+                # 생존하는 모든 시간의 가중치 합산 (간단 처리)
+                max_score = 0
+                for h in range(best_hour, 24): max_score += get_traffic_weight(h)
             else:
+                max_score = -1.0
+                best_hour = 12
+                
+                # 적들의 갱신 사이사이 '빈집(Gap)'을 모두 탐색
+                for i in range(len(active_hours)):
+                    curr_h = active_hours[i]
+                    next_h = active_hours[(i + 1) % len(active_hours)]
+                    
+                    raw_gap = (next_h - curr_h) % 24
+                    if raw_gap == 0: raw_gap = 24
+                    
+                    strike_hour = (curr_h + 1) % 24 # 타격 시간 (경쟁사 갱신 직후)
+                    
+                    # 💡 [핵심] 빈집 구간의 트래픽 점수 합산 (Quality * Quantity)
+                    gap_score = 0.0
+                    for h in range(strike_hour, strike_hour + raw_gap):
+                        real_h = h % 24
+                        gap_score += get_traffic_weight(real_h)
+                            
+                    # 가장 점수(가치)가 높은 타점을 승자로 선정
+                    if gap_score > max_score:
+                        max_score = gap_score
+                        best_hour = strike_hour
+            
+            # 유의미한 점수(최소 2점 이상, 예: 일반 시간 2시간 or 피크 시간 1시간)일 때만 추천
+            if max_score >= 2.0:
+                ampm = "오후" if best_hour >= 12 else "오전"
+                disp_h = best_hour if best_hour <= 12 else best_hour - 12
+                if disp_h == 0: disp_h = 12
+                badge_text = f"⚡ {ampm} {disp_h}시 타격"
+            else:
+                # 틈새가 너무 좁거나 트래픽이 죽은 시간이면 수시 방어 체제
                 badge_text = "🔥 수시 방어"
                 
         strategy_dict[b_key] = badge_text
