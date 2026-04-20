@@ -15,6 +15,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 from PIL import Image, ImageDraw, ImageFont
 import io
+import warnings
+warnings.filterwarnings("ignore") # 💡 쓸데없는 Streamlit 경고(Warning) 원천 차단!
 
 # 1. 시트 접근 권한 설정
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -385,101 +387,107 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
     import io
 
     # 1. 도화지 세팅 (매물 5개 기준, 동적 세로 길이 계산)
-    base_height = 820
+    base_height = 850
     for key in ["top", "mid", "low"]:
-        base_height += 85  # 카드 타이틀 여백
+        base_height += 90  # 카드 타이틀 여백
         items = item_data.get(key, [])[:5]
-        base_height += len(items) * 85 if items else 60
+        base_height += len(items) * 95 if items else 80
         base_height += 30  # 카드 하단 여백
 
-    # 💡 가로폭 1000 -> 1200으로 확장
     width = 1200
-    height = base_height + 50
-    img = Image.new('RGB', (width, height), color=(248, 250, 252))
+    height = base_height + 60
+    img = Image.new('RGB', (width, height), color=(248, 250, 252)) # 고급스러운 연한 쿨그레이 배경
     draw = ImageDraw.Draw(img)
 
-    # 폰트 세팅 (나눔고딕 고정)
+    # 폰트 세팅
     try:
         f_title = ImageFont.truetype("NanumGothic.ttf", 52)
         f_desc = ImageFont.truetype("NanumGothic.ttf", 26)
-        f_tier_title = ImageFont.truetype("NanumGothic.ttf", 28)
-        f_tier_num = ImageFont.truetype("NanumGothic.ttf", 44)
-        f_label = ImageFont.truetype("NanumGothic.ttf", 24)
-        f_small = ImageFont.truetype("NanumGothic.ttf", 20)
-        f_badge = ImageFont.truetype("NanumGothic.ttf", 18)
+        f_tier_title = ImageFont.truetype("NanumGothic.ttf", 30)
+        f_tier_num = ImageFont.truetype("NanumGothic.ttf", 46)
+        f_label = ImageFont.truetype("NanumGothic.ttf", 26)
+        f_small = ImageFont.truetype("NanumGothic.ttf", 22)
+        f_badge = ImageFont.truetype("NanumGothic.ttf", 20)
     except:
         f_title = f_desc = f_tier_title = f_tier_num = f_label = f_small = f_badge = ImageFont.load_default()
 
     # ------------------------------------------------------
-    # [헤더 영역] - 늘어난 width에 맞춰 박스 확장
+    # [헤더 영역: 프리미엄 딥블루 라운드 박스]
     # ------------------------------------------------------
-    draw.rounded_rectangle([(40, 40), (width - 40, 240)], radius=25, fill=(37, 99, 235))
+    draw.rounded_rectangle([(40, 40), (width - 40, 250)], radius=30, fill=(30, 58, 138)) 
 
-    # 마스터 대시보드 제목
-    t1 = "마스터 대시보드"
+    t1 = "TOP RANK 마스터 대시보드"
     t1w = draw.textlength(t1, font=f_title)
     draw.text(((width - t1w) / 2, 75), t1, font=f_title, fill=(255, 255, 255))
 
-    # TOP RANK AI 뱃지 (우측 여백 자동 계산)
-    badge_text = "TOP RANK AI"
+    badge_text = "AI REPORT"
     bw = draw.textlength(badge_text, font=f_badge)
-    draw.rounded_rectangle([(width - 40 - bw - 40, 75), (width - 40, 120)], radius=22, fill=(60, 130, 246))
-    draw.text((width - 40 - bw - 20, 86), badge_text, font=f_badge, fill=(255, 255, 255))
+    draw.rounded_rectangle([(width - 40 - bw - 40, 80), (width - 40, 125)], radius=22, fill=(59, 130, 246))
+    draw.text((width - 40 - bw - 20, 91), badge_text, font=f_badge, fill=(255, 255, 255))
 
-    # 서브 텍스트
-    d1 = f"네이버 부동산 실시간 분석 : {realtor_name} 전용 리포트"
-    d2 = "매물 등급별 AI 처방에 맞춰 광고비를 스마트하게 지출하세요."
+    d1 = f"네이버 부동산 실시간 AI 분석 : {realtor_name} 전용 리포트"
+    d2 = "매물 등급별 AI 타점에 맞춰 광고비를 스마트하게 지출하세요."
     d1w = draw.textlength(d1, font=f_desc)
     d2w = draw.textlength(d2, font=f_desc)
-    draw.text(((width - d1w) / 2, 155), d1, font=f_desc, fill=(191, 219, 254))
-    draw.text(((width - d2w) / 2, 195), d2, font=f_desc, fill=(255, 255, 255))
+    draw.text(((width - d1w) / 2, 160), d1, font=f_desc, fill=(191, 219, 254))
+    draw.text(((width - d2w) / 2, 205), d2, font=f_desc, fill=(255, 255, 255))
 
     def draw_section_title(text, y_pos):
         tw = draw.textlength(text, font=f_tier_title)
         draw.text(((width - tw)/2, y_pos), text, font=f_tier_title, fill=(15, 23, 42))
-        draw.rectangle([((width)/2 - 25, y_pos + 45), ((width)/2 + 25, y_pos + 50)], fill=(59, 130, 246))
+        draw.rounded_rectangle([((width)/2 - 35, y_pos + 45), ((width)/2 + 35, y_pos + 51)], radius=3, fill=(59, 130, 246))
 
     # ------------------------------------------------------
-    # [전략 분석 지표] - 박스 너비 450 -> 550으로 확장
+    # [전략 분석 지표: 진짜 바 차트 그래픽 렌더링]
     # ------------------------------------------------------
-    draw_section_title("전략 분석 지표", 290)
+    draw_section_title("전략 분석 지표", 300)
 
     # 좌측 박스 (단지별 순위)
-    draw.rounded_rectangle([(40, 360), (590, 680)], radius=20, outline=(226, 232, 240), width=2)
+    draw.rounded_rectangle([(40, 370), (580, 700)], radius=25, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
     l1 = "단지별 최고 순위"
     l1w = draw.textlength(l1, font=f_label)
-    draw.text((40 + (550 - l1w)/2, 385), l1, font=f_label, fill=(30, 41, 59))
+    draw.text((40 + (540 - l1w)/2, 400), l1, font=f_label, fill=(30, 41, 59))
+    draw.line([(80, 450), (540, 450)], fill=(241, 245, 249), width=2)
 
-    y_off = 435
+    y_off = 475
     if my_ranks_dict:
-        for i, (name, rank) in enumerate(list(my_ranks_dict.items())[:6]):
+        for i, (name, rank) in enumerate(list(my_ranks_dict.items())[:5]):
             r_str = f"{rank}위" if isinstance(rank, int) else str(rank)
-            draw.text((70, y_off), f"{i+1}. {name[:15]}", font=f_small, fill=(71, 85, 105)) # 이름 표시 길이 연장
-            draw.text((560, y_off), r_str, font=f_tier_title, fill=(37, 99, 235), anchor="ra")
-            draw.line([(70, y_off+38), (560, y_off+38)], fill=(241, 245, 249), width=1)
-            y_off += 40
+            draw.text((80, y_off), f"{i+1}. {name[:16]}", font=f_label, fill=(71, 85, 105))
+            draw.text((540, y_off), r_str, font=f_tier_title, fill=(37, 99, 235), anchor="ra")
+            y_off += 45
 
-    # 우측 박스 (시장 점유율)
-    draw.rounded_rectangle([(610, 360), (1160, 680)], radius=20, outline=(226, 232, 240), width=2)
-    l2 = "시장 점유율 TOP 6"
+    # 우측 박스 (시장 점유율 실제 바 그래프)
+    draw.rounded_rectangle([(620, 370), (1160, 700)], radius=25, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
+    l2 = "시장 점유율 TOP 5"
     l2w = draw.textlength(l2, font=f_label)
-    draw.text((610 + (550 - l2w)/2, 385), l2, font=f_label, fill=(30, 41, 59))
+    draw.text((620 + (540 - l2w)/2, 400), l2, font=f_label, fill=(30, 41, 59))
+    draw.line([(660, 450), (1120, 450)], fill=(241, 245, 249), width=2)
 
-    y_off = 435
+    y_off = 475
     if top_comp_list:
-        max_s = max([s for _, s in top_comp_list]) if top_comp_list else 1
-        for i, (name, score) in enumerate(top_comp_list[:6]):
-            draw.text((640, y_off), f"{i+1}. {name[:12]}", font=f_small, fill=(71, 85, 105)) # 이름 표시 길이 연장
-            bar_w = int((score/max_s) * 180) if max_s > 0 else 0 # 바 그래프 길이 비율 조정
-            draw.rounded_rectangle([(840, y_off+3), (840+bar_w, y_off+20)], radius=4, fill=(219, 234, 254))
-            draw.text((1130, y_off), f"{int(score)}점", font=f_small, fill=(30, 41, 59), anchor="ra")
-            draw.line([(640, y_off+38), (1130, y_off+38)], fill=(241, 245, 249), width=1)
-            y_off += 40
+        max_score = max([score for _, score in top_comp_list]) if top_comp_list else 1
+        cleaned_realtor = clean_realtor_name(realtor_name)
+        
+        for i, (name, score) in enumerate(top_comp_list[:5]):
+            is_me = (name == cleaned_realtor)
+            text_color = (37, 99, 235) if is_me else (71, 85, 105)
+            bar_color = (59, 130, 246) if is_me else (226, 232, 240)
+            
+            draw.text((660, y_off), f"{i+1}. {name[:12]}", font=f_label, fill=text_color)
+            
+            # 💡 [그래픽 개선] 조잡한 텍스트 대신 진짜 둥근 사각형 막대를 그립니다.
+            bar_max_width = 180
+            bar_w = int((score / max_score) * bar_max_width) if max_score > 0 else 0
+            draw.rounded_rectangle([(880, y_off+5), (880+bar_w, y_off+25)], radius=10, fill=bar_color)
+            
+            draw.text((1120, y_off), f"{int(score)}점", font=f_label, fill=text_color, anchor="ra")
+            y_off += 45
 
     # ------------------------------------------------------
-    # [실시간 매물 노출 등급] - 레이아웃 충돌 해결
+    # [실시간 매물 노출 등급 리스트]
     # ------------------------------------------------------
-    draw_section_title("실시간 매물 노출 등급", 730)
+    draw_section_title("실시간 매물 노출 등급", 750)
 
     tiers = [
         {"t": "S급 노출 매물 (1~5위)", "c": top_count, "a": top_avg, "color": (29, 78, 216), "bg": (239, 246, 255), "key": "top"},
@@ -487,44 +495,47 @@ def generate_kakao_report_image(realtor_name, top_count, top_avg, mid_count, mid
         {"t": "B급 누락 경고 (16위 밖)", "c": low_count, "a": low_avg, "color": (185, 28, 28), "bg": (254, 242, 242), "key": "low"}
     ]
 
-    y_cursor = 800
+    y_cursor = 830
     for t in tiers:
         items = item_data.get(t["key"], [])[:5]
-        box_h = 85 + (len(items) * 85 if items else 60)
+        box_h = 90 + (len(items) * 95 if items else 80)
 
-        draw.rounded_rectangle([(40, y_cursor), (width - 40, y_cursor + box_h)], radius=16, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
-        draw.rounded_rectangle([(40, y_cursor), (width - 40, y_cursor + 75)], radius=16, fill=t["bg"])
-        draw.text((70, y_cursor + 25), t["t"], font=f_tier_title, fill=t["color"])
+        # 큰 흰색 박스
+        draw.rounded_rectangle([(40, y_cursor), (width - 40, y_cursor + box_h)], radius=20, fill=(255, 255, 255), outline=(226, 232, 240), width=2)
+        # 상단 타이틀 컬러 바 (위쪽만 둥글게)
+        draw.rounded_rectangle([(40, y_cursor), (width - 40, y_cursor + 80)], radius=20, fill=t["bg"])
+        draw.rectangle([(40, y_cursor + 40), (width - 40, y_cursor + 80)], fill=t["bg"]) 
+        
+        draw.text((75, y_cursor + 25), t["t"], font=f_tier_title, fill=t["color"])
 
         count_text = f"전체 {t['c']}건 중 5건 (단지 평균 {t['a']}위)" if t['c'] > 5 else f"{t['c']}건 (단지 평균 {t['a']}위)"
-        cw = draw.textlength(count_text, font=f_small)
-        # 우측 정렬 좌표 자동화
-        draw.text((width - 70 - cw, y_cursor + 30), count_text, font=f_small, fill=(15, 23, 42))
+        cw = draw.textlength(count_text, font=f_label)
+        draw.text((width - 75 - cw, y_cursor + 27), count_text, font=f_label, fill=(71, 85, 105))
 
-        c_y = y_cursor + 75
+        c_y = y_cursor + 80
         if not items:
-            none_txt = "해당 매물이 없습니다."
+            none_txt = "해당 등급의 매물이 없습니다."
             nw = draw.textlength(none_txt, font=f_label)
             draw.text(((width - nw)/2, c_y + 25), none_txt, font=f_label, fill=(148, 163, 184))
         else:
             for item in items:
-                draw.text((70, c_y + 20), item["spec"], font=f_label, fill=(51, 65, 85))
+                draw.text((75, c_y + 20), item["spec"], font=f_label, fill=(30, 41, 59))
 
                 clean_badge = item["badge"].replace("🚨 ", "").replace("⚡ ", "").replace("✅ ", "")
                 bw = draw.textlength(clean_badge, font=f_badge)
 
-                bg_color = (254, 226, 226) if "중단" in clean_badge else ((219, 234, 254) if "타격" in clean_badge else (220, 252, 231))
+                bg_color = (254, 226, 226) if "중단" in clean_badge else ((239, 246, 255) if "타격" in clean_badge else (240, 253, 244))
                 text_color = (220, 38, 38) if "중단" in clean_badge else ((37, 99, 235) if "타격" in clean_badge else (22, 163, 74))
 
-                # 뱃지 우측 밀착 정렬 (동적 너비 할당)
-                draw.rounded_rectangle([(width - 70 - bw - 24, c_y + 16), (width - 70, c_y + 44)], radius=8, fill=bg_color)
-                draw.text((width - 70 - bw - 12, c_y + 24), clean_badge, font=f_badge, fill=text_color)
+                # AI 처방 뱃지 (입체감 있는 디자인)
+                draw.rounded_rectangle([(width - 75 - bw - 30, c_y + 15), (width - 75, c_y + 45)], radius=8, fill=bg_color)
+                draw.text((width - 75 - bw - 15, c_y + 23), clean_badge, font=f_badge, fill=text_color)
 
-                draw.text((70, c_y + 55), item["rank_str"], font=f_small, fill=(100, 116, 139))
-                draw.line([(40, c_y + 85), (width - 40, c_y + 85)], fill=(241, 245, 249), width=1)
-                c_y += 85
+                draw.text((75, c_y + 60), item["rank_str"].replace("<br>", " "), font=f_small, fill=(100, 116, 139))
+                draw.line([(40, c_y + 95), (width - 40, c_y + 95)], fill=(241, 245, 249), width=1)
+                c_y += 95
 
-        y_cursor += box_h + 30
+        y_cursor += box_h + 35
 
     footer = "본 리포트는 TOP RANK AI에 의해 실시간 생성되었습니다."
     fw = draw.textlength(footer, font=f_small)
@@ -1204,17 +1215,16 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 cleaned_my_realtor = clean_realtor_name(display_realtor)
                 top_df['색상'] = top_df['부동산명_축약'].apply(lambda x: '#3b82f6' if x == cleaned_my_realtor else '#e2e8f0')
                 
-                # 3. 차트 생성
+                # 3. 차트 생성 (💡 color 속성을 빼서 그룹 쪼개짐 방지!)
                 fig_ms = px.bar(top_df, x='총점수', y='부동산명_축약', orientation='h', 
-                                color='색상', color_discrete_map='identity', 
                                 text='총점수', template='plotly_white')
                 
-                fig_ms.update_traces(textposition='outside', textfont=dict(weight='bold', color='#475569'))
+                # 💡 차트를 다 그린 후, 막대기 색상만 일괄적으로 입혀줍니다.
+                fig_ms.update_traces(marker_color=top_df['색상'], textposition='outside', textfont=dict(weight='bold', color='#475569'))
                 
-                # 💡 여기가 핵심입니다. y축을 뒤집어서 1등이 맨 위에 오게 강제합니다.
+                # y축을 뒤집어서 1등이 맨 위에 오게 강제합니다.
                 fig_ms.update_yaxes(autorange="reversed")
                 
-                # 불필요한 범례 제거 및 레이아웃 깔끔하게 정리
                 fig_ms.update_layout(height=210, margin=dict(t=0, b=0, l=0, r=0), xaxis_visible=False, yaxis_title="", plot_bgcolor='rgba(0,0,0,0)', showlegend=False)
                 
                 st.plotly_chart(fig_ms, use_container_width=True)
@@ -1263,14 +1273,30 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
                 # 💡 Warning 제거: use_container_width 삭제 (컬럼 안에 있으므로 자동 정렬됨)
             )
             
+        st.markdown("<br>", unsafe_allow_html=True)
+        selected_days = max(1, (end_dt.date() - start_dt.date()).days + 1)
+        ranks_dict_val = my_ranks_dict if 'my_ranks_dict' in locals() else {}
+        
+        report_image_bytes = generate_kakao_report_image(
+            display_realtor, t_cnt, t_avg, m_cnt, m_avg, l_cnt, l_avg, selected_days, ranks_dict_val, top_comp_list, item_data_for_image
+        )
+        
+        c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
+        with c_btn2:
+            st.download_button(
+                label="📸 실시간 작전 리포트 다운로드 (카톡 전송용)",
+                data=report_image_bytes,
+                file_name=f"TOP_RANK_리포트_{display_realtor}_{datetime.now().strftime('%m%d')}.png",
+                mime="image/png",
+                type="primary"
+            )
+            
             st.markdown("<br>", unsafe_allow_html=True)
             
             kakao_msg = generate_kakao_text_message(item_data_for_image)
-            
             import json
             js_msg = json.dumps(kakao_msg)
             
-            # 💡 버튼 디자인 프리미엄화: 부드러운 그림자, 마우스 오버 시 입체감 부여
             copy_html = f"""
             <div style="text-align: center; padding-top: 5px;">
                 <button id="copyBtn" onclick="copyText()" 
@@ -1315,8 +1341,8 @@ TOP RANK AI가 분석한 오늘의 시장 핵심 전략을 보고드립니다.
             """
             
             import streamlit.components.v1 as components
-            # 💡 Warning 제거: st.components.v1.html 대신 iframe의 srcdoc 속성을 사용하여 경고 원천 차단
-            components.iframe(srcdoc=copy_html, height=80)
+            # 💡 [치명적 오류 픽스] srcdoc 대신 원래의 html 함수를 사용합니다!
+            components.html(copy_html, height=80)
             
         # ------------------------------------------------------
         # 6. [AI 자동 갱신 성과 영역] 
