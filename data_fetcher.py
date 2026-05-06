@@ -9,7 +9,7 @@ import numpy as np
 
 # 스크립트 위치 기준 절대 경로 (실행 cwd와 무관)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(_BASE_DIR, "data")
+DATA_DIR = _BASE_DIR  # "data" 폴더 지정을 빼고 최상위 폴더로 바로 연결
 import pandas as pd
 import streamlit as st
 from oauth2client.service_account import ServiceAccountCredentials
