@@ -1602,9 +1602,116 @@ def main() -> None:
                 unsafe_allow_html=True,
             )
 
+            # ==========================================
+            # [추가] 🚀 오늘의 실시간 감시망 (Live Tracker)
+            # ==========================================
+            kst_now = datetime.now(timezone(timedelta(hours=9)))
+            kst_today = kst_now.date()
+
+            # 현재 선택된 단지의 데이터셋 로드 (현재 코드 딕셔너리 키에 맞게 매핑)
+            comp_data = {
+                "ms_df": complex_data.get("ms", pd.DataFrame()),
+                "comp_df": complex_data.get("comp", pd.DataFrame()),
+                "act_df": complex_data.get("action", pd.DataFrame()),
+            }
+            _ms_df = comp_data.get("ms_df", pd.DataFrame())
+            _comp_df = comp_data.get("comp_df", pd.DataFrame())
+            _act_df = comp_data.get("act_df", pd.DataFrame())
+
+            # 원본 tl_plot 보존을 위해 복사본 생성
+            if "tl_plot" in locals() and not tl_plot.empty:
+                display_tl_df = tl_plot.copy()
+            else:
+                display_tl_df = pd.DataFrame()
+
+            if not _ms_df.empty and not _comp_df.empty and not display_tl_df.empty:
+                # 1. 🎯 1순위 타겟 (현재 권력자: 순위 Top 3)
+                top3_realtors = _ms_df.sort_values("총점수", ascending=False).head(3)["부동산명"].tolist()
+
+                # 2. 🎯 2순위 타겟 (잠재적 위협: 고빈도 갱신자)
+                # 주 3회 이상(매일, 2일에, 3~4일에) 갱신하는 부동산 추출
+                high_freq_realtors = _comp_df[
+                    _comp_df["갱신빈도"].astype(str).str.contains("매일|2일에|3~4일에", na=False, regex=True)
+                ]["부동산명"].tolist()
+
+                target_status = {}
+                # 중복을 제거한 핵심 타겟 리스트
+                for r in set(top3_realtors + high_freq_realtors):
+                    # 타겟이 유령매물(활동 없음)인 경우 감시망에서 제외
+                    freq_val = _comp_df.loc[_comp_df["부동산명"] == r, "갱신빈도"].values
+                    if len(freq_val) > 0 and "활동 없음" in str(freq_val[0]):
+                        continue
+
+                    # 오늘 갱신 완료 여부 확인
+                    today_renewed = False
+                    if not _act_df.empty and "부동산명" in _act_df.columns:
+                        if "Start" in _act_df.columns:
+                            today_acts = _act_df[(_act_df["부동산명"] == r)]
+                            if not today_acts.empty:
+                                # timezone naive/aware 에러 방지
+                                today_acts_dates = pd.to_datetime(today_acts["Start"], errors="coerce").dt.tz_localize(
+                                    None
+                                ).dt.date
+                                if (today_acts_dates == kst_today).any():
+                                    today_renewed = True
+                        elif "최근 갱신 시각" in _act_df.columns:
+                            today_acts = _act_df[_act_df["부동산명"] == r].copy()
+                            if not today_acts.empty:
+                                ts = pd.to_datetime(today_acts["최근 갱신 시각"], format="%m/%d %H:%M", errors="coerce")
+                                if ts.notna().any():
+                                    today_renewed = (ts.dt.date == kst_today).any()
+
+                    # 뱃지 부여 로직 (Top3가 우선)
+                    if r in top3_realtors:
+                        target_status[r] = {"icon": "👑", "renewed": today_renewed, "type": "상위권"}
+                    else:
+                        target_status[r] = {"icon": "🔥", "renewed": today_renewed, "type": "고빈도"}
+
+                # 3. 👀 실시간 감시망 UI 출력
+                if target_status:
+                    st.markdown("---")
+                    st.markdown(f"##### 👀 오늘의 실시간 감시망 (기준: {kst_now.strftime('%H:%M')})")
+                    st.caption("현재 내 순위를 위협하는 '핵심 경쟁사'들의 오늘 자 갱신 현황입니다.")
+
+                    # 뱃지를 열(Columns)로 배치하여 깔끔하게 표시
+                    cols = st.columns(min(len(target_status), 4))
+                    col_idx = 0
+
+                    # 갱신 완료된 곳을 뒤로, 대기중인 곳을 앞으로 정렬 (직관성 확보)
+                    sorted_targets = sorted(target_status.items(), key=lambda x: x[1]["renewed"])
+
+                    for r, info in sorted_targets:
+                        if info["renewed"]:
+                            status_html = "<span style='color:#16a34a; font-weight:bold;'>🟢 갱신 완료</span>"
+                        else:
+                            status_html = "<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span>"
+
+                        cols[col_idx % len(cols)].markdown(
+                            f"<div style='padding:10px; border:1px solid #e2e8f0; border-radius:8px; background-color:#f8fafc; margin-bottom:10px;'>"
+                            f"<div style='font-size:0.85em; color:#64748b; margin-bottom:3px;'>{info['icon']} {info['type']}</div>"
+                            f"<div style='font-weight:bold; font-size:1.05em; margin-bottom:5px;'>{r}</div>"
+                            f"{status_html}"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+                        col_idx += 1
+                    st.markdown("---")
+
+                # 4. 타임라인 Y축(Task) 이름표 업데이트
+                def _apply_icon(name):
+                    if name in target_status:
+                        return f"{target_status[name]['icon']} {name}"
+                    return name
+
+                if "Task" in display_tl_df.columns:
+                    display_tl_df["Task"] = display_tl_df["Task"].apply(_apply_icon)
+
             # 3. 차트 기본 렌더링 (툴팁: 내 순위·1위 부동산 마스킹, 호버 프레임은 캐시)
             tl_hover = _build_plotly_hover_frame(
-                tl_plot, IS_DEMO_MODE, filter_realtor_name, display_realtor
+                display_tl_df if not display_tl_df.empty else tl_plot,
+                IS_DEMO_MODE,
+                filter_realtor_name,
+                display_realtor,
             )
             tl_hover = tl_hover[tl_hover["Task"].isin(task_order)].copy()
             for _c in ("Task", "State", "_hv_s", "_hv_f", "_hv_st", "_hv_rank", "_hv_extra"):
