@@ -1144,6 +1144,41 @@ def precompute_all_complexes_data(
                 .sort_values("총횟수", ascending=False)
             )
 
+            # [추가] 주력 갱신 시간 및 예측 신뢰도 계산
+            def _get_pattern_details(group):
+                s_dt = pd.to_datetime(group["수집일시"], errors="coerce").dropna()
+                total = len(s_dt)
+                if total == 0:
+                    return pd.Series({"주력 갱신 시간": "-", "예측 신뢰도": "-"})
+
+                hours = s_dt.dt.hour
+                top_hours = hours.value_counts().head(2)  # 상위 1~2개 시간대 추출
+
+                peak_str = ", ".join([f"{int(h):02d}시" for h in top_hours.index])
+                rel_pct = (top_hours.sum() / total) * 100
+
+                if rel_pct >= 60:
+                    rel_str = f"🟢 높음 ({rel_pct:.0f}%)"
+                elif rel_pct >= 30:
+                    rel_str = f"🟡 보통 ({rel_pct:.0f}%)"
+                else:
+                    rel_str = f"🔴 낮음 ({rel_pct:.0f}%)"
+
+                return pd.Series({"주력 갱신 시간": peak_str, "예측 신뢰도": rel_str})
+
+            pattern_df = (
+                b_df_comp.dropna(subset=["부동산명_정제"])
+                .groupby("부동산명_정제")
+                .apply(_get_pattern_details, include_groups=False)
+                .reset_index()
+                .rename(columns={"부동산명_정제": "부동산명"})
+            )
+
+            # 기존 comp_df에 계산된 패턴 데이터 병합
+            comp_df = comp_df.merge(pattern_df, on="부동산명", how="left").sort_values(
+                "총횟수", ascending=False
+            )
+
         results[comp] = {"action": act_df, "timeline": tl_df, "ms": ms_df, "comp": comp_df}
 
     elapsed = time.time() - start_t
@@ -1834,7 +1869,7 @@ def main() -> None:
                 )
             )
             st.dataframe(
-                comp_df[["부동산명", "총횟수", "갱신빈도"]],
+                comp_df[["부동산명", "총횟수", "갱신빈도", "주력 갱신 시간", "예측 신뢰도"]],
                 use_container_width=True,
                 hide_index=True,
             )
