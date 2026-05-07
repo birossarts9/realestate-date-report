@@ -1072,6 +1072,8 @@ def precompute_all_complexes_data(
         trk["max_확인일자_dt"] = trk.groupby("트랙키")["확인일자_dt"].cummax()
         trk["prev_max_dt"] = trk.groupby("트랙키")["max_확인일자_dt"].shift(1)
         c1 = (
+            trk["prev_max_dt"].notna()
+            &
             trk["확인일자_dt"].notna()
             & (trk["확인일자_dt"] == trk["max_확인일자_dt"])
             & (trk["max_확인일자_dt"] != trk["prev_max_dt"])
@@ -1085,24 +1087,32 @@ def precompute_all_complexes_data(
             ms_df = pd.DataFrame(columns=["부동산명", "매물건수", "총점수"])
             comp_df = pd.DataFrame(columns=["부동산명", "총횟수", "갱신빈도"])
         else:
-            uniq = t_df.drop_duplicates(
-                subset=["단지명", "동/호수", "층/타입", "거래방식", "가격", "부동산명"]
-            ).copy()
-            uniq["묶음_총개수"] = uniq.groupby(
-                ["단지명", "동/호수", "층/타입", "거래방식", "가격"]
-            )["부동산명"].transform("count")
-            rank_num = pd.to_numeric(
-                uniq["묶음내순위"]
+            t_df_ms = t_df.copy()
+            t_df_ms["부동산명_정제"] = t_df_ms["부동산명"].apply(clean_realtor_name)
+            t_df_ms["_순위정렬"] = pd.to_numeric(
+                t_df_ms["묶음내순위"]
                 .astype(str)
                 .str.replace("단독", "1", regex=False)
                 .str.replace(r"[^0-9]", "", regex=True),
                 errors="coerce",
             ).fillna(999)
-            uniq["파워점수"] = 10 + (10 / rank_num) + (uniq["묶음_총개수"] * 0.1)
+
+            # [수정] 순위가 높은(숫자가 작은) 순으로 정렬 후 정제된 부동산명 기준으로 중복 제거
+            uniq = t_df_ms.sort_values("_순위정렬").drop_duplicates(
+                subset=["단지명", "동/호수", "층/타입", "거래방식", "가격", "부동산명_정제"]
+            ).copy()
+
+            uniq["묶음_총개수"] = uniq.groupby(
+                ["단지명", "동/호수", "층/타입", "거래방식", "가격"]
+            )["부동산명_정제"].transform("count")
+
+            uniq["파워점수"] = 10 + (10 / uniq["_순위정렬"]) + (uniq["묶음_총개수"] * 0.1)
+
             ms_df = (
-                uniq.groupby("부동산명", dropna=False)
-                .agg(매물건수=("부동산명", "count"), 총점수=("파워점수", "sum"))
+                uniq.groupby("부동산명_정제", dropna=False)
+                .agg(매물건수=("부동산명_정제", "count"), 총점수=("파워점수", "sum"))
                 .reset_index()
+                .rename(columns={"부동산명_정제": "부동산명"})
             )
             ms_df["총점수"] = ms_df["총점수"].round().astype(int)
 
