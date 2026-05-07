@@ -1062,21 +1062,33 @@ def precompute_all_complexes_data(
             s = s.str.replace(">", ")", regex=False)
             t_df[col] = s
         trk = build_listing_tracking_keys(t_df, time_col="수집일시")
-        trk = trk.sort_values(["트랙키", "수집일시"], ascending=[True, True]).copy()
-        # [초고속 파싱] apply(수작업) 대신 C-엔진 벡터 연산
-        conf_s = trk["확인일자"].astype(str).str.strip()
+        # 1. 부동산명 정제 및 날짜 점(.) 찌꺼기 제거
+        trk["부동산명_정제"] = trk["부동산명"].apply(clean_realtor_name)
+        conf_s = trk["확인일자"].astype(str).str.strip().str.rstrip(".")
         trk["확인일자_dt"] = pd.to_datetime(conf_s, format="%y.%m.%d", errors="coerce")
         na_m = trk["확인일자_dt"].isna() & (conf_s != "") & (conf_s.str.lower() != "nan")
         if na_m.any():
             trk.loc[na_m, "확인일자_dt"] = pd.to_datetime(conf_s[na_m], errors="coerce")
-        trk["max_확인일자_dt"] = trk.groupby("트랙키")["확인일자_dt"].cummax()
-        trk["prev_max_dt"] = trk.groupby("트랙키")["max_확인일자_dt"].shift(1)
+
+        # 2. 매물을 특정하는 절대 기준 세팅
+        grp_keys = ["부동산명_정제", "단지명", "동/호수", "층/타입", "거래방식", "가격", "노출형태"]
+
+        # [핵심 버그 수정] 빈칸(NaN)이 있으면 Pandas가 데이터를 통삭제해버리므로 안전하게 텍스트로 채움
+        for c in grp_keys:
+            trk[c] = trk[c].fillna("미상")
+
+        trk = trk.sort_values(grp_keys + ["수집일시"])
+
+        # 3. 각 개별 매물별로 확인일자 갱신 이력 추적 (dropna=False 이중 방어)
+        trk["max_확인일자_dt"] = trk.groupby(grp_keys, dropna=False)["확인일자_dt"].cummax()
+        trk["prev_max_dt"] = trk.groupby(grp_keys, dropna=False)["max_확인일자_dt"].shift(1)
+
+        # 4. 최초 수집이 아니면서 확인일자가 실제로 변경된 경우만 갱신으로 카운트
         c1 = (
-            trk["prev_max_dt"].notna()
-            &
             trk["확인일자_dt"].notna()
             & (trk["확인일자_dt"] == trk["max_확인일자_dt"])
             & (trk["max_확인일자_dt"] != trk["prev_max_dt"])
+            & trk["prev_max_dt"].notna()
         )
         boosted_df = trk[c1].copy()
         act_df, tl_df = compute_prime_action_df(trk, boosted_df, realtor_name)
