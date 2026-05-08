@@ -1404,9 +1404,8 @@ def main() -> None:
     ms_df = complex_data.get("ms", pd.DataFrame())
     comp_df = complex_data.get("comp", pd.DataFrame())
 
-    tab_main, tab_market = st.tabs(["🛡️ 오늘의 AI 방어 현황", "📡 시장 & 경쟁사 동향"])
-
-    with tab_main:
+    # 탭을 제거하고 메인 화면 단일 레이아웃으로 통합
+    if True:
         tl_plot, day_start, day_end = _clip_timeline_to_chart_day(timeline_df, e_d)
         if tl_plot.empty:
             action_df_48h = _empty_action_df()
@@ -1629,11 +1628,20 @@ def main() -> None:
 
             if active_tasks:
                 st.markdown("---")
-                st.markdown(f"##### 👀 실시간 타점 감시망 (기준: {kst_now.strftime('%H:%M')})")
+                # [수정] 제목 폰트 확대
+                st.markdown(
+                    f"<h3 style='color:#1E293B; margin-bottom: 0px;'>👀 실시간 타점 감시망 <span style='font-size: 1.2rem; color: #64748B;'>(기준: {kst_now.strftime('%H:%M')})</span></h3>",
+                    unsafe_allow_html=True,
+                )
 
-                # 1. 감시할 매물 선택 드롭다운
+                # [수정] 선택창 라벨 폰트 확대 (기본 라벨은 숨김)
+                st.markdown(
+                    "<div style='font-size: 1.15rem; font-weight: 700; color: #334155; margin-top: 18px; margin-bottom: -10px;'>🎯 감시할 내 매물을 선택하세요:</div>",
+                    unsafe_allow_html=True,
+                )
                 sel_task = st.selectbox(
-                    "🎯 감시할 내 매물을 선택하세요:",
+                    label="감시할 매물 선택",
+                    label_visibility="collapsed",
                     options=active_tasks,
                     key="live_tracker_task_select",
                 )
@@ -1675,7 +1683,7 @@ def main() -> None:
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
                         if r_uni == my_unified:
-                            continue  # 나는 감시 제외
+                            continue
 
                         r_original = sub_df[sub_df["부동산명_통합"] == r_uni]["부동산명"].iloc[-1]
                         r_disp = mask_text(
@@ -1686,7 +1694,15 @@ def main() -> None:
                         )
                         is_today = r_uni in today_renewed
 
-                        # [추가] 주력 갱신 시간 및 마지노선 계산
+                        # [추가] comp_df에서 광고 빈도수 가져오기
+                        if not comp_df.empty and "부동산명" in comp_df.columns and "갱신빈도" in comp_df.columns:
+                            comp_match = comp_df.copy()
+                            comp_match["부동산명_통합"] = comp_match["부동산명"].apply(clean_realtor_name)
+                            freq_val = comp_match.loc[comp_match["부동산명_통합"] == r_uni, "갱신빈도"].values
+                        else:
+                            freq_val = []
+                        freq_str = freq_val[0] if len(freq_val) > 0 else "정보 없음"
+
                         target_acts = sub_df[
                             (sub_df["부동산명_통합"] == r_uni)
                             & sub_df["확인일자_변동"]
@@ -1712,12 +1728,14 @@ def main() -> None:
                             state_html = f"<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span><br><span style='font-size:0.8rem; color:#64748b;'>주의: 평소 {peak_str} 집중 갱신</span>"
                             is_waiting = True
                         else:
-                            state_html = f"<span style='color:#2563eb; font-weight:bold;'>🟢 휴무 예상</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 주력시간({peak_str}) 지남</span>"
+                            # [수정] 휴무 예상 -> 광고 계획 없는 날
+                            state_html = f"<span style='color:#2563eb; font-weight:bold;'>🟢 광고 계획 없는 날</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 주력시간({peak_str}) 지남</span>"
                             is_waiting = False
 
                         if r_uni in top3_unified:
                             target_status[r_uni] = {
                                 "display": r_disp,
+                                "freq": freq_str,
                                 "icon": "👑",
                                 "html": state_html,
                                 "is_waiting": is_waiting,
@@ -1726,6 +1744,7 @@ def main() -> None:
                         else:
                             target_status[r_uni] = {
                                 "display": r_disp,
+                                "freq": freq_str,
                                 "icon": "🔥",
                                 "html": state_html,
                                 "is_waiting": is_waiting,
@@ -1745,7 +1764,7 @@ def main() -> None:
                             cols[col_idx % len(cols)].markdown(
                                 f"<div style='padding:12px; border:1px solid #e2e8f0; border-radius:8px; background-color:#f8fafc; margin-bottom:10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'>"
                                 f"<div style='font-size:0.8rem; color:#64748b; margin-bottom:4px;'>{info['icon']} {info['type']}</div>"
-                                f"<div style='font-weight:900; font-size:1.1rem; color:#1e293b; margin-bottom:8px;'>{info['display']}</div>"
+                                f"<div style='font-weight:900; font-size:1.1rem; color:#1e293b; margin-bottom:8px;'>{info['display']} <span style='font-size:0.85rem; font-weight:500; color:#475569;'>({info['freq']})</span></div>"
                                 f"<div>{info['html']}</div>"
                                 f"</div>",
                                 unsafe_allow_html=True,
@@ -2002,7 +2021,7 @@ def main() -> None:
 
 
 
-    with tab_market:
+    if True:
         st.markdown("#### 🏆 단지 내 시장 점유율 (M/S) Top 10")
         st.caption("파워점수 공식 = 기본(10) + 순위가점(10/순위) + 물량가점(묶음개수*0.1)")
 
@@ -2053,28 +2072,6 @@ def main() -> None:
                 st.plotly_chart(fig_ms, use_container_width=True, config={"displayModeBar": False})
         else:
             st.info("점유율 데이터가 없습니다.")
-
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("#### 📊 경쟁사 활동 패턴 (예산 집행 추정)")
-        st.caption("분석 기간 내 확인일자 갱신 빈도를 추적합니다.")
-
-        if not comp_df.empty:
-            comp_df = comp_df.copy()
-            comp_df["부동산명"] = comp_df["부동산명"].apply(
-                lambda x: mask_text(
-                    x,
-                    is_demo=IS_DEMO_MODE,
-                    filter_realtor_name=filter_realtor_name,
-                    display_realtor=display_realtor,
-                )
-            )
-            st.dataframe(
-                comp_df[["부동산명", "총횟수", "갱신빈도", "주력 갱신 시간", "예측 신뢰도"]],
-                use_container_width=True,
-                hide_index=True,
-            )
-        else:
-            st.info("경쟁사 갱신 활동 데이터가 없습니다.")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🤖 탑랭크 AI 비서")
