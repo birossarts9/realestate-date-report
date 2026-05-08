@@ -1603,112 +1603,124 @@ def main() -> None:
             )
 
             # ==========================================
-            # [추가] 🚀 오늘의 실시간 감시망 (Live Tracker)
+            # [수정] 🚀 매물별 실시간 감시망 (Live Tracker)
             # ==========================================
-            kst_now = datetime.now(timezone(timedelta(hours=9)))
+            kst_now = _now_kst_naive()
             kst_today = kst_now.date()
 
-            # 현재 선택된 단지의 데이터셋 로드 (현재 코드 딕셔너리 키에 맞게 매핑)
-            comp_data = {
-                "ms_df": complex_data.get("ms", pd.DataFrame()),
-                "comp_df": complex_data.get("comp", pd.DataFrame()),
-                "act_df": complex_data.get("action", pd.DataFrame()),
-            }
-            _ms_df = comp_data.get("ms_df", pd.DataFrame())
-            _comp_df = comp_data.get("comp_df", pd.DataFrame())
-            _act_df = comp_data.get("act_df", pd.DataFrame())
+            # 원본 데이터 및 내 매물(Task) 리스트 확보
+            t_df = filtered_df[filtered_df["단지명"] == _sel_complex].copy()
+            if not t_df.empty and "Task" not in t_df.columns:
+                t_df["Task"] = t_df.apply(
+                    lambda r: _task_label_from_spec(
+                        r.get("단지명", ""),
+                        r.get("동/호수", ""),
+                        r.get("층/타입", ""),
+                        _scalar_price_str(r.get("가격", "")),
+                    ),
+                    axis=1,
+                )
 
-            # 원본 tl_plot 보존을 위해 복사본 생성
-            if "tl_plot" in locals() and not tl_plot.empty:
-                display_tl_df = tl_plot.copy()
-            else:
-                display_tl_df = pd.DataFrame()
+            my_unified = clean_realtor_name(filter_realtor_name)
+            t_df["부동산명_통합"] = t_df["부동산명"].apply(clean_realtor_name)
 
-            if not _ms_df.empty and not _comp_df.empty and not display_tl_df.empty:
-                # 1. 🎯 1순위 타겟 (현재 권력자: 순위 Top 3)
-                top3_realtors = _ms_df.sort_values("총점수", ascending=False).head(3)["부동산명"].tolist()
+            # 현재 화면에 보이는 내 활동 매물 위주로 리스트업
+            active_tasks = tl_plot["Task"].dropna().unique().tolist() if not tl_plot.empty else []
 
-                # 2. 🎯 2순위 타겟 (잠재적 위협: 고빈도 갱신자)
-                # 주 3회 이상(매일, 2일에, 3~4일에) 갱신하는 부동산 추출
-                high_freq_realtors = _comp_df[
-                    _comp_df["갱신빈도"].astype(str).str.contains("매일|2일에|3~4일에", na=False, regex=True)
-                ]["부동산명"].tolist()
+            if active_tasks:
+                st.markdown("---")
+                st.markdown(f"##### 👀 실시간 타점 감시망 (기준: {kst_now.strftime('%H:%M')})")
 
-                target_status = {}
-                # 중복을 제거한 핵심 타겟 리스트
-                for r in set(top3_realtors + high_freq_realtors):
-                    # 타겟이 유령매물(활동 없음)인 경우 감시망에서 제외
-                    freq_val = _comp_df.loc[_comp_df["부동산명"] == r, "갱신빈도"].values
-                    if len(freq_val) > 0 and "활동 없음" in str(freq_val[0]):
-                        continue
+                # 1. 감시할 매물 선택 드롭다운
+                sel_task = st.selectbox(
+                    "🎯 감시할 내 매물을 선택하세요:",
+                    options=active_tasks,
+                    key="live_tracker_task_select",
+                )
 
-                    # 오늘 갱신 완료 여부 확인
-                    today_renewed = False
-                    if not _act_df.empty and "부동산명" in _act_df.columns:
-                        if "Start" in _act_df.columns:
-                            today_acts = _act_df[(_act_df["부동산명"] == r)]
-                            if not today_acts.empty:
-                                # timezone naive/aware 에러 방지
-                                today_acts_dates = pd.to_datetime(today_acts["Start"], errors="coerce").dt.tz_localize(
-                                    None
-                                ).dt.date
-                                if (today_acts_dates == kst_today).any():
-                                    today_renewed = True
-                        elif "최근 갱신 시각" in _act_df.columns:
-                            today_acts = _act_df[_act_df["부동산명"] == r].copy()
-                            if not today_acts.empty:
-                                ts = pd.to_datetime(today_acts["최근 갱신 시각"], format="%m/%d %H:%M", errors="coerce")
-                                if ts.notna().any():
-                                    today_renewed = (ts.dt.date == kst_today).any()
+                # 2. 선택된 매물의 경쟁사 데이터만 정밀 필터링
+                sub_df = t_df[t_df["Task"] == sel_task].copy()
 
-                    # 뱃지 부여 로직 (Top3가 우선)
-                    if r in top3_realtors:
-                        target_status[r] = {"icon": "👑", "renewed": today_renewed, "type": "상위권"}
-                    else:
-                        target_status[r] = {"icon": "🔥", "renewed": today_renewed, "type": "고빈도"}
+                if not sub_df.empty:
+                    sub_df = sub_df.sort_values("수집일시")
 
-                # 3. 👀 실시간 감시망 UI 출력
-                if target_status:
-                    st.markdown("---")
-                    st.markdown(f"##### 👀 오늘의 실시간 감시망 (기준: {kst_now.strftime('%H:%M')})")
-                    st.caption("현재 내 순위를 위협하는 '핵심 경쟁사'들의 오늘 자 갱신 현황입니다.")
+                    # [타겟 1] 상위권 (최근 묶음내순위 1~3위)
+                    latest_ranks = sub_df.groupby("부동산명_통합")["묶음내순위_숫자"].last().reset_index()
+                    latest_ranks["묶음내순위_숫자"] = (
+                        pd.to_numeric(latest_ranks["묶음내순위_숫자"], errors="coerce").fillna(999)
+                    )
+                    top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
 
-                    # 뱃지를 열(Columns)로 배치하여 깔끔하게 표시
-                    cols = st.columns(min(len(target_status), 4))
-                    col_idx = 0
+                    # [타겟 2] 고빈도 (4일에 1번 이상 갱신)
+                    sub_df["확인일자_str"] = sub_df["확인일자"].astype(str).str.strip()
+                    sub_df["확인일자_변동"] = sub_df.groupby("부동산명_통합")["확인일자_str"].shift(1) != sub_df[
+                        "확인일자_str"
+                    ]
+                    analysis_days = max(
+                        1, (sub_df["수집일시"].max().date() - sub_df["수집일시"].min().date()).days + 1
+                    )
+                    renew_counts = sub_df[
+                        sub_df["확인일자_변동"]
+                        & (sub_df["확인일자_str"] != "nan")
+                        & (sub_df["확인일자_str"] != "")
+                    ].groupby("부동산명_통합").size()
 
-                    # 갱신 완료된 곳을 뒤로, 대기중인 곳을 앞으로 정렬 (직관성 확보)
-                    sorted_targets = sorted(target_status.items(), key=lambda x: x[1]["renewed"])
+                    high_freq_unified = [r for r, cnt in renew_counts.items() if (analysis_days / cnt) <= 4.0]
 
-                    for r, info in sorted_targets:
-                        if info["renewed"]:
-                            status_html = "<span style='color:#16a34a; font-weight:bold;'>🟢 갱신 완료</span>"
-                        else:
-                            status_html = "<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span>"
+                    # [오늘 갱신 여부]
+                    conf_s = sub_df["확인일자"].astype(str).str.strip().str.rstrip(".")
+                    sub_df["확인일자_dt"] = pd.to_datetime(conf_s, format="%y.%m.%d", errors="coerce")
+                    today_renewed = sub_df[sub_df["확인일자_dt"].dt.date == kst_today]["부동산명_통합"].unique().tolist()
 
-                        cols[col_idx % len(cols)].markdown(
-                            f"<div style='padding:10px; border:1px solid #e2e8f0; border-radius:8px; background-color:#f8fafc; margin-bottom:10px;'>"
-                            f"<div style='font-size:0.85em; color:#64748b; margin-bottom:3px;'>{info['icon']} {info['type']}</div>"
-                            f"<div style='font-weight:bold; font-size:1.05em; margin-bottom:5px;'>{r}</div>"
-                            f"{status_html}"
-                            f"</div>",
-                            unsafe_allow_html=True,
+                    target_status = {}
+                    for r_uni in set(top3_unified + high_freq_unified):
+                        if r_uni == my_unified:
+                            continue  # 나는 감시 제외
+
+                        r_original = sub_df[sub_df["부동산명_통합"] == r_uni]["부동산명"].iloc[-1]
+                        r_disp = mask_text(
+                            r_original,
+                            is_demo=IS_DEMO_MODE,
+                            filter_realtor_name=filter_realtor_name,
+                            display_realtor=display_realtor,
                         )
-                        col_idx += 1
-                    st.markdown("---")
+                        is_today = r_uni in today_renewed
 
-                # 4. 타임라인 Y축(Task) 이름표 업데이트
-                def _apply_icon(name):
-                    if name in target_status:
-                        return f"{target_status[name]['icon']} {name}"
-                    return name
+                        if r_uni in top3_unified:
+                            target_status[r_uni] = {"display": r_disp, "icon": "👑", "renewed": is_today, "type": "상위권 방어조"}
+                        else:
+                            target_status[r_uni] = {"display": r_disp, "icon": "🔥", "renewed": is_today, "type": "고빈도 추격조"}
 
-                if "Task" in display_tl_df.columns:
-                    display_tl_df["Task"] = display_tl_df["Task"].apply(_apply_icon)
+                    # 3. UI 렌더링
+                    if target_status:
+                        st.caption(f"선택하신 **[{sel_task}]** 매물에서 나와 경쟁 중인 타겟들입니다.")
+                        cols = st.columns(min(len(target_status), 4))
+                        col_idx = 0
+                        sorted_targets = sorted(target_status.items(), key=lambda x: x[1]["renewed"])
 
+                        for r_uni, info in sorted_targets:
+                            status_html = (
+                                "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span>"
+                                if info["renewed"]
+                                else "<span style='color:#dc2626; font-weight:bold;'>🔴 아직 안 함 (대기중)</span>"
+                            )
+                            cols[col_idx % len(cols)].markdown(
+                                f"<div style='padding:12px; border:1px solid #e2e8f0; border-radius:8px; "
+                                "background-color:#f8fafc; margin-bottom:10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'>"
+                                f"<div style='font-size:0.8rem; color:#64748b; margin-bottom:4px;'>{info['icon']} {info['type']}</div>"
+                                f"<div style='font-weight:900; font-size:1.1rem; color:#1e293b; margin-bottom:8px;'>{info['display']}</div>"
+                                f"{status_html}"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+                            col_idx += 1
+                    else:
+                        st.info("이 매물에는 현재 감시할 만한 위협적인 경쟁사가 없습니다.")
+            # ==========================================
+            # 아래부터는 기존 px.timeline 그리는 코드 (display_tl_df 치환 없이 원본 tl_hover 사용)
             # 3. 차트 기본 렌더링 (툴팁: 내 순위·1위 부동산 마스킹, 호버 프레임은 캐시)
             tl_hover = _build_plotly_hover_frame(
-                display_tl_df if not display_tl_df.empty else tl_plot,
+                tl_plot,
                 IS_DEMO_MODE,
                 filter_realtor_name,
                 display_realtor,
