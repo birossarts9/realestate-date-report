@@ -1686,34 +1686,93 @@ def main() -> None:
                         )
                         is_today = r_uni in today_renewed
 
-                        if r_uni in top3_unified:
-                            target_status[r_uni] = {"display": r_disp, "icon": "👑", "renewed": is_today, "type": "상위권 방어조"}
+                        # [추가] 주력 갱신 시간 및 마지노선 계산
+                        target_acts = sub_df[
+                            (sub_df["부동산명_통합"] == r_uni)
+                            & sub_df["확인일자_변동"]
+                            & (sub_df["확인일자_str"] != "nan")
+                            & (sub_df["확인일자_str"] != "")
+                        ]
+                        if not target_acts.empty:
+                            hours = pd.to_datetime(target_acts["수집일시"]).dt.hour
+                            top_hours = hours.value_counts().head(2)
+                            peak_str = ", ".join([f"{int(h)}시" for h in top_hours.index])
+                            deadline = top_hours.index.max() + 1  # 마지노선 = 가장 늦은 피크타임 + 1시간 버퍼
                         else:
-                            target_status[r_uni] = {"display": r_disp, "icon": "🔥", "renewed": is_today, "type": "고빈도 추격조"}
+                            peak_str = "패턴 불규칙"
+                            deadline = 18  # 기본 마지노선
 
-                    # 3. UI 렌더링
+                        now_hour = kst_now.hour
+
+                        # [핵심] 3-State 분기 로직
+                        if is_today:
+                            state_html = "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 예산 소진 확인됨</span>"
+                            is_waiting = False
+                        elif now_hour < deadline:
+                            state_html = f"<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span><br><span style='font-size:0.8rem; color:#64748b;'>주의: 평소 {peak_str} 집중 갱신</span>"
+                            is_waiting = True
+                        else:
+                            state_html = f"<span style='color:#2563eb; font-weight:bold;'>🟢 휴무 예상</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 주력시간({peak_str}) 지남</span>"
+                            is_waiting = False
+
+                        if r_uni in top3_unified:
+                            target_status[r_uni] = {
+                                "display": r_disp,
+                                "icon": "👑",
+                                "html": state_html,
+                                "is_waiting": is_waiting,
+                                "type": "상위권 방어조",
+                            }
+                        else:
+                            target_status[r_uni] = {
+                                "display": r_disp,
+                                "icon": "🔥",
+                                "html": state_html,
+                                "is_waiting": is_waiting,
+                                "type": "고빈도 추격조",
+                            }
+
+                    # 3. UI 렌더링 및 결합 시너지 가이드
                     if target_status:
                         st.caption(f"선택하신 **[{sel_task}]** 매물에서 나와 경쟁 중인 타겟들입니다.")
                         cols = st.columns(min(len(target_status), 4))
                         col_idx = 0
-                        sorted_targets = sorted(target_status.items(), key=lambda x: x[1]["renewed"])
+
+                        # 정렬: 대기중(위험)인 것을 가장 앞으로, 완료/휴무(안전)를 뒤로
+                        sorted_targets = sorted(target_status.items(), key=lambda x: not x[1]["is_waiting"])
 
                         for r_uni, info in sorted_targets:
-                            status_html = (
-                                "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span>"
-                                if info["renewed"]
-                                else "<span style='color:#dc2626; font-weight:bold;'>🔴 아직 안 함 (대기중)</span>"
-                            )
                             cols[col_idx % len(cols)].markdown(
-                                f"<div style='padding:12px; border:1px solid #e2e8f0; border-radius:8px; "
-                                "background-color:#f8fafc; margin-bottom:10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'>"
+                                f"<div style='padding:12px; border:1px solid #e2e8f0; border-radius:8px; background-color:#f8fafc; margin-bottom:10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'>"
                                 f"<div style='font-size:0.8rem; color:#64748b; margin-bottom:4px;'>{info['icon']} {info['type']}</div>"
                                 f"<div style='font-weight:900; font-size:1.1rem; color:#1e293b; margin-bottom:8px;'>{info['display']}</div>"
-                                f"{status_html}"
+                                f"<div>{info['html']}</div>"
                                 f"</div>",
                                 unsafe_allow_html=True,
                             )
                             col_idx += 1
+
+                        # [최종 결론] AI 예측 시간과 실시간 팩트의 결합
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        any_waiting = any(info["is_waiting"] for info in target_status.values())
+
+                        # 기존 AI 전략 가져오기 (대시보드 상의 변수명에 맞게 매칭)
+                        strategy_dict = complex_data.get("strategy_dict", {})
+                        ai_msg = strategy_dict.get(sel_task, "AI 분석 시간")
+                        # 불필요한 태그 정리
+                        ai_msg_clean = ai_msg.split("(예상")[0].replace("💡", "").strip() if "(예상" in ai_msg else ai_msg
+
+                        if any_waiting:
+                            st.warning(
+                                f"**🛑 [대기 권장]** 아직 평소 루틴을 소화하지 않은 요주의 경쟁사가 있습니다. 섣불리 갱신하면 금방 순위가 밀릴 위험이 큽니다. 원래 계획된 **[{ai_msg_clean}]**을 참고하여 안전하게 대기하는 것을 권장합니다.",
+                                icon="⚠️",
+                            )
+                        else:
+                            st.success(
+                                f"**🚀 [즉시 갱신 요망]** 핵심 경쟁사들의 오늘 활동이 모두 종료되었거나 휴무로 판단됩니다! 기존에 추천된 **[{ai_msg_clean}]**까지 기다릴 필요 없이, **지금 당장 갱신하여 빈집을 조기 선점하세요!**",
+                                icon="🔥",
+                            )
+
                     else:
                         st.info("이 매물에는 현재 감시할 만한 위협적인 경쟁사가 없습니다.")
             # ==========================================
