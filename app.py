@@ -1689,11 +1689,12 @@ def main() -> None:
                         return g
 
                     if not lifespan.empty:
-                        tracked_lifespan = (
-                            lifespan.groupby("_spec_key", group_keys=False)
-                            .apply(_assign_tracks)
-                            .reset_index(drop=True)
-                        )
+                        # [Pandas 버전 호환성 패치] apply 대신 안전한 명시적 순회 병합 사용
+                        assigned_list = []
+                        for spec, group in lifespan.groupby("_spec_key", dropna=False):
+                            assigned_list.append(_assign_tracks(group))
+                        tracked_lifespan = pd.concat(assigned_list, ignore_index=True)
+                        
                         sub_df = sub_df.merge(
                             tracked_lifespan[["_spec_key", "매물번호", "Track_ID"]],
                             on=["_spec_key", "매물번호"],
