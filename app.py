@@ -1738,6 +1738,10 @@ def main() -> None:
                     )
                     top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
 
+                    # [버그 해결] 단지 전체에서 갱신을 자주 하는 부동산 중, '현재 선택된 매물'에 실제로 참여 중인 곳만 필터링
+                    sub_realtors = sub_df["부동산명_통합"].unique().tolist()
+                    high_freq_unified = [r for r in high_freq_unified if r in sub_realtors]
+
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
                         if r_uni == my_unified:
