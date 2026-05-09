@@ -1166,17 +1166,56 @@ def precompute_all_complexes_data(
                 .sort_values("총횟수", ascending=False)
             )
 
-            # [추가] 주력 갱신 시간 및 예측 신뢰도 계산
+            # [추가] 주력 갱신 시간, 요일 그룹별 주력·마지노선, 예측 신뢰도
+            _pat_now = _now_kst_naive()
+            _pat_wd = int(_pat_now.weekday())
+
+            def _today_weekday_group_kr() -> str:
+                if _pat_wd == 0:
+                    return "월요일"
+                if _pat_wd == 4:
+                    return "금요일"
+                if _pat_wd in (5, 6):
+                    return "주말"
+                return "화~목"
+
+            def _filter_same_weekday_bucket(s: pd.Series) -> pd.Series:
+                wd = s.dt.weekday
+                if _pat_wd == 0:
+                    return s[wd == 0]
+                if _pat_wd == 4:
+                    return s[wd == 4]
+                if _pat_wd in (5, 6):
+                    return s[wd.isin([5, 6])]
+                return s[wd.isin([1, 2, 3])]
+
+            def _peak_str_and_deadline(s_dt: pd.Series) -> tuple[str, int]:
+                if s_dt.empty:
+                    return "-", 18
+                hours = s_dt.dt.hour
+                top_hours = hours.value_counts().head(2)
+                peak_str = ", ".join([f"{int(h):02d}시" for h in top_hours.index])
+                deadline = int(top_hours.index.max()) + 1
+                return peak_str, min(deadline, 23)
+
             def _get_pattern_details(group):
                 s_dt = pd.to_datetime(group["수집일시"], errors="coerce").dropna()
                 total = len(s_dt)
+                wd_label = _today_weekday_group_kr()
                 if total == 0:
-                    return pd.Series({"주력 갱신 시간": "-", "예측 신뢰도": "-"})
+                    return pd.Series(
+                        {
+                            "주력 갱신 시간": "-",
+                            "예측 신뢰도": "-",
+                            "오늘_요일_그룹": wd_label,
+                            "오늘 요일 주력 시간": "-",
+                            "오늘 요일 마지노선": 18,
+                        }
+                    )
 
+                peak_all, deadline_all = _peak_str_and_deadline(s_dt)
                 hours = s_dt.dt.hour
-                top_hours = hours.value_counts().head(2)  # 상위 1~2개 시간대 추출
-
-                peak_str = ", ".join([f"{int(h):02d}시" for h in top_hours.index])
+                top_hours = hours.value_counts().head(2)
                 rel_pct = (top_hours.sum() / total) * 100
 
                 if rel_pct >= 60:
@@ -1186,7 +1225,21 @@ def precompute_all_complexes_data(
                 else:
                     rel_str = f"🔴 낮음 ({rel_pct:.0f}%)"
 
-                return pd.Series({"주력 갱신 시간": peak_str, "예측 신뢰도": rel_str})
+                s_wd = _filter_same_weekday_bucket(s_dt)
+                if len(s_wd) == 0:
+                    peak_wd, deadline_wd = peak_all, deadline_all
+                else:
+                    peak_wd, deadline_wd = _peak_str_and_deadline(s_wd)
+
+                return pd.Series(
+                    {
+                        "주력 갱신 시간": peak_all,
+                        "예측 신뢰도": rel_str,
+                        "오늘_요일_그룹": wd_label,
+                        "오늘 요일 주력 시간": peak_wd,
+                        "오늘 요일 마지노선": int(deadline_wd),
+                    }
+                )
 
             pattern_df = (
                 b_df_comp.dropna(subset=["부동산명_정제"])
@@ -1201,7 +1254,13 @@ def precompute_all_complexes_data(
                 "총횟수", ascending=False
             )
 
-        results[comp] = {"action": act_df, "timeline": tl_df, "ms": ms_df, "comp": comp_df}
+        results[comp] = {
+            "action": act_df,
+            "timeline": tl_df,
+            "ms": ms_df,
+            "comp": comp_df,
+            "boosted": boosted_df,
+        }
 
     elapsed = time.time() - start_t
     print(f"[DONE] precompute_all_complexes_data 완료 ({elapsed:.2f}s)\n")
@@ -1646,112 +1705,38 @@ def main() -> None:
                     key="live_tracker_task_select",
                 )
 
-                # 2. 선택된 매물의 경쟁사 데이터만 정밀 필터링
+                # 2. 선택된 매물의 경쟁사 — 상위권 판별만 묶음 단위로, 갱신·패턴은 단지 전역 boosted/comp
                 sub_df = t_df[t_df["Task"] == sel_task].copy()
 
                 if not sub_df.empty:
-                    sub_df["수집일시"] = pd.to_datetime(sub_df["수집일시"], errors="coerce")
-                    sub_df = sub_df.dropna(subset=["수집일시"]).copy()
-
-                    # [핵심 교체] 동적 트랙 할당 기반 갱신 추적
-                    # 동일 스펙 내에서 매물번호별 생애주기를 추출한 뒤, 시간 겹침 여부로 Track_ID를 동적 부여
-                    sub_df["_spec_key"] = (
-                        sub_df["단지명"].astype(str).str.strip()
-                        + "_"
-                        + sub_df["동/호수"].astype(str).str.strip()
-                        + "_"
-                        + sub_df["층/타입"].astype(str).str.strip()
-                    )
-
-                    lifespan = (
-                        sub_df.dropna(subset=["매물번호"])
-                        .groupby(["_spec_key", "매물번호"], dropna=False)["수집일시"]
-                        .agg(Start_Time="min", End_Time="max")
-                        .reset_index()
-                    )
-
-                    def _assign_tracks(group):
-                        g = group.sort_values("Start_Time").copy()
-                        track_end_times = []
-                        assigned = []
-                        for _, row in g.iterrows():
-                            track_no = None
-                            for i in range(len(track_end_times)):
-                                if track_end_times[i] < row["Start_Time"]:
-                                    track_end_times[i] = row["End_Time"]
-                                    track_no = i + 1
-                                    break
-                            if track_no is None:
-                                track_end_times.append(row["End_Time"])
-                                track_no = len(track_end_times)
-                            assigned.append(track_no)
-                        g["Track_ID"] = assigned
-                        return g
-
-                    if not lifespan.empty:
-                        # [Pandas 버전 호환성 패치] apply 대신 안전한 명시적 순회 병합 사용
-                        assigned_list = []
-                        for spec, group in lifespan.groupby("_spec_key", dropna=False):
-                            assigned_list.append(_assign_tracks(group))
-                        tracked_lifespan = pd.concat(assigned_list, ignore_index=True)
-                        
-                        sub_df = sub_df.merge(
-                            tracked_lifespan[["_spec_key", "매물번호", "Track_ID"]],
-                            on=["_spec_key", "매물번호"],
-                            how="left",
+                    b_df = complex_data.get("boosted")
+                    if b_df is not None and not b_df.empty:
+                        b_df = b_df.copy()
+                        b_df["수집일시"] = pd.to_datetime(b_df["수집일시"], errors="coerce")
+                        if "부동산명_정제" not in b_df.columns:
+                            b_df["부동산명_정제"] = b_df["부동산명"].apply(clean_realtor_name)
+                        today_renewed = b_df[b_df["수집일시"].dt.date == kst_today][
+                            "부동산명_정제"
+                        ].unique().tolist()
+                        b_freq = b_df.dropna(subset=["수집일시"])
+                        analysis_days = max(
+                            1,
+                            (b_freq["수집일시"].max().date() - b_freq["수집일시"].min().date()).days + 1,
                         )
+                        renew_counts = b_freq.groupby("부동산명_정제", dropna=False).size()
+                        high_freq_unified = [
+                            r for r, cnt in renew_counts.items() if (analysis_days / cnt) <= 4.0
+                        ]
                     else:
-                        sub_df["Track_ID"] = 1
+                        today_renewed = []
+                        high_freq_unified = []
 
-                    sub_df["Track_ID"] = pd.to_numeric(sub_df["Track_ID"], errors="coerce").fillna(1).astype(int)
-                    sub_df = sub_df.sort_values(["단지명", "동/호수", "층/타입", "Track_ID", "수집일시"]).copy()
-
-                    # 이전값 참조 + 같은 레일(Track) 안에서만 상태/갱신 판정
-                    sub_df["prev_단지명"] = sub_df["단지명"].shift(1)
-                    sub_df["prev_동호수"] = sub_df["동/호수"].shift(1)
-                    sub_df["prev_층타입"] = sub_df["층/타입"].shift(1)
-                    sub_df["prev_Track_ID"] = sub_df["Track_ID"].shift(1)
-                    sub_df["prev_매물번호"] = sub_df["매물번호"].shift(1)
-                    sub_df["prev_가격"] = sub_df["가격"].shift(1)
-
-                    cond_same_track_spec = (
-                        (sub_df["단지명"] == sub_df["prev_단지명"])
-                        & (sub_df["동/호수"] == sub_df["prev_동호수"])
-                        & (sub_df["층/타입"] == sub_df["prev_층타입"])
-                        & (sub_df["Track_ID"] == sub_df["prev_Track_ID"])
-                    )
-                    cond_same_price = (sub_df["가격"] == sub_df["prev_가격"])
-
-                    sub_df["매물상태"] = "새매물"
-                    sub_df.loc[cond_same_track_spec & cond_same_price, "매물상태"] = "동일매물"
-                    sub_df.loc[cond_same_track_spec & ~cond_same_price, "매물상태"] = "가격변동의심"
-
-                    sub_df["갱신포착"] = (
-                        (sub_df["매물상태"] == "동일매물")
-                        & cond_same_track_spec
-                        & (sub_df["매물번호"] != sub_df["prev_매물번호"])
-                        & sub_df["prev_매물번호"].notna()
-                    )
-
-                    # [타겟 1] 상위권 (최근 묶음내순위 1~3위)
+                    # [타겟 1] 상위권 (최근 묶음내순위 1~3위) — 선택 매물 스냅샷만 사용
                     latest_ranks = sub_df.groupby("부동산명_통합")["묶음내순위_숫자"].last().reset_index()
                     latest_ranks["묶음내순위_숫자"] = (
                         pd.to_numeric(latest_ranks["묶음내순위_숫자"], errors="coerce").fillna(999)
                     )
                     top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
-
-                    # [타겟 2] 고빈도 (트랙 기반 갱신포착이 4일에 1번 이상)
-                    analysis_days = max(
-                        1, (sub_df["수집일시"].max().date() - sub_df["수집일시"].min().date()).days + 1
-                    )
-                    renew_counts = sub_df[sub_df["갱신포착"]].groupby("부동산명_통합").size()
-
-                    high_freq_unified = [r for r, cnt in renew_counts.items() if (analysis_days / cnt) <= 4.0]
-
-                    # [오늘 갱신 여부] - 트랙 기반 갱신포착 기준
-                    today_renewed = sub_df[
-                        sub_df["갱신포착"] & (sub_df["수집일시"].dt.date == kst_today)
-                    ]["부동산명_통합"].unique().tolist()
 
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
@@ -1767,37 +1752,76 @@ def main() -> None:
                         )
                         is_today = r_uni in today_renewed
 
-                        # [추가] comp_df에서 광고 빈도수 가져오기
-                        if not comp_df.empty and "부동산명" in comp_df.columns and "갱신빈도" in comp_df.columns:
+                        peak_usual = "패턴 불규칙"
+                        peak_today_wd = "-"
+                        wd_group = ""
+                        deadline = 18
+                        freq_str = "정보 없음"
+
+                        if not comp_df.empty and "부동산명" in comp_df.columns:
                             comp_match = comp_df.copy()
                             comp_match["부동산명_통합"] = comp_match["부동산명"].apply(clean_realtor_name)
-                            freq_val = comp_match.loc[comp_match["부동산명_통합"] == r_uni, "갱신빈도"].values
-                        else:
-                            freq_val = []
-                        freq_str = freq_val[0] if len(freq_val) > 0 else "정보 없음"
-
-                        target_acts = sub_df[(sub_df["부동산명_통합"] == r_uni) & sub_df["갱신포착"]]
-                        if not target_acts.empty:
-                            hours = pd.to_datetime(target_acts["수집일시"]).dt.hour
-                            top_hours = hours.value_counts().head(2)
-                            peak_str = ", ".join([f"{int(h)}시" for h in top_hours.index])
-                            deadline = top_hours.index.max() + 1  # 마지노선 = 가장 늦은 피크타임 + 1시간 버퍼
-                        else:
-                            peak_str = "패턴 불규칙"
-                            deadline = 18  # 기본 마지노선
+                            cm = comp_match.loc[comp_match["부동산명_통합"] == r_uni]
+                            if not cm.empty:
+                                row0 = cm.iloc[0]
+                                if "갱신빈도" in cm.columns:
+                                    fv = row0.get("갱신빈도")
+                                    if pd.notna(fv) and str(fv).strip():
+                                        freq_str = str(fv)
+                                if "주력 갱신 시간" in cm.columns and pd.notna(row0.get("주력 갱신 시간")):
+                                    peak_usual = str(row0["주력 갱신 시간"])
+                                if "오늘 요일 주력 시간" in cm.columns and pd.notna(
+                                    row0.get("오늘 요일 주력 시간")
+                                ):
+                                    peak_today_wd = str(row0["오늘 요일 주력 시간"])
+                                if "오늘_요일_그룹" in cm.columns and pd.notna(row0.get("오늘_요일_그룹")):
+                                    wd_group = str(row0["오늘_요일_그룹"])
+                                if "오늘 요일 마지노선" in cm.columns:
+                                    try:
+                                        deadline = int(float(row0["오늘 요일 마지노선"]))
+                                    except (TypeError, ValueError):
+                                        deadline = 18
 
                         now_hour = kst_now.hour
 
-                        # [핵심] 3-State 분기 로직
+                        if peak_today_wd in ("-", "") or str(peak_today_wd).lower() == "nan":
+                            peak_today_wd = peak_usual
+
+                        _bad_peak = ("-", "패턴 불규칙", "")
+                        if (
+                            peak_usual not in _bad_peak
+                            and peak_today_wd not in _bad_peak
+                            and peak_usual != peak_today_wd
+                            and wd_group
+                        ):
+                            pattern_sub = (
+                                f"평소 {peak_usual} 집중 · {wd_group}엔 {peak_today_wd}에 더 몰립니다"
+                            )
+                        elif peak_today_wd not in _bad_peak and wd_group:
+                            pattern_sub = f"{wd_group} 패턴 {peak_today_wd} 집중 갱신"
+                        elif peak_usual not in _bad_peak:
+                            pattern_sub = f"평소 {peak_usual} 집중 갱신"
+                        else:
+                            pattern_sub = "갱신 패턴 불규칙"
+
+                        # [핵심] 3-State 분기 (마지노선·요일 패턴은 사전계산 comp_df 기준)
                         if is_today:
-                            state_html = "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 예산 소진 확인됨</span>"
+                            state_html = (
+                                "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span><br>"
+                                f"<span style='font-size:0.8rem; color:#64748b;'>안전: 예산 소진 확인됨 · {pattern_sub}</span>"
+                            )
                             is_waiting = False
                         elif now_hour < deadline:
-                            state_html = f"<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span><br><span style='font-size:0.8rem; color:#64748b;'>주의: 평소 {peak_str} 집중 갱신</span>"
+                            state_html = (
+                                "<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span><br>"
+                                f"<span style='font-size:0.8rem; color:#64748b;'>주의: {pattern_sub}</span>"
+                            )
                             is_waiting = True
                         else:
-                            # [수정] 휴무 예상 -> 광고 계획 없는 날
-                            state_html = f"<span style='color:#2563eb; font-weight:bold;'>🟢 광고 계획 없는 날</span><br><span style='font-size:0.8rem; color:#64748b;'>안전: 주력시간({peak_str}) 지남</span>"
+                            state_html = (
+                                "<span style='color:#2563eb; font-weight:bold;'>🟢 광고 계획 없는 날</span><br>"
+                                f"<span style='font-size:0.8rem; color:#64748b;'>안전: 오늘 요일 마지노선({deadline}시) 경과 · {pattern_sub}</span>"
+                            )
                             is_waiting = False
 
                         if r_uni in top3_unified:
