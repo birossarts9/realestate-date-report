@@ -1650,7 +1650,87 @@ def main() -> None:
                 sub_df = t_df[t_df["Task"] == sel_task].copy()
 
                 if not sub_df.empty:
-                    sub_df = sub_df.sort_values("수집일시")
+                    sub_df["수집일시"] = pd.to_datetime(sub_df["수집일시"], errors="coerce")
+                    sub_df = sub_df.dropna(subset=["수집일시"]).copy()
+
+                    # [핵심 교체] 동적 트랙 할당 기반 갱신 추적
+                    # 동일 스펙 내에서 매물번호별 생애주기를 추출한 뒤, 시간 겹침 여부로 Track_ID를 동적 부여
+                    sub_df["_spec_key"] = (
+                        sub_df["단지명"].astype(str).str.strip()
+                        + "_"
+                        + sub_df["동/호수"].astype(str).str.strip()
+                        + "_"
+                        + sub_df["층/타입"].astype(str).str.strip()
+                    )
+
+                    lifespan = (
+                        sub_df.dropna(subset=["매물번호"])
+                        .groupby(["_spec_key", "매물번호"], dropna=False)["수집일시"]
+                        .agg(Start_Time="min", End_Time="max")
+                        .reset_index()
+                    )
+
+                    def _assign_tracks(group):
+                        g = group.sort_values("Start_Time").copy()
+                        track_end_times = []
+                        assigned = []
+                        for _, row in g.iterrows():
+                            track_no = None
+                            for i in range(len(track_end_times)):
+                                if track_end_times[i] < row["Start_Time"]:
+                                    track_end_times[i] = row["End_Time"]
+                                    track_no = i + 1
+                                    break
+                            if track_no is None:
+                                track_end_times.append(row["End_Time"])
+                                track_no = len(track_end_times)
+                            assigned.append(track_no)
+                        g["Track_ID"] = assigned
+                        return g
+
+                    if not lifespan.empty:
+                        tracked_lifespan = (
+                            lifespan.groupby("_spec_key", group_keys=False)
+                            .apply(_assign_tracks)
+                            .reset_index(drop=True)
+                        )
+                        sub_df = sub_df.merge(
+                            tracked_lifespan[["_spec_key", "매물번호", "Track_ID"]],
+                            on=["_spec_key", "매물번호"],
+                            how="left",
+                        )
+                    else:
+                        sub_df["Track_ID"] = 1
+
+                    sub_df["Track_ID"] = pd.to_numeric(sub_df["Track_ID"], errors="coerce").fillna(1).astype(int)
+                    sub_df = sub_df.sort_values(["단지명", "동/호수", "층/타입", "Track_ID", "수집일시"]).copy()
+
+                    # 이전값 참조 + 같은 레일(Track) 안에서만 상태/갱신 판정
+                    sub_df["prev_단지명"] = sub_df["단지명"].shift(1)
+                    sub_df["prev_동호수"] = sub_df["동/호수"].shift(1)
+                    sub_df["prev_층타입"] = sub_df["층/타입"].shift(1)
+                    sub_df["prev_Track_ID"] = sub_df["Track_ID"].shift(1)
+                    sub_df["prev_매물번호"] = sub_df["매물번호"].shift(1)
+                    sub_df["prev_가격"] = sub_df["가격"].shift(1)
+
+                    cond_same_track_spec = (
+                        (sub_df["단지명"] == sub_df["prev_단지명"])
+                        & (sub_df["동/호수"] == sub_df["prev_동호수"])
+                        & (sub_df["층/타입"] == sub_df["prev_층타입"])
+                        & (sub_df["Track_ID"] == sub_df["prev_Track_ID"])
+                    )
+                    cond_same_price = (sub_df["가격"] == sub_df["prev_가격"])
+
+                    sub_df["매물상태"] = "새매물"
+                    sub_df.loc[cond_same_track_spec & cond_same_price, "매물상태"] = "동일매물"
+                    sub_df.loc[cond_same_track_spec & ~cond_same_price, "매물상태"] = "가격변동의심"
+
+                    sub_df["갱신포착"] = (
+                        (sub_df["매물상태"] == "동일매물")
+                        & cond_same_track_spec
+                        & (sub_df["매물번호"] != sub_df["prev_매물번호"])
+                        & sub_df["prev_매물번호"].notna()
+                    )
 
                     # [타겟 1] 상위권 (최근 묶음내순위 1~3위)
                     latest_ranks = sub_df.groupby("부동산명_통합")["묶음내순위_숫자"].last().reset_index()
@@ -1659,26 +1739,18 @@ def main() -> None:
                     )
                     top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
 
-                    # [타겟 2] 고빈도 (4일에 1번 이상 갱신)
-                    sub_df["확인일자_str"] = sub_df["확인일자"].astype(str).str.strip()
-                    sub_df["확인일자_변동"] = sub_df.groupby("부동산명_통합")["확인일자_str"].shift(1) != sub_df[
-                        "확인일자_str"
-                    ]
+                    # [타겟 2] 고빈도 (트랙 기반 갱신포착이 4일에 1번 이상)
                     analysis_days = max(
                         1, (sub_df["수집일시"].max().date() - sub_df["수집일시"].min().date()).days + 1
                     )
-                    renew_counts = sub_df[
-                        sub_df["확인일자_변동"]
-                        & (sub_df["확인일자_str"] != "nan")
-                        & (sub_df["확인일자_str"] != "")
-                    ].groupby("부동산명_통합").size()
+                    renew_counts = sub_df[sub_df["갱신포착"]].groupby("부동산명_통합").size()
 
                     high_freq_unified = [r for r, cnt in renew_counts.items() if (analysis_days / cnt) <= 4.0]
 
-                    # [오늘 갱신 여부]
-                    conf_s = sub_df["확인일자"].astype(str).str.strip().str.rstrip(".")
-                    sub_df["확인일자_dt"] = pd.to_datetime(conf_s, format="%y.%m.%d", errors="coerce")
-                    today_renewed = sub_df[sub_df["확인일자_dt"].dt.date == kst_today]["부동산명_통합"].unique().tolist()
+                    # [오늘 갱신 여부] - 트랙 기반 갱신포착 기준
+                    today_renewed = sub_df[
+                        sub_df["갱신포착"] & (sub_df["수집일시"].dt.date == kst_today)
+                    ]["부동산명_통합"].unique().tolist()
 
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
@@ -1703,12 +1775,7 @@ def main() -> None:
                             freq_val = []
                         freq_str = freq_val[0] if len(freq_val) > 0 else "정보 없음"
 
-                        target_acts = sub_df[
-                            (sub_df["부동산명_통합"] == r_uni)
-                            & sub_df["확인일자_변동"]
-                            & (sub_df["확인일자_str"] != "nan")
-                            & (sub_df["확인일자_str"] != "")
-                        ]
+                        target_acts = sub_df[(sub_df["부동산명_통합"] == r_uni) & sub_df["갱신포착"]]
                         if not target_acts.empty:
                             hours = pd.to_datetime(target_acts["수집일시"]).dt.hour
                             top_hours = hours.value_counts().head(2)
