@@ -11,7 +11,7 @@ import os
 import time
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -1039,7 +1039,10 @@ def compute_prime_action_df(
 
 @st.cache_data(show_spinner="🚀 선택된 기간의 모든 단지 데이터를 미리 계산 중입니다... (최초 1회만 소요)")
 def precompute_all_complexes_data(
-    df_to_process: pd.DataFrame, complexes_list: list[str], realtor_name: str
+    df_to_process: pd.DataFrame,
+    complexes_list: list[str],
+    realtor_name: str,
+    target_date: date,
 ) -> dict[str, dict[str, pd.DataFrame]]:
     """기간·부동산 필터가 같을 때 단지 전환 시 재계산 없이 쓰기 위한 일괄 사전 계산."""
     import time  # 상단에 임포트했지만 혹시 몰라 안전하게 내부에서도 확인
@@ -1167,8 +1170,8 @@ def precompute_all_complexes_data(
             )
 
             # [추가] 주력 갱신 시간, 요일 그룹별 주력·마지노선, 예측 신뢰도
-            _pat_now = _now_kst_naive()
-            _pat_wd = int(_pat_now.weekday())
+            # target_date: 달력 종료일(e_d)과 동기 — 실시간 서버 시각이 아님
+            _pat_wd = int(target_date.weekday())
 
             def _today_weekday_group_kr() -> str:
                 if _pat_wd == 0:
@@ -1443,7 +1446,7 @@ def main() -> None:
         st.stop()
 
     master_data_dict = precompute_all_complexes_data(
-        filtered_df, _complex_choices, filter_realtor_name
+        filtered_df, _complex_choices, filter_realtor_name, e_d
     )
 
     _sel_complex = st.sidebar.selectbox(
@@ -1737,10 +1740,6 @@ def main() -> None:
                         pd.to_numeric(latest_ranks["묶음내순위_숫자"], errors="coerce").fillna(999)
                     )
                     top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
-
-                    # [버그 해결] 단지 전체에서 갱신을 자주 하는 부동산 중, '현재 선택된 매물'에 실제로 참여 중인 곳만 필터링
-                    sub_realtors = sub_df["부동산명_통합"].unique().tolist()
-                    high_freq_unified = [r for r in high_freq_unified if r in sub_realtors]
 
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
