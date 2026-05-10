@@ -34,6 +34,8 @@ from ranking_logic import (
 )
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# 엑셀 열 인덱스(0-based): N열 = CP사 — 멀티 CP 광고 핑퐁 노이즈 방지용 식별자
+COL_CP = 13
 
 _GUIDE_REPLY_TIME = (
     "최근 **28일(4주) 치의 타사 활동 데이터**를 분석합니다. 특히 최근 4일의 활동엔 가중치를 2배로 주어 최신 트렌드를 반영합니다. "
@@ -1065,6 +1067,9 @@ def precompute_all_complexes_data(
             s = s.str.replace(">", ")", regex=False)
             t_df[col] = s
         trk = build_listing_tracking_keys(t_df, time_col="수집일시")
+        if "CP사" not in trk.columns:
+            trk["CP사"] = ""
+        trk["CP사"] = trk["CP사"].fillna("").astype(str).str.strip()
         # 1. 부동산명 정제 및 날짜 점(.) 찌꺼기 제거
         trk["부동산명_정제"] = trk["부동산명"].apply(clean_realtor_name)
         conf_s = trk["확인일자"].astype(str).str.strip().str.rstrip(".")
@@ -1074,7 +1079,15 @@ def precompute_all_complexes_data(
             trk.loc[na_m, "확인일자_dt"] = pd.to_datetime(conf_s[na_m], errors="coerce")
 
         # 2. 매물을 특정하는 절대 기준 세팅
-        grp_keys = ["부동산명_정제", "단지명", "동/호수", "층/타입", "거래방식", "가격", "노출형태"]
+        grp_keys = [
+            "부동산명_정제",
+            "단지명",
+            "동/호수",
+            "층/타입",
+            "거래방식",
+            "가격",
+            "CP사",
+        ]
 
         # [핵심 버그 수정] 빈칸(NaN)이 있으면 Pandas가 데이터를 통삭제해버리므로 안전하게 텍스트로 채움
         for c in grp_keys:
@@ -1103,6 +1116,9 @@ def precompute_all_complexes_data(
             comp_df = pd.DataFrame(columns=["부동산명", "총횟수", "갱신빈도"])
         else:
             t_df_ms = t_df.copy()
+            if "CP사" not in t_df_ms.columns:
+                t_df_ms["CP사"] = ""
+            t_df_ms["CP사"] = t_df_ms["CP사"].fillna("").astype(str).str.strip()
             t_df_ms["부동산명_정제"] = t_df_ms["부동산명"].apply(clean_realtor_name)
             t_df_ms["_순위정렬"] = pd.to_numeric(
                 t_df_ms["묶음내순위"]
@@ -1112,13 +1128,21 @@ def precompute_all_complexes_data(
                 errors="coerce",
             ).fillna(999)
 
-            # [수정] 순위가 높은(숫자가 작은) 순으로 정렬 후 정제된 부동산명 기준으로 중복 제거
+            # [수정] 순위가 높은(숫자가 작은) 순으로 정렬 후 CP사·부동산명 기준 중복 제거
             uniq = t_df_ms.sort_values("_순위정렬").drop_duplicates(
-                subset=["단지명", "동/호수", "층/타입", "거래방식", "가격", "부동산명_정제"]
+                subset=[
+                    "단지명",
+                    "동/호수",
+                    "층/타입",
+                    "거래방식",
+                    "가격",
+                    "부동산명_정제",
+                    "CP사",
+                ]
             ).copy()
 
             uniq["묶음_총개수"] = uniq.groupby(
-                ["단지명", "동/호수", "층/타입", "거래방식", "가격"]
+                ["단지명", "동/호수", "층/타입", "거래방식", "가격", "CP사"]
             )["부동산명_정제"].transform("count")
 
             uniq["파워점수"] = 10 + (10 / uniq["_순위정렬"]) + (uniq["묶음_총개수"] * 0.1)
