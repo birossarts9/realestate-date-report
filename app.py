@@ -1078,33 +1078,28 @@ def precompute_all_complexes_data(
         if na_m.any():
             trk.loc[na_m, "확인일자_dt"] = pd.to_datetime(conf_s[na_m], errors="coerce")
 
-        # 2. 매물을 특정하는 절대 기준 세팅
-        grp_keys = [
-            "부동산명_정제",
-            "단지명",
-            "동/호수",
-            "층/타입",
-            "거래방식",
-            "가격",
-            "CP사",
-        ]
+        # 2. 매물을 특정하는 절대 기준 세팅 (대표님 엑셀 SOP 완벽 이식)
+        # 노출형태(단독/묶음)는 갱신 시 변할 수 있으므로 제거, 멀티 채널 핑퐁 방지를 위해 CP사 추가
+        grp_keys = ["부동산명_정제", "단지명", "동/호수", "층/타입", "거래방식", "가격", "CP사"]
 
-        # [핵심 버그 수정] 빈칸(NaN)이 있으면 Pandas가 데이터를 통삭제해버리므로 안전하게 텍스트로 채움
         for c in grp_keys:
-            trk[c] = trk[c].fillna("미상")
+            if c in trk.columns:
+                trk[c] = trk[c].fillna("미상")
 
         trk = trk.sort_values(grp_keys + ["수집일시"])
 
-        # 3. 각 개별 매물별로 확인일자 갱신 이력 추적 (dropna=False 이중 방어)
-        trk["max_확인일자_dt"] = trk.groupby(grp_keys, dropna=False)["확인일자_dt"].cummax()
-        trk["prev_max_dt"] = trk.groupby(grp_keys, dropna=False)["max_확인일자_dt"].shift(1)
+        # 3. 대표님 엑셀 M열(고유번호) 비교 로직 적용
+        # 확인일자(날짜) 비교 대신, 가장 확실한 갱신 증거인 '고유번호'의 변경을 추적
+        if "고유번호" not in trk.columns:
+            trk["고유번호"] = trk["매물번호"]  # 혹시 컬럼명이 다를 경우를 대비한 방어 코드
 
-        # 4. 최초 수집이 아니면서 확인일자가 실제로 변경된 경우만 갱신으로 카운트
+        trk["prev_고유번호"] = trk.groupby(grp_keys, dropna=False)["고유번호"].shift(1)
+
+        # 4. 동일매물(스펙+가격+CP사 완벽 일치) 내에서 고유번호(M열)가 달라진 순간 갱신 포착
         c1 = (
-            trk["확인일자_dt"].notna()
-            & (trk["확인일자_dt"] == trk["max_확인일자_dt"])
-            & (trk["max_확인일자_dt"] != trk["prev_max_dt"])
-            & trk["prev_max_dt"].notna()
+            trk["고유번호"].notna()
+            & trk["prev_고유번호"].notna()
+            & (trk["고유번호"] != trk["prev_고유번호"])
         )
         boosted_df = trk[c1].copy()
         act_df, tl_df = compute_prime_action_df(trk, boosted_df, realtor_name)
