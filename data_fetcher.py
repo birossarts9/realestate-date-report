@@ -287,13 +287,19 @@ def process_data(df):
         df["고유번호"] = "기록없음"
     df["고유번호"] = df["고유번호"].fillna("기록없음")
 
-    # 가격 변동으로 같은 매물이 분절되지 않도록 가격은 키에서 제외
+    if "CP사" not in df.columns:
+        df["CP사"] = ""
+    df["CP사"] = df["CP사"].fillna("").astype(str).str.strip().replace({"nan": "", "None": ""})
+
+    # 가격 변동으로 같은 매물이 분절되지 않도록 가격은 키에서 제외 (CP사는 채널 분리)
     df["매물묶음키"] = (
         df["동/호수"].astype(str).str.strip()
         + " | "
         + df["층/타입"].astype(str).str.strip()
         + " | "
         + df["거래방식"].astype(str).str.strip()
+        + " | "
+        + df["CP사"].astype(str).str.strip()
     )
     cleaned_name = (
         df["부동산명"]
