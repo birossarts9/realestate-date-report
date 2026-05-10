@@ -1216,8 +1216,18 @@ def precompute_all_complexes_data(
                     return "-", 18
                 hours = s_dt.dt.hour
                 top_hours = hours.value_counts().head(2)
-                peak_str = ", ".join([f"{int(h):02d}시" for h in top_hours.index])
-                deadline = int(top_hours.index.max()) + 1
+                idx_sorted = sorted(int(h) for h in top_hours.index.tolist())
+                if not idx_sorted:
+                    return "-", 18
+                if len(idx_sorted) == 1:
+                    h0 = idx_sorted[0]
+                    return f"{h0:02d}시", min(h0 + 1, 23)
+                h0, h1 = idx_sorted[0], idx_sorted[1]
+                if abs(h1 - h0) == 1:
+                    peak_str = f"{h0}~{h1}시"
+                else:
+                    peak_str = f"{h0:02d}시, {h1:02d}시"
+                deadline = max(h0, h1) + 1
                 return peak_str, min(deadline, 23)
 
             def _get_pattern_details(group):
@@ -1232,6 +1242,7 @@ def precompute_all_complexes_data(
                             "오늘_요일_그룹": wd_label,
                             "오늘 요일 주력 시간": "-",
                             "오늘 요일 마지노선": 18,
+                            "오늘요일_실측": False,
                         }
                     )
 
@@ -1248,7 +1259,8 @@ def precompute_all_complexes_data(
                     rel_str = f"🔴 낮음 ({rel_pct:.0f}%)"
 
                 s_wd = _filter_same_weekday_bucket(s_dt)
-                if len(s_wd) == 0:
+                weekday_has_sample = len(s_wd) > 0
+                if not weekday_has_sample:
                     peak_wd, deadline_wd = peak_all, deadline_all
                 else:
                     peak_wd, deadline_wd = _peak_str_and_deadline(s_wd)
@@ -1260,6 +1272,7 @@ def precompute_all_complexes_data(
                         "오늘_요일_그룹": wd_label,
                         "오늘 요일 주력 시간": peak_wd,
                         "오늘 요일 마지노선": int(deadline_wd),
+                        "오늘요일_실측": weekday_has_sample,
                     }
                 )
 
@@ -1785,6 +1798,7 @@ def main() -> None:
                         wd_group = ""
                         deadline = 18
                         freq_str = "정보 없음"
+                        weekday_real = True
 
                         if not comp_df.empty and "부동산명" in comp_df.columns:
                             comp_match = comp_df.copy()
@@ -1809,46 +1823,56 @@ def main() -> None:
                                         deadline = int(float(row0["오늘 요일 마지노선"]))
                                     except (TypeError, ValueError):
                                         deadline = 18
+                                if "오늘요일_실측" in cm.columns:
+                                    _wr = row0.get("오늘요일_실측")
+                                    weekday_real = True if pd.isna(_wr) else bool(_wr)
 
                         now_hour = kst_now.hour
 
-                        if peak_today_wd in ("-", "") or str(peak_today_wd).lower() == "nan":
-                            peak_today_wd = peak_usual
+                        _bad_peak = ("-", "패턴 불규칙", "", "nan")
+                        peak_usual_n = str(peak_usual).strip()
+                        peak_today_n = str(peak_today_wd).strip()
+                        if peak_today_n.lower() in ("nan", "none"):
+                            peak_today_n = "-"
 
-                        _bad_peak = ("-", "패턴 불규칙", "")
-                        if (
-                            peak_usual not in _bad_peak
-                            and peak_today_wd not in _bad_peak
-                            and peak_usual != peak_today_wd
-                            and wd_group
-                        ):
-                            pattern_sub = (
-                                f"평소 {peak_usual} 집중 · {wd_group}엔 {peak_today_wd}에 더 몰립니다"
-                            )
-                        elif peak_today_wd not in _bad_peak and wd_group:
-                            pattern_sub = f"{wd_group} 패턴 {peak_today_wd} 집중 갱신"
-                        elif peak_usual not in _bad_peak:
-                            pattern_sub = f"평소 {peak_usual} 집중 갱신"
+                        wd_disp = wd_group if wd_group else ""
+                        if not weekday_real and wd_disp:
+                            if peak_usual_n not in _bad_peak:
+                                pattern_desc = (
+                                    f"{wd_disp} 패턴: 데이터 없음 (전체 기준 {peak_usual_n})"
+                                )
+                            else:
+                                pattern_desc = f"{wd_disp} 패턴: 데이터 없음 (평일 기준 분석)"
+                        elif peak_usual_n in _bad_peak or peak_today_n in _bad_peak:
+                            pattern_desc = "패턴 데이터 부족"
+                        elif peak_usual_n == peak_today_n:
+                            pattern_desc = f"평소처럼 {peak_today_n}에 집중합니다"
                         else:
-                            pattern_sub = "갱신 패턴 불규칙"
+                            wg = f"{wd_disp} " if wd_disp else ""
+                            pattern_desc = f"평소 {peak_usual_n} ➔ {wg}{peak_today_n} 위주"
 
-                        # [핵심] 3-State 분기 (마지노선·요일 패턴은 사전계산 comp_df 기준)
+                        # 3행: 상태 / 패턴 / 마지노선 (가독성 고정 포맷)
+                        _gray = "color:#64748b;font-size:0.9rem;"
+                        _small = "color:#94a3b8;font-size:0.8rem;"
                         if is_today:
                             state_html = (
-                                "<span style='color:#16a34a; font-weight:bold;'>🟢 오늘 갱신 완료</span><br>"
-                                f"<span style='font-size:0.8rem; color:#64748b;'>안전: 예산 소진 확인됨 · {pattern_sub}</span>"
+                                f"<b>🟢 오늘 활동 종료 (안전)</b>"
+                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<br><span style='{_small}'>마지노선: {deadline}시</span>"
                             )
                             is_waiting = False
                         elif now_hour < deadline:
                             state_html = (
-                                "<span style='color:#dc2626; font-weight:bold;'>🔴 대기중</span><br>"
-                                f"<span style='font-size:0.8rem; color:#64748b;'>주의: {pattern_sub}</span>"
+                                f"<b>🔴 아직 활동 전 (주의)</b>"
+                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<br><span style='{_small}'>마지노선: {deadline}시 (이후 안전)</span>"
                             )
                             is_waiting = True
                         else:
                             state_html = (
-                                "<span style='color:#2563eb; font-weight:bold;'>🟢 광고 계획 없는 날</span><br>"
-                                f"<span style='font-size:0.8rem; color:#64748b;'>안전: 오늘 요일 마지노선({deadline}시) 경과 · {pattern_sub}</span>"
+                                f"<b>🟢 활동 종료 예상 (안전)</b>"
+                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<br><span style='{_small}'>마지노선 {deadline}시 경과</span>"
                             )
                             is_waiting = False
 
@@ -1902,14 +1926,22 @@ def main() -> None:
                         ai_msg_clean = ai_msg.split("(예상")[0].replace("💡", "").strip() if "(예상" in ai_msg else ai_msg
 
                         if any_waiting:
-                            st.warning(
-                                f"**🛑 [대기 권장]** 아직 평소 루틴을 소화하지 않은 요주의 경쟁사가 있습니다. 섣불리 갱신하면 금방 순위가 밀릴 위험이 큽니다. 원래 계획된 **[{ai_msg_clean}]**을 참고하여 안전하게 대기하는 것을 권장합니다.",
-                                icon="⚠️",
+                            st.markdown(
+                                "<div style='background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;"
+                                "border-radius:8px;margin-top:8px;font-family:inherit;'>"
+                                "<span style='color:#b45309;font-weight:800;font-size:1.15rem;'>[대기 권장]</span>"
+                                f"<span style='color:#334155;margin-left:8px;'>마지노선 전 · AI 참고 {html.escape(ai_msg_clean)}</span>"
+                                "</div>",
+                                unsafe_allow_html=True,
                             )
                         else:
-                            st.success(
-                                f"**🚀 [즉시 갱신 요망]** 핵심 경쟁사들의 오늘 활동이 모두 종료되었거나 휴무로 판단됩니다! 기존에 추천된 **[{ai_msg_clean}]**까지 기다릴 필요 없이, **지금 당장 갱신하여 빈집을 조기 선점하세요!**",
-                                icon="🔥",
+                            st.markdown(
+                                "<div style='background:#ecfdf5;border-left:4px solid #10b981;padding:12px 16px;"
+                                "border-radius:8px;margin-top:8px;font-family:inherit;'>"
+                                "<span style='color:#047857;font-weight:800;font-size:1.15rem;'>[즉시 갱신]</span>"
+                                f"<span style='color:#334155;margin-left:8px;'>창구 비었을 가능성 · AI {html.escape(ai_msg_clean)}</span>"
+                                "</div>",
+                                unsafe_allow_html=True,
                             )
 
                     else:
