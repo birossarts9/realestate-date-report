@@ -11,7 +11,7 @@ import os
 import time
 
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -1042,7 +1042,7 @@ def precompute_all_complexes_data(
     df_to_process: pd.DataFrame,
     complexes_list: list[str],
     realtor_name: str,
-    target_date: date,
+    target_date: datetime.date,
 ) -> dict[str, dict[str, pd.DataFrame]]:
     """기간·부동산 필터가 같을 때 단지 전환 시 재계산 없이 쓰기 위한 일괄 사전 계산."""
     import time  # 상단에 임포트했지만 혹시 몰라 안전하게 내부에서도 확인
@@ -1171,7 +1171,7 @@ def precompute_all_complexes_data(
 
             # [추가] 주력 갱신 시간, 요일 그룹별 주력·마지노선, 예측 신뢰도
             # target_date: 달력 종료일(e_d)과 동기 — 실시간 서버 시각이 아님
-            _pat_wd = int(target_date.weekday())
+            _pat_wd = target_date.weekday()
 
             def _today_weekday_group_kr() -> str:
                 if _pat_wd == 0:
@@ -1741,12 +1741,18 @@ def main() -> None:
                     )
                     top3_unified = latest_ranks[latest_ranks["묶음내순위_숫자"] <= 3]["부동산명_통합"].tolist()
 
+                    sub_realtors = sub_df["부동산명_통합"].unique().tolist()
+                    high_freq_unified = [r for r in high_freq_unified if r in sub_realtors]
+
                     target_status = {}
                     for r_uni in set(top3_unified + high_freq_unified):
                         if r_uni == my_unified:
                             continue
 
-                        r_original = sub_df[sub_df["부동산명_통합"] == r_uni]["부동산명"].iloc[-1]
+                        r_original_series = sub_df[sub_df["부동산명_통합"] == r_uni]["부동산명"]
+                        if r_original_series.empty:
+                            continue
+                        r_original = r_original_series.iloc[-1]
                         r_disp = mask_text(
                             r_original,
                             is_demo=IS_DEMO_MODE,
