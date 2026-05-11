@@ -779,6 +779,9 @@ SECONDARY_MIN_GAP_HOURS = 3
 SECONDARY_MIN_SCORE_RATIO = 0.30
 # 2순위 최소 비즈니스 시간 (분). 1시간 미만 빈집은 추천 가치 낮음
 SECONDARY_MIN_BUSINESS_MINS = 60
+# 감시 대상 경쟁사의 일별 마지노선(관측 상 최종 활동 시각)보다 이른 빈집 타격 후보는
+# 이후 갱신에 묻힐 확률이 높아 점수에 강한 패널티 (자살 타이밍 완화)
+STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR = 0.02
 
 # 경쟁 과열로 모든 빈집 점수가 음수일 때 네이버 일반 피크 타임 안내 (앱 파서·마커와 호환)
 NAVER_PEAK_FALLBACK_MSG = (
@@ -963,6 +966,9 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
         if first_h < 8:
             first_h = 9
 
+        enemy_deadline_h = max(active)
+        deadline_minutes = int(enemy_deadline_h) * 60
+
         for i in range(n_act):
             h_cur = active[i]
             start = strike_dt[h_cur]
@@ -974,6 +980,9 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
             end = day0 + pd.Timedelta(days=1) + pd.Timedelta(hours=first_h)
 
             sc, biz_m = gap_score_and_business(start, end, h_cur)
+            strike_minutes = int(start.hour) * 60 + int(start.minute)
+            if strike_minutes < deadline_minutes:
+                sc *= STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR
             candidates.append((sc, start, biz_m))
 
         if not candidates:
