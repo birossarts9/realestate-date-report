@@ -2126,7 +2126,7 @@ def main() -> None:
                         _small = "color:#94a3b8;font-size:0.8rem;"
                         if is_today:
                             state_html = (
-                                f"<b>🟢 오늘 활동 종료 (안전)</b>"
+                                f"<b>🟢 갱신 완료 (예산 소진)</b>"
                                 f"<br><span style='{_gray}'>{pattern_desc}</span>"
                                 f"<br><span style='{_small}'>마지노선: {deadline}시</span>"
                             )
@@ -2140,7 +2140,7 @@ def main() -> None:
                             is_waiting = True
                         else:
                             state_html = (
-                                f"<b>🟢 활동 종료 예상 (안전)</b>"
+                                f"<b><span style='color:#3B82F6;'>🔵 활동 없음 (마지노선 경과)</span></b>"
                                 f"<br><span style='{_gray}'>{pattern_desc}</span>"
                                 f"<br><span style='{_small}'>마지노선 {deadline}시 경과</span>"
                             )
@@ -2216,15 +2216,18 @@ def main() -> None:
                         for r_uni, info in sorted_targets:
                             # 보조 정보 톤다운: 폰트·여백 축소, 옅은 톤
                             cols[col_idx % len(cols)].markdown(
-                                f"<div style='padding:10px 12px; border:1px solid #e2e8f0; "
+                                f"<div style='height:100%; min-height:140px; display:flex; flex-direction:column; "
+                                f"justify-content:space-between; padding:10px 12px; border:1px solid #e2e8f0; "
                                 f"border-radius:8px; background-color:#fafbfc; margin-bottom:8px; "
                                 f"box-shadow: 0 1px 2px rgba(0,0,0,0.03); opacity:0.95;'>"
+                                f"<div>"
                                 f"<div style='font-size:0.75rem; color:#64748b; margin-bottom:3px;'>"
                                 f"{info['icon']} {info['type']}</div>"
                                 f"<div style='font-weight:800; font-size:0.98rem; color:#1e293b; "
                                 f"margin-bottom:6px;'>{info['display']} "
                                 f"<span style='font-size:0.78rem; font-weight:500; color:#475569;'>"
                                 f"({info['freq']})</span></div>"
+                                f"</div>"
                                 f"<div style='font-size:0.88rem;'>{info['html']}</div>"
                                 f"</div>",
                                 unsafe_allow_html=True,
@@ -2295,23 +2298,17 @@ def main() -> None:
                 gridwidth=1,
                 zeroline=False,
             )
-            _tick_vals = []
-            _tick_txt = []
-            _tc = pd.Timestamp(day_start).floor("h")
-            _t_end = pd.Timestamp(day_end)
-            while _tc <= _t_end:
-                _h = int(_tc.hour)
-                _nh = _h + 1
-                _tick_vals.append(_tc)
-                _tick_txt.append(f"{_h}~{_nh}시" if _nh <= 23 else "23~24시")
-                _tc += pd.Timedelta(hours=1)
-
+            # X축: 줌/자동 틱에서도 날짜·초 단위가 섞이지 않도록 시간(%H:00)만 고정
+            _hour_ms = 3600000
             fig.update_xaxes(
                 side="top",
+                type="date",
                 range=[day_start, day_end],
-                tickmode="array",
-                tickvals=_tick_vals,
-                ticktext=_tick_txt,
+                dtick=_hour_ms,
+                tickformat="%H:00",
+                tickformatstops=[
+                    dict(dtickrange=[None, None], value="%H:00"),
+                ],
                 tickangle=0,
                 tickfont=dict(family=_plot_font, size=9, color=_toss_sub),
                 showgrid=True,
@@ -2433,7 +2430,7 @@ def main() -> None:
                 borderpad=5,
             )
 
-            # 7. AI 추천 시각 마커 — 1순위·2순위 빨간색 마커 (타임라인 Task별 광고 추천 시간)
+            # 7. AI 추천 시각 마커 — 별(star) 통일, 1순위 빨강 / 2순위 파랑 (Task별 광고 추천 시간)
             mx1, my1, m_adv1 = [], [], []
             mx2, my2, m_adv2 = [], [], []
             for t in task_order:
@@ -2453,16 +2450,18 @@ def main() -> None:
                     my2.append(t)
                     m_adv2.append(advice_s)
 
+            _ai_star_1 = "#EF4444"
+            _ai_star_2 = "#3B82F6"
             if mx1:
                 fig.add_trace(go.Scatter(
                     x=mx1,
                     y=my1,
                     mode="markers",
                     marker=dict(
-                        symbol="circle",
-                        size=12,
-                        color=_toss_red,
-                        line=dict(color="white", width=2),
+                        symbol="star",
+                        size=13,
+                        color=_ai_star_1,
+                        line=dict(color="white", width=1.5),
                     ),
                     customdata=m_adv1,
                     name="AI 1순위 추천",
@@ -2477,14 +2476,22 @@ def main() -> None:
                     marker=dict(
                         symbol="star",
                         size=13,
-                        color=_toss_red,
-                        line=dict(color="white", width=1),
+                        color=_ai_star_2,
+                        line=dict(color="white", width=1.5),
                     ),
                     customdata=m_adv2,
                     name="AI 2순위 추천",
                     hovertemplate="%{y}<br>%{customdata}<extra></extra>",
                 ))
 
+            st.markdown(
+                "<div style='font-size:0.88rem;color:#475569;margin:4px 0 8px 0;line-height:1.55;'>"
+                "⭐ <span style='color:#EF4444;font-weight:600;'>빨간색 별</span>: 1순위 타격 추천 시각 / "
+                "⭐ <span style='color:#3B82F6;font-weight:600;'>파란색 별</span>: "
+                "2순위 타격 추천 시각 (오전·오후 분리)"
+                "</div>",
+                unsafe_allow_html=True,
+            )
             # [혁신적 우회법] Streamlit의 80KB 청크 절단 버그를 원천 봉쇄
             # scrollZoom=False: 휠이 차트 확대가 아니라 페이지 세로 스크롤에 가깝게 동작
             html_str = fig.to_html(
