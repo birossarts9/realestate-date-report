@@ -512,54 +512,67 @@ def _render_action_card(
     total_watch: int = 0,
     waiting_watch: int = 0,
 ) -> None:
-    """통합 액션 카드 — 사용자가 1초 만에 갱신 여부를 결정할 수 있도록 큼직하게 렌더."""
-    p = action["palette"]
-    raw_ai = (ai_msg or "").strip()
-    ai_html = html.escape(raw_ai) if raw_ai else "<span style='color:#64748b;font-weight:600;'>AI 추천 문구를 확인 중입니다.</span>"
-
-    if total_watch > 0:
-        done_watch = total_watch - waiting_watch
-        stats_html = (
-            f"총 <b>{total_watch}</b>곳 중 <b>{done_watch}</b>곳은 활동을 마쳤고, "
-            f"<b>{waiting_watch}</b>곳이 아직 갱신 대기 중입니다."
+    """통합 액션 카드 — 실시간 경쟁사 상태를 최우선으로 렌더."""
+    if total_watch <= 0:
+        title = "✅ 자유 갱신"
+        palette = {
+            "bg": "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+            "border": "#10b981",
+            "accent": "#047857",
+            "text": "#065f46",
+        }
+        summary_text = "현재 화면에서 집계된 경쟁 감시 대상이 없습니다. 원하시는 시각에 자유롭게 갱신하셔도 됩니다."
+    elif waiting_watch > 0:
+        title = "🛑 대기 권장 (적군 활동 중)"
+        palette = {
+            "bg": "linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)",
+            "border": "#ef4444",
+            "accent": "#b91c1c",
+            "text": "#9f1239",
+        }
+        summary_text = (
+            f"현재 감시 중인 총 {total_watch}곳 중 {waiting_watch}곳이 아직 갱신 대기 중입니다."
         )
     else:
-        stats_html = "현재 화면에서 집계된 경쟁 감시 대상이 없습니다."
+        title = "🚀 즉시 타격 (경쟁사 활동 종료)"
+        palette = {
+            "bg": "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+            "border": "#2563eb",
+            "accent": "#1d4ed8",
+            "text": "#1e3a8a",
+        }
+        summary_text = (
+            f"감시 중인 {total_watch}곳이 모두 오늘 갱신을 마쳤습니다. 지금이 가장 안전한 타점입니다."
+        )
+
+    raw_ai = (ai_msg or "").strip()
+    ai_html = html.escape(raw_ai) if raw_ai else "AI 추천 문구를 확인 중입니다."
+    ai_block = (
+        "<div style='margin-top:14px; font-size:0.84rem; color:#94a3b8; line-height:1.5;'>"
+        "<span style='font-weight:700;'>[과거 데이터 기반 AI 참고 타점]</span> "
+        f"<span style='font-weight:500;'>{ai_html}</span>"
+        "</div>"
+    )
 
     st.markdown(
         f"""
 <div style="
-  background: {p['bg']};
-  border: 2px solid {p['border']};
-  border-left: 10px solid {p['border']};
+  background: {palette['bg']};
+  border: 2px solid {palette['border']};
+  border-left: 10px solid {palette['border']};
   border-radius: 14px;
   padding: 22px 26px;
   margin: 18px 0 16px 0;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   font-family: inherit;
 ">
-  <div style="font-size: 1.55rem; font-weight: 900; color: {p['accent']}; letter-spacing: -0.02em; line-height: 1.25;">
-    {action['title']}
+  <div style="font-size: 1.55rem; font-weight: 900; color: {palette['accent']}; letter-spacing: -0.02em; line-height: 1.25;">
+    {title}
   </div>
-  <div style="font-size: 0.98rem; color: #475569; margin-top: 10px; line-height: 1.5;">
-    {stats_html}
+  <div style="font-size: 1.08rem; color: {palette['text']}; margin-top: 12px; line-height: 1.52; font-weight: 700;">
+    {html.escape(summary_text)}
   </div>
-  <div style="font-size: 1.02rem; color: {p['text']}; margin-top: 10px; line-height: 1.55;">
-    {action['reason']}
-  </div>
-  <div style="
-    margin-top: 14px;
-    padding: 12px 16px;
-    background: rgba(255,255,255,0.72);
-    border-radius: 10px;
-    border: 1px dashed {p['border']};
-    color: #1e293b;
-    font-size: 1.05rem;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  ">
-    {ai_html}
-  </div>
+  {ai_block}
 </div>
 """,
         unsafe_allow_html=True,
