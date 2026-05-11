@@ -270,6 +270,236 @@ def _ai_rec_ts_in_48h_window(
     return None
 
 
+def _parse_ai_secondary_time(advice: str) -> tuple[int, int] | None:
+    """다중 추천 메시지에서 '2순위 HH:MM'을 추출. 없으면 None."""
+    s = str(advice or "")
+    if not s:
+        return None
+    m = re.search(r"2순위[^\d]*(\d{1,2}):(\d{2})", s)
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2))
+    if 0 <= h <= 23 and 0 <= mi <= 59:
+        return h, mi
+    return None
+
+
+def _ai_secondary_ts_in_48h_window(
+    advice: str,
+    chart_day: datetime.date,
+    day_start: pd.Timestamp,
+    day_end: pd.Timestamp,
+) -> pd.Timestamp | None:
+    """48시간 창 안에 들어오는 2순위 추천 시각."""
+    hm = _parse_ai_secondary_time(advice)
+    if hm is None:
+        return None
+    h, mi = hm
+    for base_date in (chart_day, chart_day - timedelta(days=1)):
+        cand = pd.Timestamp(
+            year=base_date.year, month=base_date.month, day=base_date.day,
+            hour=h, minute=mi,
+        )
+        if day_start <= cand <= day_end:
+            return cand
+    return None
+
+
+# ------------------------------------------------------------------------------
+# 통합 액션 카드 (Integrated Action Card) — Mix Engine 헬퍼
+# ------------------------------------------------------------------------------
+def _parse_ai_primary_time(ai_msg: str) -> tuple[int, int] | None:
+    """`💡 1순위: HH:MM ...` 형식 또는 (구) `💡 AI 처방: HH:MM ...`에서
+    1순위 시각(시, 분)을 추출. 추출 실패 시 None."""
+    if not ai_msg:
+        return None
+    s = str(ai_msg)
+    m = re.search(r"1순위[^\d]*(\d{1,2}):(\d{2})", s)
+    if not m:
+        m = re.search(r"(\d{1,2}):(\d{2})", s)
+    if not m:
+        return None
+    h, mi = int(m.group(1)), int(m.group(2))
+    if 0 <= h <= 23 and 0 <= mi <= 59:
+        return h, mi
+    return None
+
+
+# Mix Engine 임계치
+_AI_REACH_GRACE_MINUTES = 5      # AI 추천 시각으로부터 ±이 분량 이내면 "도달"로 간주
+_WAIT_NEAR_THRESHOLD_MIN = 30    # 임박(30분 이내)이면 대기 메시지를 보강
+
+
+def _determine_action_state(
+    target_status: dict,
+    any_waiting: bool,
+    ai_msg: str,
+    kst_now: pd.Timestamp,
+) -> dict:
+    """
+    실시간 경쟁사 상황과 AI 다중 추천을 종합한 상태 판단.
+    반환: {status, title, reason, palette}
+        status: "STRIKE" | "WAIT" | "FREE"
+        palette: 카드 색상 (bg / border / accent / text)
+    """
+    palette_strike = {
+        "bg": "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+        "border": "#2563eb",
+        "accent": "#1d4ed8",
+        "text": "#1e3a8a",
+        "subtext": "#1e40af",
+    }
+    palette_wait = {
+        "bg": "linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)",
+        "border": "#f97316",
+        "accent": "#c2410c",
+        "text": "#9a3412",
+        "subtext": "#b45309",
+    }
+    palette_free = {
+        "bg": "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+        "border": "#10b981",
+        "accent": "#047857",
+        "text": "#065f46",
+        "subtext": "#047857",
+    }
+
+    # 데이터·경쟁사 자체가 없는 경우 → 자유 갱신
+    if not target_status:
+        return {
+            "status": "FREE",
+            "title": "✅ 자유 갱신 가능",
+            "reason": (
+                "현재 감시 대상 경쟁사가 없거나 활동 데이터가 부족합니다. "
+                "원하시는 시각에 자유롭게 갱신하셔도 됩니다."
+            ),
+            "palette": palette_free,
+        }
+
+    ai_primary = _parse_ai_primary_time(ai_msg)
+    now_min = kst_now.hour * 60 + kst_now.minute
+    waiting_cnt = sum(1 for info in target_status.values() if info.get("is_waiting"))
+
+    # AI 추천 시각이 명시되지 않은 경우 (자유 갱신 메시지·파싱 실패)
+    if ai_primary is None:
+        if any_waiting:
+            return {
+                "status": "WAIT",
+                "title": "🛑 잠시 대기 권장",
+                "reason": (
+                    f"요주의 경쟁사 {waiting_cnt}곳이 아직 활동 전입니다. "
+                    "이들이 갱신을 마친 뒤 타격하면 노출 효과가 훨씬 오래갑니다."
+                ),
+                "palette": palette_wait,
+            }
+        return {
+            "status": "STRIKE",
+            "title": "🚀 지금 타격 가능",
+            "reason": (
+                "주요 경쟁사들이 오늘 활동을 마쳤거나 일정 외 시간입니다. "
+                "지금 갱신해도 빈집을 노릴 수 있습니다."
+            ),
+            "palette": palette_strike,
+        }
+
+    ai_min = ai_primary[0] * 60 + ai_primary[1]
+    diff_min = ai_min - now_min
+    hh, mm = ai_primary
+    ai_hhmm = f"{hh:02d}:{mm:02d}"
+
+    # (A) AI 추천 시각에 도달했거나 이미 지났음 → 즉시 타격
+    if diff_min <= _AI_REACH_GRACE_MINUTES:
+        if not any_waiting:
+            reason = (
+                f"AI 1순위 추천 시각({ai_hhmm})에 도달했고, "
+                "주요 경쟁사들이 활동을 마쳤습니다. 지금이 최적의 타이밍입니다."
+            )
+        else:
+            reason = (
+                f"AI 1순위 추천 시각({ai_hhmm})에 도달했습니다. "
+                f"요주의 경쟁사 {waiting_cnt}곳이 남아있지만, 추천 시각의 빈집 점수가 더 높습니다."
+            )
+        return {
+            "status": "STRIKE",
+            "title": "🚀 지금이 최적의 타이밍입니다!",
+            "reason": reason,
+            "palette": palette_strike,
+        }
+
+    # (B) 경쟁사들이 이미 모두 활동 종료 → 빈집이 일찍 열림
+    if not any_waiting:
+        return {
+            "status": "STRIKE",
+            "title": "🚀 빈집이 일찍 열렸습니다!",
+            "reason": (
+                f"AI 1순위 추천 시각({ai_hhmm})까지 {diff_min//60}시간 {diff_min%60}분 남았지만, "
+                "주요 경쟁사들이 이미 오늘 활동을 마쳤습니다. AI 시간을 기다리지 말고 지금 타격하세요."
+            ),
+            "palette": palette_strike,
+        }
+
+    # (C) AI 시간 도달 전 + 요주의 경쟁사 남음 → 대기 권장
+    if diff_min <= _WAIT_NEAR_THRESHOLD_MIN:
+        reason = (
+            f"AI 1순위 추천 시각({ai_hhmm})까지 {diff_min}분 남았습니다. "
+            f"요주의 경쟁사 {waiting_cnt}곳이 활동 중이니 이 시각을 지키는 것이 안전합니다."
+        )
+    else:
+        reason = (
+            f"AI 1순위 추천 시각({ai_hhmm})까지 {diff_min//60}시간 {diff_min%60}분 남았고, "
+            f"요주의 경쟁사 {waiting_cnt}곳이 아직 활동 전입니다. "
+            "지금 갱신하면 곧 경쟁사 갱신에 묻혀 효과가 빠르게 소멸됩니다."
+        )
+
+    return {
+        "status": "WAIT",
+        "title": "🛑 잠시 대기 권장",
+        "reason": reason,
+        "palette": palette_wait,
+    }
+
+
+def _render_action_card(action: dict, ai_msg: str) -> None:
+    """통합 액션 카드 — 사용자가 1초 만에 갱신 여부를 결정할 수 있도록 큼직하게 렌더."""
+    p = action["palette"]
+    ai_html = html.escape(str(ai_msg or "AI 추천 정보 없음"))
+    st.markdown(
+        f"""
+<div style="
+  background: {p['bg']};
+  border: 2px solid {p['border']};
+  border-left: 10px solid {p['border']};
+  border-radius: 14px;
+  padding: 22px 26px;
+  margin: 18px 0 16px 0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  font-family: inherit;
+">
+  <div style="font-size: 1.55rem; font-weight: 900; color: {p['accent']}; letter-spacing: -0.02em; line-height: 1.25;">
+    {action['title']}
+  </div>
+  <div style="font-size: 1.02rem; color: {p['text']}; margin-top: 8px; line-height: 1.55;">
+    {action['reason']}
+  </div>
+  <div style="
+    margin-top: 14px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.72);
+    border-radius: 10px;
+    border: 1px dashed {p['border']};
+    color: #1e293b;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  ">
+    {ai_html}
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def _find_action_row_for_task(task: str, action_df: pd.DataFrame) -> pd.Series | None:
     """타임라인 Task 문자열에 대응하는 action_df 행 엄격 탐색"""
     if action_df.empty:
@@ -1895,57 +2125,63 @@ def main() -> None:
                                 "type": "고빈도 추격조",
                             }
 
-                    # 3. UI 렌더링 및 결합 시너지 가이드
+                    # ===========================================================
+                    # [최상단] 통합 타격 지시 카드 (Integrated Action Card)
+                    # ===========================================================
+                    strategy_dict = complex_data.get("strategy_dict", {})
+                    ai_msg = strategy_dict.get(sel_task, "")
+                    any_waiting = (
+                        any(info["is_waiting"] for info in target_status.values())
+                        if target_status
+                        else False
+                    )
+
+                    action = _determine_action_state(
+                        target_status=target_status,
+                        any_waiting=any_waiting,
+                        ai_msg=ai_msg,
+                        kst_now=kst_now,
+                    )
+                    _render_action_card(action, ai_msg)
+
+                    # ===========================================================
+                    # [보조 정보] 감시 중인 경쟁사 상세 — 작게 나열
+                    # ===========================================================
                     if target_status:
-                        st.caption(f"선택하신 **[{sel_task}]** 매물에서 나와 경쟁 중인 타겟들입니다.")
+                        st.markdown(
+                            "<div style='font-size:1.0rem;font-weight:700;color:#334155;"
+                            "margin-top:6px;margin-bottom:4px;'>"
+                            f"👁️ 감시 중인 경쟁사 상세 "
+                            f"<span style='font-size:0.85rem;font-weight:500;color:#64748b;'>"
+                            f"([{sel_task}] 기준 · {len(target_status)}곳)"
+                            f"</span></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        # 대기중(위험) → 안전 순 정렬
+                        sorted_targets = sorted(
+                            target_status.items(), key=lambda x: not x[1]["is_waiting"]
+                        )
+
                         cols = st.columns(min(len(target_status), 4))
                         col_idx = 0
-
-                        # 정렬: 대기중(위험)인 것을 가장 앞으로, 완료/휴무(안전)를 뒤로
-                        sorted_targets = sorted(target_status.items(), key=lambda x: not x[1]["is_waiting"])
-
                         for r_uni, info in sorted_targets:
+                            # 보조 정보 톤다운: 폰트·여백 축소, 옅은 톤
                             cols[col_idx % len(cols)].markdown(
-                                f"<div style='padding:12px; border:1px solid #e2e8f0; border-radius:8px; background-color:#f8fafc; margin-bottom:10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);'>"
-                                f"<div style='font-size:0.8rem; color:#64748b; margin-bottom:4px;'>{info['icon']} {info['type']}</div>"
-                                f"<div style='font-weight:900; font-size:1.1rem; color:#1e293b; margin-bottom:8px;'>{info['display']} <span style='font-size:0.85rem; font-weight:500; color:#475569;'>({info['freq']})</span></div>"
-                                f"<div>{info['html']}</div>"
+                                f"<div style='padding:10px 12px; border:1px solid #e2e8f0; "
+                                f"border-radius:8px; background-color:#fafbfc; margin-bottom:8px; "
+                                f"box-shadow: 0 1px 2px rgba(0,0,0,0.03); opacity:0.95;'>"
+                                f"<div style='font-size:0.75rem; color:#64748b; margin-bottom:3px;'>"
+                                f"{info['icon']} {info['type']}</div>"
+                                f"<div style='font-weight:800; font-size:0.98rem; color:#1e293b; "
+                                f"margin-bottom:6px;'>{info['display']} "
+                                f"<span style='font-size:0.78rem; font-weight:500; color:#475569;'>"
+                                f"({info['freq']})</span></div>"
+                                f"<div style='font-size:0.88rem;'>{info['html']}</div>"
                                 f"</div>",
                                 unsafe_allow_html=True,
                             )
                             col_idx += 1
-
-                        # [최종 결론] AI 예측 시간과 실시간 팩트의 결합
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        any_waiting = any(info["is_waiting"] for info in target_status.values())
-
-                        # 기존 AI 전략 가져오기 (대시보드 상의 변수명에 맞게 매칭)
-                        strategy_dict = complex_data.get("strategy_dict", {})
-                        ai_msg = strategy_dict.get(sel_task, "AI 분석 시간")
-                        # 불필요한 태그 정리
-                        ai_msg_clean = ai_msg.split("(예상")[0].replace("💡", "").strip() if "(예상" in ai_msg else ai_msg
-
-                        if any_waiting:
-                            st.markdown(
-                                "<div style='background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;"
-                                "border-radius:8px;margin-top:8px;font-family:inherit;'>"
-                                "<span style='color:#b45309;font-weight:800;font-size:1.15rem;'>[대기 권장]</span>"
-                                f"<span style='color:#334155;margin-left:8px;'>마지노선 전 · AI 참고 {html.escape(ai_msg_clean)}</span>"
-                                "</div>",
-                                unsafe_allow_html=True,
-                            )
-                        else:
-                            st.markdown(
-                                "<div style='background:#ecfdf5;border-left:4px solid #10b981;padding:12px 16px;"
-                                "border-radius:8px;margin-top:8px;font-family:inherit;'>"
-                                "<span style='color:#047857;font-weight:800;font-size:1.15rem;'>[즉시 갱신]</span>"
-                                f"<span style='color:#334155;margin-left:8px;'>창구 비었을 가능성 · AI {html.escape(ai_msg_clean)}</span>"
-                                "</div>",
-                                unsafe_allow_html=True,
-                            )
-
-                    else:
-                        st.info("이 매물에는 현재 감시할 만한 위협적인 경쟁사가 없습니다.")
             # ==========================================
             # 아래부터는 기존 px.timeline 그리는 코드 (display_tl_df 치환 없이 원본 tl_hover 사용)
             # 3. 차트 기본 렌더링 (툴팁: 내 순위·1위 부동산 마스킹, 호버 프레임은 캐시)
@@ -2126,32 +2362,55 @@ def main() -> None:
                 borderpad=5,
             )
 
-            # 7. AI 추천 시각 마커 (토스 레드 배지 스타일)
-            mx, my, m_adv = [], [], []
+            # 7. AI 추천 시각 마커 — 1순위(빨강 동그라미) + 2순위(주황 다이아몬드)
+            mx1, my1, m_adv1 = [], [], []
+            mx2, my2, m_adv2 = [], [], []
             for t in task_order:
                 r = sort_info[t][3]
                 if r is None:
                     continue
                 advice = r.get("광고 추천 시간")
-                ts = _ai_rec_ts_in_48h_window(str(advice or ""), e_d, day_start, day_end)
-                if ts:
-                    mx.append(ts)
-                    my.append(t)
-                    m_adv.append(str(advice or ""))
+                advice_s = str(advice or "")
+                ts1 = _ai_rec_ts_in_48h_window(advice_s, e_d, day_start, day_end)
+                if ts1:
+                    mx1.append(ts1)
+                    my1.append(t)
+                    m_adv1.append(advice_s)
+                ts2 = _ai_secondary_ts_in_48h_window(advice_s, e_d, day_start, day_end)
+                if ts2:
+                    mx2.append(ts2)
+                    my2.append(t)
+                    m_adv2.append(advice_s)
 
-            if mx:
+            if mx1:
                 fig.add_trace(go.Scatter(
-                    x=mx,
-                    y=my,
+                    x=mx1,
+                    y=my1,
                     mode="markers",
                     marker=dict(
                         symbol="circle",
-                        size=10,
+                        size=12,
                         color=_toss_red,
                         line=dict(color="white", width=2),
                     ),
-                    customdata=m_adv,
-                    name="AI 추천 갱신시각",
+                    customdata=m_adv1,
+                    name="AI 1순위 추천",
+                    hovertemplate="%{y}<br>%{customdata}<extra></extra>",
+                ))
+
+            if mx2:
+                fig.add_trace(go.Scatter(
+                    x=mx2,
+                    y=my2,
+                    mode="markers",
+                    marker=dict(
+                        symbol="diamond-open",
+                        size=11,
+                        color="#f97316",
+                        line=dict(color="#f97316", width=2),
+                    ),
+                    customdata=m_adv2,
+                    name="AI 2순위 추천",
                     hovertemplate="%{y}<br>%{customdata}<extra></extra>",
                 ))
 
