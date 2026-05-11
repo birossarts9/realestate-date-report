@@ -440,7 +440,7 @@ def _determine_action_state(
             }
         return {
             "status": "STRIKE",
-            "title": "🚀 즉시 타격",
+            "title": "🚀 AI 광고 추천 시간",
             "reason": (
                 "주요 경쟁사들이 오늘 활동을 마쳤거나 일정 외 시간입니다. "
                 "지금 갱신해도 빈집을 노릴 수 있습니다."
@@ -467,7 +467,7 @@ def _determine_action_state(
             )
         return {
             "status": "STRIKE",
-            "title": "🚀 즉시 타격",
+            "title": "🚀 AI 광고 추천 시간",
             "reason": reason,
             "palette": palette_strike,
         }
@@ -476,7 +476,7 @@ def _determine_action_state(
     if not any_waiting:
         return {
             "status": "STRIKE",
-            "title": "🚀 즉시 타격",
+            "title": "🚀 AI 광고 추천 시간",
             "reason": (
                 f"AI 1순위 추천 시각({ai_hhmm})까지 {diff_min//60}시간 {diff_min%60}분 남았지만, "
                 "주요 경쟁사들이 이미 오늘 활동을 마쳤습니다. AI 시간을 기다리지 말고 지금 타격하세요."
@@ -2271,6 +2271,10 @@ def main() -> None:
                             f"</span></div>",
                             unsafe_allow_html=True,
                         )
+                        st.caption(
+                            "※ 광고 여부는 단지 전체 기준으로 감시하며, "
+                            "현재 선택한 매물을 보유한 부동산만 표시됩니다."
+                        )
 
                         # 대기중(위험) → 안전 순 정렬
                         sorted_targets = sorted(
@@ -2379,13 +2383,15 @@ def main() -> None:
                 gridwidth=1,
                 zeroline=False,
             )
-            # X축: 줌/자동 틱에서도 날짜·초 단위가 섞이지 않도록 시간(%H:00)만 고정
-            _hour_ms = 3600000
+            # X축: 2시간 간격(4·6·8…)으로 정돈, 시간만 표시
+            _two_h_ms = 7200000
+            _x_tick0 = pd.Timestamp(day_start)
             fig.update_xaxes(
                 side="top",
                 type="date",
                 range=[day_start, day_end],
-                dtick=_hour_ms,
+                tick0=_x_tick0,
+                dtick=_two_h_ms,
                 tickformat="%H:00",
                 tickformatstops=[
                     dict(dtickrange=[None, None], value="%H:00"),
@@ -2511,7 +2517,7 @@ def main() -> None:
                 borderpad=5,
             )
 
-            # 7. AI 추천 시각 마커 — 별(star) 통일, 1순위 빨강 / 2순위 파랑 (Task별 광고 추천 시간)
+            # 7. AI 추천 시각 마커 — 별(star) 통일, 1순위 빨강 / 2순위 주황 (Task별 광고 추천 시간)
             mx1, my1, m_adv1 = [], [], []
             mx2, my2, m_adv2 = [], [], []
             for t in task_order:
@@ -2532,7 +2538,7 @@ def main() -> None:
                     m_adv2.append(advice_s)
 
             _ai_star_1 = "#EF4444"
-            _ai_star_2 = "#3B82F6"
+            _ai_star_2 = "#F59E0B"
             if mx1:
                 fig.add_trace(go.Scatter(
                     x=mx1,
@@ -2568,7 +2574,7 @@ def main() -> None:
             st.markdown(
                 "<div style='font-size:0.88rem;color:#475569;margin:4px 0 8px 0;line-height:1.55;'>"
                 "⭐ <span style='color:#EF4444;font-weight:600;'>빨간색 별</span>: 1순위 타격 추천 시각 / "
-                "⭐ <span style='color:#3B82F6;font-weight:600;'>파란색 별</span>: "
+                "⭐ <span style='color:#F59E0B;font-weight:600;'>주황색 별</span>: "
                 "2순위 타격 추천 시각 (오전·오후 분리)"
                 "</div>",
                 unsafe_allow_html=True,
@@ -2592,6 +2598,7 @@ def main() -> None:
 
 
     if True:
+        st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("#### 🏆 단지 내 시장 점유율 (M/S) Top 10")
         st.caption("파워점수 공식 = 기본(10) + 순위가점(10/순위) + 물량가점(묶음개수*0.1)")
 
