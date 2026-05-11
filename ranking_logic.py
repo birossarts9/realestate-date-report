@@ -773,26 +773,20 @@ def _fmt_expected_duration(total_mins: int) -> str:
 
 
 # --- 다중 시간 추천 (Multi-Recommendations) 파라미터 ----------------------------
-# 1순위와 2순위 사이 최소 시간 간격 — 오전/오후를 자연스럽게 나누기 위함
-SECONDARY_MIN_GAP_HOURS = 3
+# 1·2순위 시각 최소 간격(분). 미만이면 2순위 후보에서 제외
+SECONDARY_MIN_GAP_MINUTES = 180
 # 2순위 점수가 1순위 대비 이 비율 미만이면 노출 생략 (너무 약한 빈집 차단)
 SECONDARY_MIN_SCORE_RATIO = 0.30
 # 2순위 최소 비즈니스 시간 (분). 1시간 미만 빈집은 추천 가치 낮음
 SECONDARY_MIN_BUSINESS_MINS = 60
-# comp_df 기반 '적군 마지노선'(해당 묶음 경쟁사들의 오늘 요일 마지노선 중 최댓값)보다
-# 이른 빈집 타격 후보에만 적용. comp_df·마지노선 결측 시에는 배제(패널티 미적용).
-STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR = 0.02
 
 # 경쟁 과열로 모든 빈집 점수가 음수일 때 네이버 일반 피크 타임 안내 (앱 파서·마커와 호환)
-NAVER_PEAK_FALLBACK_MSG = (
-    "💡 1순위: 11:30 (경쟁 치열 ➔ 점심 피크 정면돌파) "
-    "/ 2순위: 19:30 (저녁 피크 공략)"
-)
+NAVER_PEAK_FALLBACK_MSG = "💡 1순위: 11:30 / 2순위: 19:30"
 
 
-def _format_strike_label(strike_dt: pd.Timestamp, biz_mins: int) -> str:
-    """'HH:MM (예상 N시간 N분 독점)' 형식."""
-    return f"{int(strike_dt.hour):02d}:{int(strike_dt.minute):02d} (예상 {_fmt_expected_duration(biz_mins)} 독점)"
+def _format_strike_hhmm(strike_dt: pd.Timestamp) -> str:
+    """추천 메시지용 시각만 (HH:MM)."""
+    return f"{int(strike_dt.hour):02d}:{int(strike_dt.minute):02d}"
 
 
 def _pick_top_two_strikes(
@@ -801,8 +795,8 @@ def _pick_top_two_strikes(
     """
     (score, strike_dt, biz_mins) 후보 리스트에서
       - 1순위 : 점수 최고 (동률 시 이른 시각)
-      - 2순위 : 1순위에서 ≥SECONDARY_MIN_GAP_HOURS 떨어진 후보 중 점수 최고,
-                점수 비율·비즈니스 시간 임계치를 통과한 경우만 채택
+      - 2순위 : 1순위 확정 후, 시각 차이가 ≥SECONDARY_MIN_GAP_MINUTES 인 후보만 두고
+                그중 점수 최고(동률 시 이른 시각). 없으면 None.
     """
     if not candidates:
         return None, None
@@ -810,17 +804,17 @@ def _pick_top_two_strikes(
     ordered = sorted(candidates, key=lambda x: (-x[0], x[1]))
     first = ordered[0]
 
-    gap = pd.Timedelta(hours=SECONDARY_MIN_GAP_HOURS)
+    min_gap_sec = float(SECONDARY_MIN_GAP_MINUTES * 60)
     second: tuple[float, pd.Timestamp, int] | None = None
     for sc, strike, biz in ordered[1:]:
-        if abs(strike - first[1]) < gap:
+        if abs((strike - first[1]).total_seconds()) < min_gap_sec:
             continue
         if biz < SECONDARY_MIN_BUSINESS_MINS:
             continue
         if first[0] > 0 and sc / first[0] < SECONDARY_MIN_SCORE_RATIO:
             continue
-        second = (sc, strike, biz)
-        break
+        if second is None or sc > second[0] or (sc == second[0] and strike < second[1]):
+            second = (sc, strike, biz)
 
     return first, second
 
@@ -876,7 +870,7 @@ def precalculate_ai_strategy(
     strategy_dict 키는 app.py 호환을 위해 `매물묶음키` 유지.
 
     comp_df: 대시보드 감시망과 동일한 경쟁사 패턴 테이블(오늘 요일 마지노선 포함).
-             None/결측이면 마지노선 선행 타격 패널티는 적용하지 않는다.
+             None/결측이면 마지노선 이전 후보 제한을 적용하지 않는다.
     """
     strategy_dict = {}
     t_work = ensure_listing_sop_columns(t_tracked_df.copy())
@@ -898,10 +892,7 @@ def precalculate_ai_strategy(
 
     vip_bundles = vip_current["매물묶음키"].dropna().unique()
     # 경쟁 활동이 전혀 없을 때의 대체 메시지 (다중 추천 포맷 통일)
-    no_activity_msg = (
-        "💡 1순위: 11:30 (최근 갱신 이력 없음 ➔ 점심 피크 선점) "
-        "/ 2순위: 19:30 (저녁 피크 공략)"
-    )
+    no_activity_msg = "💡 1순위: 11:30 / 2순위: 19:30"
 
     for b_key in vip_bundles:
         vsub = vip_current[vip_current["매물묶음키"] == b_key]
@@ -1022,7 +1013,7 @@ def precalculate_ai_strategy(
                 deadline_minutes = int(enemy_deadline_h) * 60
                 strike_minutes = int(start.hour) * 60 + int(start.minute)
                 if strike_minutes < deadline_minutes:
-                    sc *= STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR
+                    continue
             candidates.append((sc, start, biz_m))
 
         if not candidates:
@@ -1037,9 +1028,9 @@ def precalculate_ai_strategy(
             strategy_dict[b_key] = NAVER_PEAK_FALLBACK_MSG
             continue
 
-        msg = f"💡 1순위: {_format_strike_label(first[1], first[2])}"
+        msg = f"💡 1순위: {_format_strike_hhmm(first[1])}"
         if second is not None:
-            msg += f"  /  2순위: {_format_strike_label(second[1], second[2])}"
+            msg += f" / 2순위: {_format_strike_hhmm(second[1])}"
 
         strategy_dict[b_key] = msg
 
