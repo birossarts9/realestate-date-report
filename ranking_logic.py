@@ -7,21 +7,58 @@ import streamlit as st
 
 from data_fetcher import clean_realtor_name
 
+# 엑셀 SOP: 갱신·AI 묶음 기준 (노출형태 제외, CP사 포함)
+LISTING_SOP_KEYS = [
+    "부동산명_정제",
+    "단지명",
+    "동/호수",
+    "층/타입",
+    "거래방식",
+    "가격",
+    "CP사",
+]
+
 # 광고 빈도 등급·경쟁사 분석 공통: 최근 28일(일요일 제외는 행 필터에서 처리)
-ANALYSIS_WINDOW_DAYS = 28  # AI 패턴 학습 기간을 4주(28일)로 확장
-# 최신성 가중치(Gap&Peak): ref일 기준 0~3일 전(최근 4일) = 2.0, 4~13일 전 = 1.0
+ANALYSIS_WINDOW_DAYS = 28
 RECENCY_WEIGHT_RECENT = 2.0
 RECENCY_WEIGHT_OLD = 1.0
-RECENCY_RECENT_MAX_DELTA = 3  # inclusive: 0~3일 전 = 최근 4일
-TRAILING_STRIKE_MINUTES = 10  # 레거시 상수(표시용); Gap 로직은 시각+10분 규칙 사용
+RECENCY_RECENT_MAX_DELTA = 3
+TRAILING_STRIKE_MINUTES = 10
 
-# 어제 하루 스코프: 스탑워치 유지 시간 상한 (표시·집계)
 MAX_HOLD_HOURS = 24.0
-# 10분 미만 유지·미진입 등: 분 단위 표기 없이 고정 문구
 SHORT_OR_NO_HOLD_LABEL = "상위권 미진입 또는 즉시 이탈"
 MIN_WASTE_MINUTES_FOR_DETAIL = 10
 MIN_PER_DAY = 24 * 60
 PEAK_MINUTES = (8 * 60 + 30, 11 * 60 + 30, 19 * 60 + 30)
+
+
+def _fill_series(col, default="미상") -> pd.Series:
+    if col is None:
+        return pd.Series([default], dtype="object")
+    s = col if isinstance(col, pd.Series) else pd.Series(col)
+    return s.fillna(default).astype(str).str.strip().replace({"nan": "", "None": ""}).replace("", default)
+
+
+def ensure_listing_sop_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """SOP 7키 컬럼을 보강해 KeyError·NaN 그룹 붕괴를 방지한다."""
+    if df is None:
+        return pd.DataFrame()
+    if df.empty:
+        return df
+    out = df.copy()
+    if "부동산명_정제" not in out.columns:
+        if "부동산명_통합" in out.columns:
+            out["부동산명_정제"] = out["부동산명_통합"].astype(str)
+        elif "부동산명" in out.columns:
+            out["부동산명_정제"] = out["부동산명"].map(clean_realtor_name)
+        else:
+            out["부동산명_정제"] = "미상"
+    for c in LISTING_SOP_KEYS:
+        if c not in out.columns:
+            out[c] = "미상"
+        else:
+            out[c] = _fill_series(out[c], "미상")
+    return out
 
 
 def _hours_excluding_daily_midnight_to_8am(t0, t1) -> float:
@@ -81,6 +118,8 @@ def filter_exclude_sunday_rows(df, time_col, confirm_col="확인일자"):
     """수집일시 또는 확인일자(파싱 가능 시)가 일요일인 행은 분석·집계에서 제외."""
     if df is None or df.empty:
         return df
+    if time_col not in df.columns:
+        return df.copy()
     out = df.copy()
     ts = pd.to_datetime(out[time_col], errors="coerce")
     mask = ts.dt.weekday != 6
@@ -90,15 +129,15 @@ def filter_exclude_sunday_rows(df, time_col, confirm_col="확인일자"):
 
 
 def _count_confirm_change_events(grp, time_col, confirm_col="확인일자"):
-    """
-    확인일자의 고유 개수를 갱신 이벤트 수로 계산한다.
-    """
+    if confirm_col not in grp.columns:
+        return 0
     return int(grp[confirm_col].dropna().astype(str).str.strip().nunique())
 
 
 def _deduped_renewal_rows_per_bundle(df, bundle_col="매물묶음키"):
-    """매물묶음키별 갱신 관측 건수(일요일 제외, 동일 시각·중개사·확인일자 중복 제거)."""
     if df is None or df.empty or "수집일시" not in df.columns:
+        return pd.Series(dtype="int64")
+    if bundle_col not in df.columns:
         return pd.Series(dtype="int64")
     sub = df.copy()
     sub["_ts"] = pd.to_datetime(sub["수집일시"], errors="coerce")
@@ -117,19 +156,19 @@ def _deduped_renewal_rows_per_bundle(df, bundle_col="매물묶음키"):
 def count_renewal_events_for_bundle(
     tracked_df, b_key, bundle_col="매물묶음키", window_days=ANALYSIS_WINDOW_DAYS
 ):
-    """단일 매물 갱신 건수(분석 기간·일요일 제외·확인일자 고유일수; 기본 window_days=ANALYSIS_WINDOW_DAYS)."""
+    if tracked_df is None or tracked_df.empty:
+        return 0
+    if bundle_col not in tracked_df.columns or "수집일시" not in tracked_df.columns:
+        return 0
+    if "트랙키" not in tracked_df.columns:
+        return 0
     work = tracked_df.copy()
-    if "트랙키" not in work.columns:
-        raise ValueError("count_renewal_events_for_bundle 입력 df에는 '트랙키'가 필요합니다.")
     sub = work[work[bundle_col] == b_key]
     if sub.empty:
         return 0
-    track_keys = sub["트랙키"].dropna().unique().tolist() if "트랙키" in sub.columns else []
+    track_keys = sub["트랙키"].dropna().unique().tolist()
     if track_keys:
         sub = work[work["트랙키"].isin(track_keys)].copy()
-    else:
-        sub = sub.copy()
-    sub = sub.copy()
     sub["_tw"] = pd.to_datetime(sub["수집일시"], errors="coerce")
     sub = sub.dropna(subset=["_tw"])
     if sub.empty:
@@ -138,15 +177,12 @@ def count_renewal_events_for_bundle(
     start = ref.normalize() - pd.Timedelta(days=window_days - 1)
     sub = sub[sub["_tw"] >= start]
     sub = filter_exclude_sunday_rows(sub, "_tw")
-    if sub.empty:
+    if sub.empty or "확인일자" not in sub.columns:
         return 0
     return int(sub["확인일자"].dropna().astype(str).str.strip().nunique())
 
 
 def attach_unified_realtor_name(df, source_col="부동산명", target_col="부동산명_통합"):
-    """
-    Step 1: `부동산명_통합` 컬럼 생성(정규화). `calculate_ad_efficiency` 입력 전에 호출 가능.
-    """
     out = df.copy()
     if source_col not in out.columns:
         raise ValueError(f"df에 '{source_col}' 컬럼이 없습니다.")
@@ -167,11 +203,9 @@ def _infer_exposure_type(df):
 @st.cache_data(ttl=3600, show_spinner=False)
 def build_listing_tracking_keys(df, time_col="수집일시"):
     """
-    최종 시계열 트래킹 키 생성:
-    - 최종스펙키(DNA): [정제부동산명 + 단지명 + 동/호수 + 층/타입 + 거래방식 + 노출형태]
-    - 트랙키:
-      - 동일 날짜(수집일시 기준)에 동일 최종스펙키에서 고유번호가 2개 이상 동시 존재하면 충돌로 판단해 고유번호별 분리
-      - 그렇지 않으면(바통 터치) 동일 DNA 이력을 통합하되, 이전 수집시각과 7일 초과 공백이 발생하면 새로운 트랙으로 분리
+    최종 시계열 트래킹 키 생성 (SOP 정렬):
+    - 최종스펙키: 부동산명_통합 + 단지명 + 동/호수 + 층/타입 + 거래방식 + 가격 + CP사
+      (노출형태는 키에서 제외 — 갱신 중 변경 가능)
     """
     start_t = time.time()
     print("[START] build_listing_tracking_keys")
@@ -188,10 +222,22 @@ def build_listing_tracking_keys(df, time_col="수집일시"):
         raise ValueError(f"df에 '{time_col}' 컬럼이 필요합니다.")
     out[time_col] = pd.to_datetime(out[time_col], errors="coerce")
 
+    if "CP사" not in out.columns:
+        out["CP사"] = ""
+    out["CP사"] = out["CP사"].fillna("").astype(str).str.strip()
+
+    for c in ("단지명", "동/호수", "층/타입", "거래방식"):
+        if c not in out.columns:
+            out[c] = ""
+        out[c] = out[c].fillna("").astype(str).str.strip()
+
+    if "가격" not in out.columns:
+        out["가격"] = ""
+    out["_가격키"] = out["가격"].fillna("").astype(str).str.strip()
+
     out["노출형태"] = _infer_exposure_type(out)
-    out["_층타입"] = out["층/타입"].fillna("").astype(str)
-    out["방향"] = out["_층타입"].str.split("|").str[-1].fillna("").astype(str).str.strip()
     out["_가격수치"] = pd.to_numeric(out.get("가격"), errors="coerce")
+
     out["최종스펙키"] = (
         out["부동산명_통합"].fillna("").astype(str).str.strip()
         + " | "
@@ -203,19 +249,21 @@ def build_listing_tracking_keys(df, time_col="수집일시"):
         + " | "
         + out["거래방식"].fillna("").astype(str).str.strip()
         + " | "
-        + out["방향"].fillna("").astype(str).str.strip()
+        + out["_가격키"]
         + " | "
-        + out["노출형태"].fillna("").astype(str).str.strip()
+        + out["CP사"].fillna("").astype(str).str.strip()
     )
+
     if "고유번호" not in out.columns:
         out["고유번호"] = "기록없음"
     out["고유번호"] = out["고유번호"].fillna("기록없음").astype(str).str.strip()
     out["_수집일자"] = out[time_col].dt.normalize()
     if "확인일자" in out.columns:
         out["_확인일자date"] = pd.to_datetime(out["확인일자"], errors="coerce").dt.date
-        out.loc[out["_수집일자"].isna(), "_수집일자"] = pd.to_datetime(out.loc[out["_수집일자"].isna(), "_확인일자date"], errors="coerce")
+        out.loc[out["_수집일자"].isna(), "_수집일자"] = pd.to_datetime(
+            out.loc[out["_수집일자"].isna(), "_확인일자date"], errors="coerce"
+        )
 
-    # 모든 시계열 교차 검증 전에 시간 오름차순 정렬
     out = out.sort_values([time_col], ascending=True)
     valid = out.dropna(subset=[time_col]).copy()
     daily_collisions = (
@@ -238,30 +286,29 @@ def build_listing_tracking_keys(df, time_col="수집일시"):
         out.loc[out["_충돌스펙"], "최종스펙키"] + " || id=" + out.loc[out["_충돌스펙"], "고유번호"]
     )
 
-    # 바통 터치 통합 규칙:
-    # - 비충돌 DNA는 하나의 매물 이력으로 통합(가격 수정/재등록 포함)
-    # - 단, 이전 수집시각과 7일 초과 공백이면 동일 매물로 보지 않고 신규 트랙으로 분리
     non_collision_mask = ~out["_충돌스펙"]
     if non_collision_mask.any():
         nc = out.loc[non_collision_mask].sort_values(["최종스펙키", time_col]).copy()
         nc["_이전수집일시"] = nc.groupby("최종스펙키")[time_col].shift(1)
         nc["_이전가격"] = nc.groupby("최종스펙키")["_가격수치"].shift(1)
         gap_days = (nc[time_col] - nc["_이전수집일시"]).dt.total_seconds() / 86400.0
-        # 10% 가격 오차율 검사: 이전 가격 대비 ±10% 초과 변동은 신규 트랙
         prev_abs = nc["_이전가격"].abs()
         rel_diff = (nc["_가격수치"] - nc["_이전가격"]).abs() / prev_abs.where(prev_abs > 0)
-        price_break = (nc["_가격수치"].notna() & nc["_이전가격"].notna() & (rel_diff > 0.10))
+        price_break = nc["_가격수치"].notna() & nc["_이전가격"].notna() & (rel_diff > 0.10)
         nc["_신규트랙시작"] = nc["_이전수집일시"].isna() | (gap_days > 7.0) | price_break
         nc["_트랙세그"] = nc.groupby("최종스펙키")["_신규트랙시작"].cumsum().astype(int)
         nc["트랙키"] = nc["최종스펙키"] + " || merged_seg=" + nc["_트랙세그"].astype(str)
         out.loc[nc.index, "트랙키"] = nc["트랙키"]
-    out = out.drop(columns=["_수집일자", "_충돌스펙", "_확인일자date", "_층타입", "_가격수치"], errors="ignore")
+
+    out = out.drop(
+        columns=["_수집일자", "_충돌스펙", "_확인일자date", "_가격수치", "_가격키"],
+        errors="ignore",
+    )
     print(f"[DONE] build_listing_tracking_keys rows={len(out):,} ({time.time() - start_t:.2f}s)")
     return out
 
 
 def _ad_eff_in_top_tier(_ignored_total_rank, bundle_rank):
-    """광고 성공 판정: 묶음내순위 3위 이내만 (전체순위는 사용하지 않음)."""
     try:
         b = int(bundle_rank)
     except (TypeError, ValueError):
@@ -270,17 +317,15 @@ def _ad_eff_in_top_tier(_ignored_total_rank, bundle_rank):
 
 
 def calculate_ad_efficiency(df):
-    """
-    광고 갱신(`확인일자` 변경) 이후 묶음내 3위 이내 유지 시간(Stopwatch)으로
-    Value(3시간 이상 유지) / Waste(미진입 또는 3시간 미만)를 집계한다.
-    """
     import pandas as pd
-    
+
     work = df.copy()
     time_col = "수집일시" if "수집일시" in work.columns else "수집일자"
     apt_col = "아파트명" if "아파트명" in work.columns else "단지명"
-    
+
     if "부동산명_통합" not in work.columns or time_col not in work.columns:
+        return {}
+    if "확인일자" not in work.columns:
         return {}
 
     work[time_col] = pd.to_datetime(work[time_col], errors="coerce")
@@ -291,30 +336,26 @@ def calculate_ad_efficiency(df):
         return {}
 
     def _scalar(v):
-        """Series가 들어와도 스칼라로 안전 변환"""
         if isinstance(v, pd.Series):
             return v.iloc[0] if not v.empty else pd.NA
         return v
 
-    # 1. 기준일 설정: 컴퓨터 '오늘'이 아닌 '데이터상 최신 날짜' 기준 (가장 안전)
     data_today = work[time_col].max().normalize().date()
     yesterday_date = data_today - pd.Timedelta(days=1)
 
     work["확인일자_date"] = work["확인일자"].apply(parse_conf_date_str)
 
-    # 3. 그룹화: 전체순위_숫자를 절대 빼고 '확인일자' 자체를 고유 이벤트 키로 사용
     group_keys = [apt_col, "부동산명_통합"]
     if "매물묶음키" in work.columns:
         group_keys.append("매물묶음키")
-    group_keys.append("확인일자") # 매물번호가 없을 때 가장 완벽한 식별자
+    group_keys.append("확인일자")
 
     agg = {}
     debug_count = 0
 
     for keys, grp in work.groupby(group_keys, sort=False):
-        conf_date = grp['확인일자_date'].iloc[0]
-        
-        # 파싱이 안 되거나 실제 '어제' 갱신된 매물이 아니면 가차 없이 패스
+        conf_date = grp["확인일자_date"].iloc[0]
+
         if pd.isna(conf_date) or conf_date != yesterday_date:
             continue
 
@@ -322,27 +363,23 @@ def calculate_ad_efficiency(df):
         if broker not in agg:
             agg[broker] = {"durations": [], "성공_횟수": 0, "실패_횟수(버려진돈)": 0}
 
-        # 시간순 정렬
         grp = grp.sort_values(time_col).reset_index(drop=True)
         start_ts = grp[time_col].iloc[0]
         debug_count += 1
 
-        # 시작 시점에 상위권 진입 실패 시 (버려진 돈)
         first_bundle = _scalar(grp.iloc[0].get("묶음내순위_숫자", pd.NA))
 
         if not _ad_eff_in_top_tier(None, first_bundle):
             agg[broker]["실패_횟수(버려진돈)"] += 1
             continue
 
-        # 상단 유지 시간(스탑워치) 계산
         end_ts = start_ts
         for _, row in grp.iterrows():
             if _ad_eff_in_top_tier(None, _scalar(row.get("묶음내순위_숫자", pd.NA))):
                 end_ts = row[time_col]
             else:
-                break # 한 번이라도 조건 밖으로 밀려나면 스탑워치 종료
+                break
 
-        # 3시간 이상 버텼는가? (하루 상한 24h)
         hours_raw = (end_ts - start_ts).total_seconds() / 3600.0
         hours = min(float(hours_raw), MAX_HOLD_HOURS)
         if hours >= 3.0:
@@ -367,19 +404,25 @@ def calculate_ad_efficiency(df):
 
 @st.cache_data(ttl=900, show_spinner=False)
 def _build_cached_event_frame(work: pd.DataFrame, time_col: str) -> pd.DataFrame:
-    """트랙키 기준 트리거/이벤트 프레임을 캐시한다."""
+    """트랙키 기준 트리거 프레임. 확인일자 cummax는 SOP 7키 그룹으로 계산."""
+    if work.empty or "트랙키" not in work.columns:
+        return pd.DataFrame()
+    if "확인일자" not in work.columns:
+        return pd.DataFrame()
+
     base = work.sort_values(["트랙키", time_col]).copy()
     base["확인일자_정제"] = base["확인일자"].astype(str).str.strip()
     base["이전확인일자"] = base.groupby("트랙키")["확인일자_정제"].shift(1)
-    # 1. 안전한 datetime 변환
     base["확인일자_dt"] = pd.to_datetime(base["확인일자_정제"].astype(str), errors="coerce")
 
-    # 2. 매물 묶음별로 누적 최신 확인일자(cummax) 계산
-    grp_keys = ["매물묶음키", "부동산명_통합"]
-    base["max_확인일자_dt"] = base.groupby(grp_keys)["확인일자_dt"].cummax()
-    base["prev_max_dt"] = base.groupby(grp_keys)["max_확인일자_dt"].shift(1)
+    base = ensure_listing_sop_columns(base)
+    grp_keys = [k for k in LISTING_SOP_KEYS if k in base.columns]
+    if not grp_keys:
+        grp_keys = ["트랙키"]
 
-    # 3. 진짜 갱신 판정: 첫 데이터이거나, 확인일자가 과거로 돌아가지 않고 '새로운 최신 날짜'로 갱신되었을 때만 인정
+    base["max_확인일자_dt"] = base.groupby(grp_keys, dropna=False)["확인일자_dt"].cummax()
+    base["prev_max_dt"] = base.groupby(grp_keys, dropna=False)["max_확인일자_dt"].shift(1)
+
     base["is_trigger"] = base["이전확인일자"].isna() | (
         base["확인일자_dt"].notna()
         & (base["확인일자_dt"] == base["max_확인일자_dt"])
@@ -392,28 +435,6 @@ def _build_cached_event_frame(work: pd.DataFrame, time_col: str) -> pd.DataFrame
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_df=None, target_complexes=None):
-    """
-    최근 ANALYSIS_WINDOW_DAYS(일요일 제외 행) 광고 갱신 빈도로 상/중/하 등급을 만든 뒤,
-    '어제' 발생한 trigger 기준으로 Value/Waste 리포트를 반환한다.
-
-    등급(분석 기간 내 확인일자 변경 이벤트 수): 상 ≥10회, 중 5~9회, 하 ≤4회.
-
-    Returns
-    -------
-    dict
-        {
-            "report": {
-                "상": {"count": int, "waste": int, "hold_min": float|None, "hold_max": float|None},
-                ...
-            },
-            "waste_details": [{"time_label": str, "minutes": int, "grade": str}, ...],
-            "yesterday": date,
-            "listings_by_grade": {
-                "상": [...], "중": [...], "하": [...]
-            },
-            "waste_hold_minutes": [int, ...],  # Waste 건별 상위권 체류(또는 0) 분 단위
-        }
-    """
     start_t = time.time()
     print("[START] calculate_ad_efficiency_with_grades")
     work = df.copy()
@@ -443,13 +464,11 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
     if tracked_df is None:
         raise ValueError("calculate_ad_efficiency_with_grades에는 tracked_df(트래킹 완료 DF)가 필요합니다.")
     base = tracked_df
-    # Early Exit 1: 단지 선필터
-    if target_complexes:
+    if target_complexes and "단지명" in base.columns:
         base = base[base["단지명"].isin(target_complexes)]
         if base.empty:
             print(f"[WARN] calculate_ad_efficiency_with_grades empty after complex filter ({time.time() - start_t:.2f}s)")
             return empty_result
-    # Early Exit 2: 타겟 부동산 선필터
     if broker_unified_filter is not None and str(broker_unified_filter).strip():
         broker_norm = str(broker_unified_filter).strip()
         if "부동산명_통합" in base.columns:
@@ -480,7 +499,8 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
         print(f"[WARN] calculate_ad_efficiency_with_grades empty events ({time.time() - start_t:.2f}s)")
         return empty_result
 
-    # 이벤트 범위(트리거 ~ 다음 트리거 직전)를 벡터로 계산
+    if "매물묶음키" not in work.columns:
+        work["매물묶음키"] = ""
     evt = work[work["is_trigger"]][["트랙키", "event_id", "trigger_ts", "매물묶음키", "부동산명_통합"]].copy()
     evt["next_trigger_ts"] = evt.groupby("트랙키")["trigger_ts"].shift(-1)
     freq_14d = evt.groupby("트랙키")["event_id"].nunique().rename("주간_갱신횟수")
@@ -497,7 +517,6 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
     rank_rows["is_top3"] = pd.to_numeric(rank_rows["묶음내순위_숫자"], errors="coerce").fillna(999).astype(int) <= 3
     rank_rows["next_ts"] = rank_rows.groupby(["트랙키", "event_id"])[time_col].shift(-1)
     rank_rows["end_ts"] = rank_rows["next_ts"].where(rank_rows["next_ts"].notna(), rank_rows["next_trigger_ts"])
-    # 구간별 00:00~08:00(매일) 제외 체류 시간
     rank_rows["dur_h"] = [
         _hours_excluding_daily_midnight_to_8am(a, b)
         for a, b in zip(rank_rows[time_col], rank_rows["end_ts"])
@@ -582,13 +601,7 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
     ).fillna(0).astype("Int64")
     ampm = hour.map(lambda h: "오전" if int(h) < 12 else "오후").astype(str)
     disp_h = hour.map(lambda h: int(h) if 1 <= int(h) <= 12 else (int(h) - 12 if int(h) > 12 else 12)).astype("Int64")
-    # dtype 충돌(int + str) 방지: 문자열 결합 전에 object/string으로 강제 변환
-    y_waste["time_label"] = (
-        ampm.astype(str)
-        + " "
-        + disp_h.astype(str)
-        + "시경"
-    )
+    y_waste["time_label"] = ampm.astype(str) + " " + disp_h.astype(str) + "시경"
     waste_details = (
         y_waste.sort_values("minutes", ascending=False)[["time_label", "minutes", "grade"]]
         .head(5)
@@ -598,16 +611,22 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
 
     listing_records = listings.rename(columns={"grade": "등급"})
     listing_records = listing_records.sort_values(["등급", "어제_갱신_있음", "주간_갱신횟수"], ascending=[True, False, False])
+    col_list = [
+        "매물묶음키",
+        "트랙키",
+        "부동산명_통합",
+        "주간_갱신횟수",
+        "어제_갱신_있음",
+        "어제_유지_시간",
+        "어제_성공",
+        "waste_minutes",
+        "유지_시간_표시",
+    ]
+    col_list = [c for c in col_list if c in listing_records.columns]
     listings_by_grade = {
-        "상": listing_records[listing_records["등급"] == "상"][
-            ["매물묶음키", "트랙키", "부동산명_통합", "주간_갱신횟수", "어제_갱신_있음", "어제_유지_시간", "어제_성공", "waste_minutes", "유지_시간_표시"]
-        ].to_dict("records"),
-        "중": listing_records[listing_records["등급"] == "중"][
-            ["매물묶음키", "트랙키", "부동산명_통합", "주간_갱신횟수", "어제_갱신_있음", "어제_유지_시간", "어제_성공", "waste_minutes", "유지_시간_표시"]
-        ].to_dict("records"),
-        "하": listing_records[listing_records["등급"] == "하"][
-            ["매물묶음키", "트랙키", "부동산명_통합", "주간_갱신횟수", "어제_갱신_있음", "어제_유지_시간", "어제_성공", "waste_minutes", "유지_시간_표시"]
-        ].to_dict("records"),
+        "상": listing_records[listing_records["등급"] == "상"][col_list].to_dict("records"),
+        "중": listing_records[listing_records["등급"] == "중"][col_list].to_dict("records"),
+        "하": listing_records[listing_records["등급"] == "하"][col_list].to_dict("records"),
     }
 
     out = {
@@ -622,22 +641,6 @@ def calculate_ad_efficiency_with_grades(df, broker_unified_filter=None, tracked_
 
 
 def calculate_heat_level(df):
-    """
-    묶음별 광고 과열도 계산.
-
-    Returns
-    -------
-    dict
-        {
-            "매물묶음키": {
-                "heat_level": 1|2|3,
-                "heat_label": "여유|보통|치열",
-                "daily_renewals": float,
-                "participants": int
-            },
-            ...
-        }
-    """
     work = df.copy()
     required = ["매물묶음키", "수집일시", "확인일자"]
     missing = [c for c in required if c not in work.columns]
@@ -679,14 +682,11 @@ def calculate_heat_level(df):
         daily = float(r_cnt / day_span)
 
         if daily >= 3.0 or p_cnt >= 8:
-            level = 3
-            label = "치열"
+            level, label = 3, "치열"
         elif daily >= 1.2 or p_cnt >= 4:
-            level = 2
-            label = "보통"
+            level, label = 2, "보통"
         else:
-            level = 1
-            label = "여유"
+            level, label = 1, "여유"
 
         out[b_key] = {
             "heat_level": level,
@@ -709,11 +709,6 @@ def _nearest_peak_distance(m):
 
 
 def _recommend_from_gap_and_peaks(active_minutes, active_hours):
-    """
-    active_hours: 경쟁사 갱신이 발생한 시(0~23) 배열
-    active_minutes: 경쟁사 갱신 시각(분 0~1439)
-    최장 연속 빈 Gap의 시작 후보 중, 피크에 가장 가깝고(동률이면 해당 시 갱신 밀도가 낮은) 분을 고른다.
-    """
     hour_cnt = Counter(active_hours)
     R = sorted(set(int(m) % MIN_PER_DAY for m in active_minutes))
     if not R:
@@ -760,7 +755,6 @@ def _recommend_from_gap_and_peaks(active_minutes, active_hours):
 
 
 def _recency_weight_delta(delta_days: int) -> float:
-    """ref일 대비 일수 차이. 14일 창 밖·미래는 0. 0~3일 전 2.0, 4~13일 전 1.0."""
     if delta_days < 0 or delta_days > 13:
         return 0.0
     if delta_days <= RECENCY_RECENT_MAX_DELTA:
@@ -771,58 +765,131 @@ def _recency_weight_delta(delta_days: int) -> float:
 def _fmt_expected_duration(total_mins: int) -> str:
     h = total_mins // 60
     m = total_mins % 60
+    if h <= 0:
+        return f"{m}분"
+    if m <= 0:
+        return f"{h}시간"
     return f"{h}시간 {m}분"
+
+
+# --- 다중 시간 추천 (Multi-Recommendations) 파라미터 ----------------------------
+# 1순위와 2순위 사이 최소 시간 간격 — 오전/오후를 자연스럽게 나누기 위함
+SECONDARY_MIN_GAP_HOURS = 3
+# 2순위 점수가 1순위 대비 이 비율 미만이면 노출 생략 (너무 약한 빈집 차단)
+SECONDARY_MIN_SCORE_RATIO = 0.30
+# 2순위 최소 비즈니스 시간 (분). 1시간 미만 빈집은 추천 가치 낮음
+SECONDARY_MIN_BUSINESS_MINS = 60
+
+
+def _format_strike_label(strike_dt: pd.Timestamp, biz_mins: int) -> str:
+    """'HH:MM (예상 N시간 N분 독점)' 형식."""
+    return f"{int(strike_dt.hour):02d}:{int(strike_dt.minute):02d} (예상 {_fmt_expected_duration(biz_mins)} 독점)"
+
+
+def _pick_top_two_strikes(
+    candidates: list[tuple[float, pd.Timestamp, int]],
+) -> tuple[tuple[float, pd.Timestamp, int] | None, tuple[float, pd.Timestamp, int] | None]:
+    """
+    (score, strike_dt, biz_mins) 후보 리스트에서
+      - 1순위 : 점수 최고 (동률 시 이른 시각)
+      - 2순위 : 1순위에서 ≥SECONDARY_MIN_GAP_HOURS 떨어진 후보 중 점수 최고,
+                점수 비율·비즈니스 시간 임계치를 통과한 경우만 채택
+    """
+    if not candidates:
+        return None, None
+
+    ordered = sorted(candidates, key=lambda x: (-x[0], x[1]))
+    first = ordered[0]
+
+    gap = pd.Timedelta(hours=SECONDARY_MIN_GAP_HOURS)
+    second: tuple[float, pd.Timestamp, int] | None = None
+    for sc, strike, biz in ordered[1:]:
+        if abs(strike - first[1]) < gap:
+            continue
+        if biz < SECONDARY_MIN_BUSINESS_MINS:
+            continue
+        if first[0] > 0 and sc / first[0] < SECONDARY_MIN_SCORE_RATIO:
+            continue
+        second = (sc, strike, biz)
+        break
+
+    return first, second
+
+
+def _mask_sop_match(frame: pd.DataFrame, ref: pd.Series) -> pd.Series:
+    m = pd.Series(True, index=frame.index)
+    for k in LISTING_SOP_KEYS:
+        if k not in frame.columns:
+            continue
+        rv = str(ref.get(k, "미상")) if hasattr(ref, "get") else str(ref[k] if k in ref.index else "미상")
+        m &= frame[k].astype(str) == rv
+    return m
 
 
 @st.cache_data(ttl=3600)
 def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_name):
     """
-    Gap & Peak Scoring: 경쟁사 갱신 시각을 최신성 가중(0~3일 2.0 / 4~13일 1.0)으로 시간대별 합산하고,
-    각 활동 시각(h)마다 타격 시각 = 해당 시간 최신 갱신 + 30분,
-    다음 활동 '시간' 정각까지를 빈집으로 두고 분당 트래픽 점수를 합산한다.
-    구간 점수에 (1 + hour_weights[h]*0.1)을 곱한 뒤 최고 점수 구간의 타격 시각을 추천한다.
+    Gap & Peak Scoring. 경쟁사 갱신은 SOP 7키(부동산명_정제~CP사)로 내 매물 묶음과 동일한 스펙만 집계한다.
+    strategy_dict 키는 app.py 호환을 위해 `매물묶음키` 유지.
     """
     strategy_dict = {}
-    t_work = t_tracked_df.copy()
-    b_work = boosted_tracked_df.copy()
+    t_work = ensure_listing_sop_columns(t_tracked_df.copy())
+    b_work = ensure_listing_sop_columns(boosted_tracked_df.copy())
     target_u = clean_realtor_name(filter_realtor_name)
+
+    if "부동산명" not in t_work.columns:
+        return strategy_dict
     t_work["_nm_u"] = t_work["부동산명"].apply(clean_realtor_name)
     vip_current = t_work[t_work["_nm_u"] == target_u].drop(columns=["_nm_u"], errors="ignore")
 
-    track_to_bundle = (
-        vip_current.dropna(subset=["트랙키", "매물묶음키"])
-        .set_index("트랙키")["매물묶음키"]
-        .to_dict()
-    )
+    if "매물묶음키" not in vip_current.columns:
+        return strategy_dict
 
-    bw_vip = b_work[b_work["트랙키"].isin(track_to_bundle.keys())].copy()
-    bw_vip["_b_key"] = bw_vip["트랙키"].map(track_to_bundle)
-    bw_vip["_ts"] = pd.to_datetime(bw_vip["수집일시"], errors="coerce")
-    bw_vip = bw_vip.dropna(subset=["_ts", "_b_key"])
-    bw_vip = bw_vip[bw_vip["_ts"].dt.weekday != 6]
-
-    if "확인일자" in bw_vip.columns:
-        c_s = bw_vip["확인일자"].astype(str).str.strip()
-        c_dt = pd.to_datetime(c_s, format="%y.%m.%d", errors="coerce")
-        c_na = c_dt.isna() & (c_s != "") & (c_s.str.lower() != "nan")
-        if c_na.any():
-            c_dt = c_dt.copy()
-            c_dt.loc[c_na] = pd.to_datetime(c_s.loc[c_na], errors="coerce")
-        keep = c_dt.isna() | (c_dt.dt.weekday != 6)
-        bw_vip = bw_vip.loc[keep].copy()
-
-    grouped_bw = dict(tuple(bw_vip.groupby("_b_key")))
+    if "부동산명" in b_work.columns:
+        b_work["_nm_u"] = b_work["부동산명"].apply(clean_realtor_name)
+    else:
+        b_work["_nm_u"] = ""
 
     vip_bundles = vip_current["매물묶음키"].dropna().unique()
-    no_activity_msg = "💡 AI 처방: 11:30 타격 (경쟁 활동 없음)"
+    # 경쟁 활동이 전혀 없을 때의 대체 메시지 (다중 추천 포맷 통일)
+    no_activity_msg = "💡 1순위: 11:30 (경쟁 활동 없음 · 자유 갱신 가능)"
 
     for b_key in vip_bundles:
-        bb = grouped_bw.get(b_key, pd.DataFrame())
+        vsub = vip_current[vip_current["매물묶음키"] == b_key]
+        if vsub.empty:
+            strategy_dict[b_key] = no_activity_msg
+            continue
+        if "수집일시" in vsub.columns:
+            vsub = vsub.sort_values("수집일시")
+        ref = vsub.iloc[-1]
+
+        sop_mask = _mask_sop_match(b_work, ref)
+        comp_mask = b_work["_nm_u"].astype(str) != target_u if "_nm_u" in b_work.columns else pd.Series(True, index=b_work.index)
+        bb = b_work[sop_mask & comp_mask].copy()
+
         if bb.empty:
             strategy_dict[b_key] = no_activity_msg
             continue
 
         bb = bb.copy()
+        bb["_ts"] = pd.to_datetime(bb.get("수집일시"), errors="coerce")
+        bb = bb.dropna(subset=["_ts"])
+        bb = bb[bb["_ts"].dt.weekday != 6]
+
+        if "확인일자" in bb.columns:
+            c_s = bb["확인일자"].astype(str).str.strip()
+            c_dt = pd.to_datetime(c_s, format="%y.%m.%d", errors="coerce")
+            c_na = c_dt.isna() & (c_s != "") & (c_s.str.lower() != "nan")
+            if c_na.any():
+                c_dt = c_dt.copy()
+                c_dt.loc[c_na] = pd.to_datetime(c_s.loc[c_na], errors="coerce")
+            keep = c_dt.isna() | (c_dt.dt.weekday != 6)
+            bb = bb.loc[keep].copy()
+
+        if bb.empty:
+            strategy_dict[b_key] = no_activity_msg
+            continue
+
         ref_ts = bb["_ts"].max()
         win_start = ref_ts.normalize() - pd.Timedelta(days=ANALYSIS_WINDOW_DAYS - 1)
         bb = bb[bb["_ts"] >= win_start]
@@ -830,10 +897,11 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
             strategy_dict[b_key] = no_activity_msg
             continue
 
-        dedup_cols = ["_ts", "부동산명"]
+        dedup_cols = ["_ts", "부동산명"] if "부동산명" in bb.columns else ["_ts"]
         if "확인일자" in bb.columns:
             dedup_cols.append("확인일자")
-        bb = bb.drop_duplicates(subset=[c for c in dedup_cols if c in bb.columns])
+        dedup_cols = [c for c in dedup_cols if c in bb.columns]
+        bb = bb.drop_duplicates(subset=dedup_cols)
 
         ref_date = pd.Timestamp(ref_ts).normalize().date()
         hour_weights = [0.0] * 24
@@ -860,65 +928,55 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
         def gap_score_and_business(start: pd.Timestamp, end: pd.Timestamp, h_cur: int) -> tuple[float, int]:
             if end <= start:
                 return 0.0, 0
-            # 분 단위 샘플 수: 기존 while(cur < end)와 동일하게 초 단위 올림
             total_mins = int(np.ceil((end - start).total_seconds() / 60.0))
             if total_mins <= 0:
                 return 0.0, 0
             rng = pd.date_range(start, periods=total_mins, freq="min")
             hours = rng.hour.to_numpy()
-            # [휴먼 타겟팅 실전 가중치 적용]
             w = np.zeros(total_mins, dtype=np.float64)
-            # 00~07시: 심야 유령 트래픽 (기본값 0.0 유지)
-            w[(hours >= 8) & (hours < 10)] = 1.5  # 출근러시
-            w[(hours >= 10) & (hours < 12)] = 1.0  # 오전 일반
-            w[(hours >= 12) & (hours < 14)] = 2.0  # 점심 빈집
-            w[(hours >= 14) & (hours < 18)] = 1.5  # 오후 임장/대응지연
-            w[(hours >= 18) & (hours <= 23)] = 3.0  # 퇴근 후 무주공산 (최고 가치)
+            w[(hours >= 8) & (hours < 10)] = 1.5
+            w[(hours >= 10) & (hours < 12)] = 1.0
+            w[(hours >= 12) & (hours < 14)] = 2.0
+            w[(hours >= 14) & (hours < 18)] = 1.5
+            w[(hours >= 18) & (hours <= 23)] = 3.0
             raw = float(w.sum())
             biz = int((hours >= 8).sum())
             weighted = raw * (1.0 + hour_weights[h_cur] * 0.1)
             return weighted, biz
 
-        best_score = -1.0
-        best_strike: pd.Timestamp | None = None
-        best_business_mins = 0
+        # 모든 빈집 후보의 점수를 수집 (단일 best가 아니라 1·2순위 도출용)
+        candidates: list[tuple[float, pd.Timestamp, int]] = []
 
         n_act = len(active)
-        # [핵심] 경쟁사의 다음 날 첫 갱신(파도) 시간 파악
         first_h = active[0]
         if first_h < 8:
-            first_h = 9  # 너무 이른 새벽이면 현실적인 출근 시간인 9시로 보정
+            first_h = 9
 
         for i in range(n_act):
             h_cur = active[i]
             start = strike_dt[h_cur]
 
-            # 룰 1: 00~07시 사이의 타격은 어차피 의미 없으므로 완전 배제
             if start.hour < 8:
                 continue
 
             day0 = start.normalize()
-            # 룰 4: 상대는 오늘 총알을 다 썼음. 고로 내 생존 시간은 '내일 아침 첫 파도(first_h)'까지 유지됨!
             end = day0 + pd.Timedelta(days=1) + pd.Timedelta(hours=first_h)
 
             sc, biz_m = gap_score_and_business(start, end, h_cur)
+            if sc <= 0:
+                continue
+            candidates.append((sc, start, biz_m))
 
-            # 최고 점수 갱신
-            if sc > best_score or (sc == best_score and best_strike is not None and start < best_strike):
-                best_score = sc
-                best_strike = start
-                best_business_mins = biz_m
-
-        if best_strike is None or best_score < 0:
+        first, second = _pick_top_two_strikes(candidates)
+        if first is None:
             strategy_dict[b_key] = no_activity_msg
             continue
 
-        exp_str = _fmt_expected_duration(best_business_mins)
+        msg = f"💡 1순위: {_format_strike_label(first[1], first[2])}"
+        if second is not None:
+            msg += f"  /  2순위: {_format_strike_label(second[1], second[2])}"
 
-        strategy_dict[b_key] = (
-            f"💡 AI 처방: {int(best_strike.hour):02d}:{int(best_strike.minute):02d} 타격 "
-            f"(예상 단독 노출: {exp_str})"
-        )
+        strategy_dict[b_key] = msg
 
     return strategy_dict
 
