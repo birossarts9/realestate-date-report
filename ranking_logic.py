@@ -825,6 +825,8 @@ def _pick_top_two_strikes(
 def _mask_sop_match(frame: pd.DataFrame, ref: pd.Series) -> pd.Series:
     m = pd.Series(True, index=frame.index)
     for k in LISTING_SOP_KEYS:
+        if k == "부동산명_정제":
+            continue
         if k not in frame.columns:
             continue
         rv = str(ref.get(k, "미상")) if hasattr(ref, "get") else str(ref[k] if k in ref.index else "미상")
@@ -858,7 +860,10 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
 
     vip_bundles = vip_current["매물묶음키"].dropna().unique()
     # 경쟁 활동이 전혀 없을 때의 대체 메시지 (다중 추천 포맷 통일)
-    no_activity_msg = "💡 1순위: 11:30 (경쟁 활동 없음 · 자유 갱신 가능)"
+    no_activity_msg = (
+        "💡 1순위: 11:30 (최근 갱신 이력 없음 ➔ 점심 피크 선점) "
+        "/ 2순위: 19:30 (저녁 피크 공략)"
+    )
 
     for b_key in vip_bundles:
         vsub = vip_current[vip_current["매물묶음키"] == b_key]
