@@ -780,6 +780,12 @@ SECONDARY_MIN_SCORE_RATIO = 0.30
 # 2순위 최소 비즈니스 시간 (분). 1시간 미만 빈집은 추천 가치 낮음
 SECONDARY_MIN_BUSINESS_MINS = 60
 
+# 경쟁 과열로 모든 빈집 점수가 음수일 때 네이버 일반 피크 타임 안내 (앱 파서·마커와 호환)
+NAVER_PEAK_FALLBACK_MSG = (
+    "💡 1순위: 11:30 (경쟁 치열 ➔ 점심 피크 정면돌파) "
+    "/ 2순위: 19:30 (저녁 피크 공략)"
+)
+
 
 def _format_strike_label(strike_dt: pd.Timestamp, biz_mins: int) -> str:
     """'HH:MM (예상 N시간 N분 독점)' 형식."""
@@ -963,13 +969,18 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
             end = day0 + pd.Timedelta(days=1) + pd.Timedelta(hours=first_h)
 
             sc, biz_m = gap_score_and_business(start, end, h_cur)
-            if sc <= 0:
-                continue
             candidates.append((sc, start, biz_m))
+
+        if not candidates:
+            strategy_dict[b_key] = NAVER_PEAK_FALLBACK_MSG
+            continue
+        if all(c[0] < 0 for c in candidates):
+            strategy_dict[b_key] = NAVER_PEAK_FALLBACK_MSG
+            continue
 
         first, second = _pick_top_two_strikes(candidates)
         if first is None:
-            strategy_dict[b_key] = no_activity_msg
+            strategy_dict[b_key] = NAVER_PEAK_FALLBACK_MSG
             continue
 
         msg = f"💡 1순위: {_format_strike_label(first[1], first[2])}"
