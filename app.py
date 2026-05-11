@@ -368,7 +368,7 @@ def _determine_action_state(
     if not target_status:
         return {
             "status": "FREE",
-            "title": "✅ 자유 갱신 가능",
+            "title": "✅ 자유 갱신",
             "reason": (
                 "현재 감시 대상 경쟁사가 없거나 활동 데이터가 부족합니다. "
                 "원하시는 시각에 자유롭게 갱신하셔도 됩니다."
@@ -385,7 +385,7 @@ def _determine_action_state(
         if any_waiting:
             return {
                 "status": "WAIT",
-                "title": "🛑 잠시 대기 권장",
+                "title": "🛑 대기 권장",
                 "reason": (
                     f"요주의 경쟁사 {waiting_cnt}곳이 아직 활동 전입니다. "
                     "이들이 갱신을 마친 뒤 타격하면 노출 효과가 훨씬 오래갑니다."
@@ -394,7 +394,7 @@ def _determine_action_state(
             }
         return {
             "status": "STRIKE",
-            "title": "🚀 지금 타격 가능",
+            "title": "🚀 즉시 타격",
             "reason": (
                 "주요 경쟁사들이 오늘 활동을 마쳤거나 일정 외 시간입니다. "
                 "지금 갱신해도 빈집을 노릴 수 있습니다."
@@ -421,7 +421,7 @@ def _determine_action_state(
             )
         return {
             "status": "STRIKE",
-            "title": "🚀 지금이 최적의 타이밍입니다!",
+            "title": "🚀 즉시 타격",
             "reason": reason,
             "palette": palette_strike,
         }
@@ -430,7 +430,7 @@ def _determine_action_state(
     if not any_waiting:
         return {
             "status": "STRIKE",
-            "title": "🚀 빈집이 일찍 열렸습니다!",
+            "title": "🚀 즉시 타격",
             "reason": (
                 f"AI 1순위 추천 시각({ai_hhmm})까지 {diff_min//60}시간 {diff_min%60}분 남았지만, "
                 "주요 경쟁사들이 이미 오늘 활동을 마쳤습니다. AI 시간을 기다리지 말고 지금 타격하세요."
@@ -453,16 +453,32 @@ def _determine_action_state(
 
     return {
         "status": "WAIT",
-        "title": "🛑 잠시 대기 권장",
+        "title": "🛑 대기 권장",
         "reason": reason,
         "palette": palette_wait,
     }
 
 
-def _render_action_card(action: dict, ai_msg: str) -> None:
+def _render_action_card(
+    action: dict,
+    ai_msg: str,
+    *,
+    total_watch: int = 0,
+    waiting_watch: int = 0,
+) -> None:
     """통합 액션 카드 — 사용자가 1초 만에 갱신 여부를 결정할 수 있도록 큼직하게 렌더."""
     p = action["palette"]
-    ai_html = html.escape(str(ai_msg or "AI 추천 정보 없음"))
+    raw_ai = (ai_msg or "").strip()
+    ai_html = html.escape(raw_ai) if raw_ai else "<span style='color:#64748b;font-weight:600;'>AI 추천 문구를 확인 중입니다.</span>"
+
+    if total_watch > 0:
+        stats_html = (
+            f"총 감시 대상 <b>{total_watch}</b>곳 중, "
+            f"요주의 경쟁사 <b>{waiting_watch}</b>곳이 아직 대기 중입니다."
+        )
+    else:
+        stats_html = "현재 화면에서 집계된 경쟁 감시 대상이 없습니다."
+
     st.markdown(
         f"""
 <div style="
@@ -478,7 +494,10 @@ def _render_action_card(action: dict, ai_msg: str) -> None:
   <div style="font-size: 1.55rem; font-weight: 900; color: {p['accent']}; letter-spacing: -0.02em; line-height: 1.25;">
     {action['title']}
   </div>
-  <div style="font-size: 1.02rem; color: {p['text']}; margin-top: 8px; line-height: 1.55;">
+  <div style="font-size: 0.98rem; color: #475569; margin-top: 10px; line-height: 1.5;">
+    {stats_html}
+  </div>
+  <div style="font-size: 1.02rem; color: {p['text']}; margin-top: 10px; line-height: 1.55;">
     {action['reason']}
   </div>
   <div style="
@@ -1453,10 +1472,7 @@ def precompute_all_complexes_data(
                     h0 = idx_sorted[0]
                     return f"{h0:02d}시", min(h0 + 1, 23)
                 h0, h1 = idx_sorted[0], idx_sorted[1]
-                if abs(h1 - h0) == 1:
-                    peak_str = f"{h0}~{h1}시"
-                else:
-                    peak_str = f"{h0:02d}시, {h1:02d}시"
+                peak_str = f"{h0}~{h1}시"
                 deadline = max(h0, h1) + 1
                 return peak_str, min(deadline, 23)
 
@@ -1519,12 +1535,20 @@ def precompute_all_complexes_data(
                 "총횟수", ascending=False
             )
 
+        strat_by_task: dict[str, object] = {}
+        if not act_df.empty and "Task" in act_df.columns and "광고 추천 시간" in act_df.columns:
+            for _, _r in act_df.iterrows():
+                _tk = str(_r.get("Task", "")).strip()
+                if _tk:
+                    strat_by_task[_tk] = _r.get("광고 추천 시간")
+
         results[comp] = {
             "action": act_df,
             "timeline": tl_df,
             "ms": ms_df,
             "comp": comp_df,
             "boosted": boosted_df,
+            "strategy_dict": strat_by_task,
         }
 
     elapsed = time.time() - start_t
@@ -1675,10 +1699,6 @@ def main() -> None:
         df = df[df["CP사"] != "한국공인중개사협회"].copy()
     if "수집일시" in df.columns:
         df["수집일시"] = pd.to_datetime(df["수집일시"], errors="coerce")
-        KST = timezone(timedelta(hours=9))
-        now_kst_for_batch = datetime.now(KST).replace(tzinfo=None)
-        data_today = now_kst_for_batch.replace(hour=0, minute=0, second=0, microsecond=0)
-        df = df[df["수집일시"] < data_today].copy()
 
     min_time, max_time = df["수집일시"].min(), df["수집일시"].max()
     if df.empty or pd.isna(min_time) or pd.isna(max_time):
@@ -1686,9 +1706,11 @@ def main() -> None:
         st.stop()
 
     st.sidebar.header("분석 기간")
+    KST = timezone(timedelta(hours=9))
+    today_kst = datetime.now(KST).date()
     default_start_date = max(min_time.date(), max_time.date() - timedelta(days=14))
     s_d = st.sidebar.date_input("시작일", default_start_date, key="tl_sd")
-    e_d = st.sidebar.date_input("종료일", max_time.date(), key="tl_ed")
+    e_d = st.sidebar.date_input("종료일", today_kst, key="tl_ed")
 
     start_dt = pd.to_datetime(s_d)
     end_dt = pd.to_datetime(e_d) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
@@ -1873,20 +1895,20 @@ def main() -> None:
         else:
             # 1. 완벽한 매물 매칭 함수 (단지명과 동/호수 분리 탐색으로 100% 매칭 보장)
             def _get_row(t_str):
-                adf = action_df_48h if not action_df_48h.empty else action_df
-                if adf.empty:
-                    return None
-                t_clean = str(t_str).replace(" ", "")
-                if "Task" in adf.columns:
-                    for _, r in adf.iterrows():
-                        if str(r.get("Task", "")).replace(" ", "") == t_clean:
-                            return r
-                parts = str(t_str).replace("(", "").replace(")", "").split()
-                if len(parts) >= 2:
-                    for _, r in adf.iterrows():
-                        m_name = str(r.get("매물명", ""))
-                        if parts[0] in m_name and parts[1] in m_name:
-                            return r
+                for adf in (action_df, action_df_48h):
+                    if adf is None or adf.empty:
+                        continue
+                    t_clean = str(t_str).replace(" ", "")
+                    if "Task" in adf.columns:
+                        for _, r in adf.iterrows():
+                            if str(r.get("Task", "")).replace(" ", "") == t_clean:
+                                return r
+                    parts = str(t_str).replace("(", "").replace(")", "").split()
+                    if len(parts) >= 2:
+                        for _, r in adf.iterrows():
+                            m_name = str(r.get("매물명", ""))
+                            if parts[0] in m_name and parts[1] in m_name:
+                                return r
                 return None
 
             # 2. 정렬 및 Y축 갱신 횟수 라벨 구축 (undefined·공백 등 쓰레기 라벨 제외 → 상단 공백 완화)
@@ -1919,12 +1941,6 @@ def main() -> None:
                 for t in task_order
             ]
 
-            st.markdown(
-                f'<p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:{_toss_sub};">'
-                "Shift + 마우스 휠을 사용하여 과거 시간으로 부드럽게 이동할 수 있습니다.</p>",
-                unsafe_allow_html=True,
-            )
-
             # ==========================================
             # [수정] 🚀 매물별 실시간 감시망 (Live Tracker)
             # ==========================================
@@ -1947,8 +1963,30 @@ def main() -> None:
             my_unified = clean_realtor_name(filter_realtor_name)
             t_df["부동산명_통합"] = t_df["부동산명"].apply(clean_realtor_name)
 
-            # 현재 화면에 보이는 내 활동 매물 위주로 리스트업
-            active_tasks = tl_plot["Task"].dropna().unique().tolist() if not tl_plot.empty else []
+            # 현재 화면에 보이는 내 활동 매물 위주로 리스트업 (유령 매물: 28일 내 갱신 2건 미만 제외)
+            def _renewal_events_28d_for_task(task: str, td: pd.DataFrame, today_d: datetime.date) -> int:
+                if td.empty or "Task" not in td.columns:
+                    return 0
+                sub = td[td["Task"] == task].copy()
+                if sub.empty:
+                    return 0
+                sub["_ts"] = pd.to_datetime(sub["수집일시"], errors="coerce")
+                sub = sub[sub["_ts"].notna()]
+                start_d = today_d - timedelta(days=27)
+                sub = sub[sub["_ts"].dt.date >= start_d]
+                if sub.empty:
+                    return 0
+                dedup_cols = [c for c in ("매물묶음키", "수집일시", "확인일자") if c in sub.columns]
+                if dedup_cols:
+                    return len(sub.drop_duplicates(subset=dedup_cols))
+                return len(sub.drop_duplicates(subset=["수집일시"]))
+
+            _raw_tracker_tasks = tl_plot["Task"].dropna().unique().tolist() if not tl_plot.empty else []
+            active_tasks = [
+                t
+                for t in _raw_tracker_tasks
+                if _renewal_events_28d_for_task(str(t), t_df, kst_today) >= 2
+            ]
 
             if active_tasks:
                 st.markdown("---")
@@ -1963,6 +2001,7 @@ def main() -> None:
                     "<div style='font-size: 1.15rem; font-weight: 700; color: #334155; margin-top: 18px; margin-bottom: -10px;'>🎯 감시할 내 매물을 선택하세요:</div>",
                     unsafe_allow_html=True,
                 )
+                st.markdown("<br>", unsafe_allow_html=True)
                 sel_task = st.selectbox(
                     label="감시할 매물 선택",
                     label_visibility="collapsed",
@@ -2027,7 +2066,7 @@ def main() -> None:
                         peak_today_wd = "-"
                         wd_group = ""
                         deadline = 18
-                        freq_str = "정보 없음"
+                        freq_str = "갱신 패턴 산출 전"
                         weekday_real = True
 
                         if not comp_df.empty and "부동산명" in comp_df.columns:
@@ -2129,7 +2168,7 @@ def main() -> None:
                     # [최상단] 통합 타격 지시 카드 (Integrated Action Card)
                     # ===========================================================
                     strategy_dict = complex_data.get("strategy_dict", {})
-                    ai_msg = strategy_dict.get(sel_task, "")
+                    ai_msg = strategy_dict.get(sel_task, "") or ""
                     any_waiting = (
                         any(info["is_waiting"] for info in target_status.values())
                         if target_status
@@ -2142,7 +2181,15 @@ def main() -> None:
                         ai_msg=ai_msg,
                         kst_now=kst_now,
                     )
-                    _render_action_card(action, ai_msg)
+                    waiting_cnt_card = sum(
+                        1 for info in target_status.values() if info.get("is_waiting")
+                    )
+                    _render_action_card(
+                        action,
+                        ai_msg,
+                        total_watch=len(target_status),
+                        waiting_watch=waiting_cnt_card,
+                    )
 
                     # ===========================================================
                     # [보조 정보] 감시 중인 경쟁사 상세 — 작게 나열
@@ -2182,6 +2229,17 @@ def main() -> None:
                                 unsafe_allow_html=True,
                             )
                             col_idx += 1
+            elif _raw_tracker_tasks:
+                st.markdown("---")
+                st.markdown(
+                    f"<h3 style='color:#1E293B; margin-bottom: 6px;'>👀 실시간 타점 감시망</h3>",
+                    unsafe_allow_html=True,
+                )
+                st.info(
+                    "최근 28일 내 갱신 이력이 **2건 미만**인 매물(유령 부동산)은 실시간 감시망 선택 목록에서 제외됩니다. "
+                    "타임라인에 노출되는 다른 매물을 확인하거나 데이터 수집을 더 진행해 주세요."
+                )
+
             # ==========================================
             # 아래부터는 기존 px.timeline 그리는 코드 (display_tl_df 치환 없이 원본 tl_hover 사용)
             # 3. 차트 기본 렌더링 (툴팁: 내 순위·1위 부동산 마스킹, 호버 프레임은 캐시)
@@ -2236,13 +2294,25 @@ def main() -> None:
                 gridwidth=1,
                 zeroline=False,
             )
+            _tick_vals = []
+            _tick_txt = []
+            _tc = pd.Timestamp(day_start).floor("h")
+            _t_end = pd.Timestamp(day_end)
+            while _tc <= _t_end:
+                _h = int(_tc.hour)
+                _nh = _h + 1
+                _tick_vals.append(_tc)
+                _tick_txt.append(f"{_h}~{_nh}시" if _nh <= 23 else "23~24시")
+                _tc += pd.Timedelta(hours=1)
+
             fig.update_xaxes(
                 side="top",
                 range=[day_start, day_end],
-                dtick=14_400_000,       # 4시간 간격 (ms) — 48시간 풀 뷰
-                tickformat="%H:00",     # 오직 시간만 출력 (날짜 제거)
-                tickangle=0,            # 글씨가 대각선으로 눕는 현상 원천 차단
-                tickfont=dict(family=_plot_font, size=11, color=_toss_sub),
+                tickmode="array",
+                tickvals=_tick_vals,
+                ticktext=_tick_txt,
+                tickangle=0,
+                tickfont=dict(family=_plot_font, size=9, color=_toss_sub),
                 showgrid=True,
                 gridcolor=_grid_soft,
                 gridwidth=1,
@@ -2362,7 +2432,7 @@ def main() -> None:
                 borderpad=5,
             )
 
-            # 7. AI 추천 시각 마커 — 1순위(빨강 동그라미) + 2순위(주황 다이아몬드)
+            # 7. AI 추천 시각 마커 — 1순위·2순위 빨간색 마커 (타임라인 Task별 광고 추천 시간)
             mx1, my1, m_adv1 = [], [], []
             mx2, my2, m_adv2 = [], [], []
             for t in task_order:
@@ -2404,10 +2474,10 @@ def main() -> None:
                     y=my2,
                     mode="markers",
                     marker=dict(
-                        symbol="diamond-open",
-                        size=11,
-                        color="#f97316",
-                        line=dict(color="#f97316", width=2),
+                        symbol="star",
+                        size=13,
+                        color=_toss_red,
+                        line=dict(color="white", width=1),
                     ),
                     customdata=m_adv2,
                     name="AI 2순위 추천",
