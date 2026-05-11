@@ -91,6 +91,52 @@ def _fmt_minutes_as_hm(minutes):
     return f"{h}시간 {r}분"
 
 
+_RE_TRACKER_REALTOR_NOISE = re.compile(
+    r"공인중개사사무소|공인중개사|부동산중개|사무소|부동산"
+)
+
+
+def _strip_realtor_label_noise(display_name: str) -> str:
+    """카드 등 표시용: 중개사무소·공인중개사 등 접미어를 제거해 브랜드만 남김."""
+    s = str(display_name or "").strip()
+    if not s:
+        return s
+    cleaned = _RE_TRACKER_REALTOR_NOISE.sub("", s).strip()
+    return cleaned if cleaned else s
+
+
+def _last_renewal_hhmm_today(
+    r_uni: str,
+    kst_today,
+    b_df: pd.DataFrame | None,
+    sub_df: pd.DataFrame,
+) -> str:
+    """당일 해당 통합 부동산명의 마지막 수집 시각 → HH:MM (없으면 --:--)."""
+    ts = None
+    if b_df is not None and not b_df.empty and "부동산명_정제" in b_df.columns:
+        br = b_df[b_df["부동산명_정제"] == r_uni]
+        if not br.empty and "수집일시" in br.columns:
+            br_dt = pd.to_datetime(br["수집일시"], errors="coerce")
+            m = br_dt.dt.date == kst_today
+            if m.any():
+                ts = br_dt.loc[m].max()
+    if ts is None or pd.isna(ts):
+        if (
+            not sub_df.empty
+            and "부동산명_통합" in sub_df.columns
+            and "수집일시" in sub_df.columns
+        ):
+            sr = sub_df[sub_df["부동산명_통합"] == r_uni]
+            if not sr.empty:
+                sr_dt = pd.to_datetime(sr["수집일시"], errors="coerce")
+                m2 = sr_dt.dt.date == kst_today
+                if m2.any():
+                    ts = sr_dt.loc[m2].max()
+    if ts is not None and pd.notna(ts):
+        return pd.Timestamp(ts).strftime("%H:%M")
+    return "--:--"
+
+
 def _dedup_floor_type_text(text):
     raw_parts = [p.strip() for p in str(text or "").split("|") if p.strip()]
     if not raw_parts:
@@ -2061,7 +2107,11 @@ def main() -> None:
                             filter_realtor_name=filter_realtor_name,
                             display_realtor=display_realtor,
                         )
+                        r_disp_short = html.escape(_strip_realtor_label_noise(r_disp))
                         is_today = r_uni in today_renewed
+                        last_active_hhmm = _last_renewal_hhmm_today(
+                            r_uni, kst_today, b_df if b_df is not None else None, sub_df
+                        )
 
                         peak_usual = "패턴 불규칙"
                         peak_today_wd = "-"
@@ -2126,22 +2176,22 @@ def main() -> None:
                         _small = "color:#94a3b8;font-size:0.8rem;"
                         if is_today:
                             state_html = (
-                                f"<b>🟢 갱신 완료 (예산 소진)</b>"
-                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<b>🟢 오늘 광고 완료 ({last_active_hhmm} 진행)</b>"
+                                f"<br><span style='{_gray}'>{html.escape(pattern_desc)}</span>"
                                 f"<br><span style='{_small}'>마지노선: {deadline}시</span>"
                             )
                             is_waiting = False
                         elif now_hour < deadline:
                             state_html = (
                                 f"<b>🔴 아직 활동 전 (주의)</b>"
-                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<br><span style='{_gray}'>{html.escape(pattern_desc)}</span>"
                                 f"<br><span style='{_small}'>마지노선: {deadline}시 (이후 안전)</span>"
                             )
                             is_waiting = True
                         else:
                             state_html = (
                                 f"<b><span style='color:#3B82F6;'>🔵 활동 없음 (마지노선 경과)</span></b>"
-                                f"<br><span style='{_gray}'>{pattern_desc}</span>"
+                                f"<br><span style='{_gray}'>{html.escape(pattern_desc)}</span>"
                                 f"<br><span style='{_small}'>마지노선 {deadline}시 경과</span>"
                             )
                             is_waiting = False
@@ -2149,19 +2199,25 @@ def main() -> None:
                         if r_uni in top3_unified:
                             target_status[r_uni] = {
                                 "display": r_disp,
+                                "display_short": r_disp_short,
                                 "freq": freq_str,
                                 "icon": "👑",
                                 "html": state_html,
                                 "is_waiting": is_waiting,
+                                "is_done_today": is_today,
+                                "last_active_time": last_active_hhmm,
                                 "type": "상위권 방어조",
                             }
                         else:
                             target_status[r_uni] = {
                                 "display": r_disp,
+                                "display_short": r_disp_short,
                                 "freq": freq_str,
                                 "icon": "🔥",
                                 "html": state_html,
                                 "is_waiting": is_waiting,
+                                "is_done_today": is_today,
+                                "last_active_time": last_active_hhmm,
                                 "type": "고빈도 추격조",
                             }
 
@@ -2214,21 +2270,30 @@ def main() -> None:
                         cols = st.columns(min(len(target_status), 4))
                         col_idx = 0
                         for r_uni, info in sorted_targets:
-                            # 보조 정보 톤다운: 폰트·여백 축소, 옅은 톤
+                            if info.get("is_waiting"):
+                                _card_bg = "#eff6ff"
+                            elif info.get("is_done_today"):
+                                _card_bg = "#ecfdf5"
+                            else:
+                                _card_bg = "#f1f5f9"
+                            _title = info.get("display_short") or html.escape(
+                                str(info.get("display", ""))
+                            )
+                            _freq_e = html.escape(str(info.get("freq", "")))
                             cols[col_idx % len(cols)].markdown(
-                                f"<div style='height:100%; min-height:140px; display:flex; flex-direction:column; "
-                                f"justify-content:space-between; padding:10px 12px; border:1px solid #e2e8f0; "
-                                f"border-radius:8px; background-color:#fafbfc; margin-bottom:8px; "
-                                f"box-shadow: 0 1px 2px rgba(0,0,0,0.03); opacity:0.95;'>"
+                                f"<div style='height:180px; overflow-y:hidden; display:flex; "
+                                f"flex-direction:column; justify-content:space-between; padding:15px; "
+                                f"border-radius:8px; border:1px solid #ddd; background-color:{_card_bg}; "
+                                f"margin-bottom:10px; box-sizing:border-box;'>"
                                 f"<div>"
-                                f"<div style='font-size:0.75rem; color:#64748b; margin-bottom:3px;'>"
-                                f"{info['icon']} {info['type']}</div>"
-                                f"<div style='font-weight:800; font-size:0.98rem; color:#1e293b; "
-                                f"margin-bottom:6px;'>{info['display']} "
-                                f"<span style='font-size:0.78rem; font-weight:500; color:#475569;'>"
-                                f"({info['freq']})</span></div>"
+                                f"<div style='font-size:0.72rem; color:#64748b; margin-bottom:4px;'>"
+                                f"{html.escape(str(info['icon']))} {html.escape(str(info['type']))}</div>"
+                                f"<div style='font-weight:800; font-size:0.95rem; color:#1e293b; "
+                                f"line-height:1.25; margin-bottom:4px;'>{_title} "
+                                f"<span style='font-size:0.76rem; font-weight:500; color:#475569;'>"
+                                f"({_freq_e})</span></div>"
                                 f"</div>"
-                                f"<div style='font-size:0.88rem;'>{info['html']}</div>"
+                                f"<div style='font-size:0.86rem; line-height:1.35;'>{info['html']}</div>"
                                 f"</div>",
                                 unsafe_allow_html=True,
                             )
@@ -2239,9 +2304,15 @@ def main() -> None:
                     f"<h3 style='color:#1E293B; margin-bottom: 6px;'>👀 실시간 타점 감시망</h3>",
                     unsafe_allow_html=True,
                 )
-                st.info(
-                    "최근 28일 내 갱신 이력이 **2건 미만**인 매물(유령 부동산)은 실시간 감시망 선택 목록에서 제외됩니다. "
-                    "타임라인에 노출되는 다른 매물을 확인하거나 데이터 수집을 더 진행해 주세요."
+                st.markdown(
+                    "<div style='height:180px; overflow-y:hidden; display:flex; align-items:center; "
+                    "justify-content:center; padding:15px; border-radius:8px; border:1px solid #ddd; "
+                    "background-color:#f8fafc; color:#475569; font-size:0.95rem; line-height:1.55; "
+                    "text-align:center; box-sizing:border-box;'>"
+                    "<div>최근 28일 내 갱신 이력이 <strong>2건 미만</strong>인 매물(유령 부동산)은 "
+                    "실시간 감시망 선택 목록에서 제외됩니다. 타임라인에 노출되는 다른 매물을 확인하거나 "
+                    "데이터 수집을 더 진행해 주세요.</div></div>",
+                    unsafe_allow_html=True,
                 )
 
             # ==========================================
