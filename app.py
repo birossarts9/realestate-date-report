@@ -472,9 +472,10 @@ def _render_action_card(
     ai_html = html.escape(raw_ai) if raw_ai else "<span style='color:#64748b;font-weight:600;'>AI 추천 문구를 확인 중입니다.</span>"
 
     if total_watch > 0:
+        done_watch = total_watch - waiting_watch
         stats_html = (
-            f"총 감시 대상 <b>{total_watch}</b>곳 중, "
-            f"요주의 경쟁사 <b>{waiting_watch}</b>곳이 아직 대기 중입니다."
+            f"총 <b>{total_watch}</b>곳 중 <b>{done_watch}</b>곳은 활동을 마쳤고, "
+            f"<b>{waiting_watch}</b>곳이 아직 갱신 대기 중입니다."
         )
     else:
         stats_html = "현재 화면에서 집계된 경쟁 감시 대상이 없습니다."
@@ -1998,7 +1999,7 @@ def main() -> None:
 
                 # [수정] 선택창 라벨 폰트 확대 (기본 라벨은 숨김)
                 st.markdown(
-                    "<div style='font-size: 1.15rem; font-weight: 700; color: #334155; margin-top: 18px; margin-bottom: -10px;'>🎯 감시할 내 매물을 선택하세요:</div>",
+                    "<div style='font-size: 1.15rem; font-weight: 700; color: #334155; margin-top: 18px; margin-bottom: 5px;'>🎯 감시할 내 매물을 선택하세요:</div>",
                     unsafe_allow_html=True,
                 )
                 st.markdown("<br>", unsafe_allow_html=True)
