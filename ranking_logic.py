@@ -779,8 +779,8 @@ SECONDARY_MIN_GAP_HOURS = 3
 SECONDARY_MIN_SCORE_RATIO = 0.30
 # 2순위 최소 비즈니스 시간 (분). 1시간 미만 빈집은 추천 가치 낮음
 SECONDARY_MIN_BUSINESS_MINS = 60
-# 감시 대상 경쟁사의 일별 마지노선(관측 상 최종 활동 시각)보다 이른 빈집 타격 후보는
-# 이후 갱신에 묻힐 확률이 높아 점수에 강한 패널티 (자살 타이밍 완화)
+# comp_df 기반 '적군 마지노선'(해당 묶음 경쟁사들의 오늘 요일 마지노선 중 최댓값)보다
+# 이른 빈집 타격 후보에만 적용. comp_df·마지노선 결측 시에는 배제(패널티 미적용).
 STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR = 0.02
 
 # 경쟁 과열로 모든 빈집 점수가 음수일 때 네이버 일반 피크 타임 안내 (앱 파서·마커와 호환)
@@ -837,11 +837,46 @@ def _mask_sop_match(frame: pd.DataFrame, ref: pd.Series) -> pd.Series:
     return m
 
 
+def _enemy_deadline_hour_from_comp_df(
+    comp_df: pd.DataFrame | None,
+    competitor_unified_names,
+) -> int | None:
+    """
+    감시망과 동일한 comp_df에서, 해당 묶음 경쟁사(통합 부동산명)들의
+    '오늘 요일 마지노선' 중 가장 늦은 시각(시)을 반환. 결측·미매칭이면 None.
+    """
+    if comp_df is None or comp_df.empty:
+        return None
+    if "부동산명" not in comp_df.columns or "오늘 요일 마지노선" not in comp_df.columns:
+        return None
+    name_set = {str(x).strip() for x in competitor_unified_names if str(x).strip()}
+    if not name_set:
+        return None
+    sub = comp_df.loc[comp_df["부동산명"].astype(str).isin(name_set)]
+    if sub.empty:
+        return None
+    dl = pd.to_numeric(sub["오늘 요일 마지노선"], errors="coerce").dropna()
+    if dl.empty:
+        return None
+    mh = int(dl.max())
+    if mh < 0 or mh > 23:
+        return None
+    return mh
+
+
 @st.cache_data(ttl=3600)
-def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_name):
+def precalculate_ai_strategy(
+    t_tracked_df,
+    boosted_tracked_df,
+    filter_realtor_name,
+    comp_df: pd.DataFrame | None = None,
+):
     """
     Gap & Peak Scoring. 경쟁사 갱신은 SOP 7키(부동산명_정제~CP사)로 내 매물 묶음과 동일한 스펙만 집계한다.
     strategy_dict 키는 app.py 호환을 위해 `매물묶음키` 유지.
+
+    comp_df: 대시보드 감시망과 동일한 경쟁사 패턴 테이블(오늘 요일 마지노선 포함).
+             None/결측이면 마지노선 선행 타격 패널티는 적용하지 않는다.
     """
     strategy_dict = {}
     t_work = ensure_listing_sop_columns(t_tracked_df.copy())
@@ -966,8 +1001,11 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
         if first_h < 8:
             first_h = 9
 
-        enemy_deadline_h = max(active)
-        deadline_minutes = int(enemy_deadline_h) * 60
+        enemy_deadline_h: int | None = None
+        if "_nm_u" in bb.columns and not bb.empty:
+            enemy_deadline_h = _enemy_deadline_hour_from_comp_df(
+                comp_df, bb["_nm_u"].dropna().unique()
+            )
 
         for i in range(n_act):
             h_cur = active[i]
@@ -980,9 +1018,11 @@ def precalculate_ai_strategy(t_tracked_df, boosted_tracked_df, filter_realtor_na
             end = day0 + pd.Timedelta(days=1) + pd.Timedelta(hours=first_h)
 
             sc, biz_m = gap_score_and_business(start, end, h_cur)
-            strike_minutes = int(start.hour) * 60 + int(start.minute)
-            if strike_minutes < deadline_minutes:
-                sc *= STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR
+            if enemy_deadline_h is not None:
+                deadline_minutes = int(enemy_deadline_h) * 60
+                strike_minutes = int(start.hour) * 60 + int(start.minute)
+                if strike_minutes < deadline_minutes:
+                    sc *= STRIKE_BEFORE_ENEMY_DEADLINE_FACTOR
             candidates.append((sc, start, biz_m))
 
         if not candidates:
