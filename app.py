@@ -978,7 +978,10 @@ def _build_timeline_from_hist(
 
 @st.cache_data(show_spinner=False)
 def _build_prime_action_df(
-    trk: pd.DataFrame, boosted_df: pd.DataFrame, filter_realtor_name: str
+    trk: pd.DataFrame,
+    boosted_df: pd.DataFrame,
+    filter_realtor_name: str,
+    comp_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     app.py 마스터 대시보드와 동일한 merge_asof / death_ts 기반 action_df + hist_base 기반 timeline_df.
@@ -1218,7 +1221,9 @@ def _build_prime_action_df(
         last_is_top_map = {}
         last_top_ts_map = {}
 
-    master_strategy_dict = precalculate_ai_strategy(trk, boosted_df, filter_realtor_name)
+    master_strategy_dict = precalculate_ai_strategy(
+        trk, boosted_df, filter_realtor_name, comp_df
+    )
 
     # [초고속 최적화] 매물묶음키별 갱신 건수: per-key for문 대신 벡터화
     market_keys = b_work["매물묶음키"].dropna().unique().tolist()
@@ -1329,10 +1334,13 @@ def _build_prime_action_df(
 
 
 def compute_prime_action_df(
-    trk: pd.DataFrame, boosted_df: pd.DataFrame, filter_realtor_name: str
+    trk: pd.DataFrame,
+    boosted_df: pd.DataFrame,
+    filter_realtor_name: str,
+    comp_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """프라임 데이터 계산 (`_build_prime_action_df`에 @st.cache_data 적용)."""
-    return _build_prime_action_df(trk, boosted_df, filter_realtor_name)
+    return _build_prime_action_df(trk, boosted_df, filter_realtor_name, comp_df)
 
 
 @st.cache_data(show_spinner="🚀 선택된 기간의 모든 단지 데이터를 미리 계산 중입니다... (최초 1회만 소요)")
@@ -1398,9 +1406,9 @@ def precompute_all_complexes_data(
             & (trk["고유번호"] != trk["prev_고유번호"])
         )
         boosted_df = trk[c1].copy()
-        act_df, tl_df = compute_prime_action_df(trk, boosted_df, realtor_name)
 
         # --- [추가] 탭 4: 시장 점유율 및 타사 패턴 사전 계산 ---
+        # comp_df(오늘 요일 마지노선)을 먼저 구축한 뒤 AI 추천과 동일한 '뇌'로 전달
         _ms_cols = ["단지명", "동/호수", "층/타입", "거래방식", "가격", "부동산명", "묶음내순위"]
         if not all(c in t_df.columns for c in _ms_cols):
             ms_df = pd.DataFrame(columns=["부동산명", "매물건수", "총점수"])
@@ -1581,6 +1589,8 @@ def precompute_all_complexes_data(
             comp_df = comp_df.merge(pattern_df, on="부동산명", how="left").sort_values(
                 "총횟수", ascending=False
             )
+
+        act_df, tl_df = compute_prime_action_df(trk, boosted_df, realtor_name, comp_df)
 
         strat_by_task: dict[str, object] = {}
         if not act_df.empty and "Task" in act_df.columns and "광고 추천 시간" in act_df.columns:
